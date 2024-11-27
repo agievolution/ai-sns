@@ -2091,6 +2091,7 @@ class SystemCfg(Base):
     autorun = Column(Boolean, default=False, doc="开机自动运行")
     showtaskbar = Column(Boolean, default=False, doc="在任务栏显示")
     updateinfo =  Column(Boolean, default=False, doc="有更新时提醒升级")
+    minirunontray =  Column(Boolean, default=False, doc="应用最小化到托盘")  #增加
     closebuttontype = Column(String(100), doc="点击关闭按钮:隐藏窗口，关闭程序")
     style = Column(String(500), doc="风格：亮色，暗色")
 
@@ -2101,9 +2102,9 @@ class SystemCfg(Base):
     is_delete = Column(Boolean, default=False, doc="软删除")
     create_time = Column(DateTime, default=datetime.now, doc="创建时间")
 
-def add_SystemCfg(autorun,showtaskbar,updateinfo,closebuttontype,style,showinfo,showinfoicon,infosound):
+def add_SystemCfg(autorun,showtaskbar,updateinfo,minirunontray,closebuttontype,style,showinfo,showinfoicon,infosound):
     session = Session()
-    systemCfg = SystemCfg(autorun=autorun,showtaskbar=showtaskbar,updateinfo=updateinfo,closebuttontype=closebuttontype,style=style,showinfo=showinfo,showinfoicon=showinfoicon,infosound=infosound)
+    systemCfg = SystemCfg(autorun=autorun,showtaskbar=showtaskbar,updateinfo=updateinfo,minirunontray=minirunontray,closebuttontype=closebuttontype,style=style,showinfo=showinfo,showinfoicon=showinfoicon,infosound=infosound)
     session.add(systemCfg)
     session.commit()
     session.close()

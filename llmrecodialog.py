@@ -141,9 +141,9 @@ class EvalApp(QDialog):
         self.speed_edit = QLineEdit()
         speed_layout.addWidget(self.speed_edit)
         # settings_button0 = QPushButton('设置')
-        test_button0 = QPushButton('测试')
+        self.test_button0 = QPushButton('测试',self)
         # speed_layout.addWidget(settings_button0)
-        speed_layout.addWidget(test_button0)
+        speed_layout.addWidget(self.test_button0)
         main_layout.addLayout(speed_layout)
 
         # 1 理解能力输入字段和设置、测试按钮
@@ -323,10 +323,10 @@ class EvalApp(QDialog):
 
         # OK 和 Cancel 按钮
         button_layout = QHBoxLayout()
-        autotest_button = QPushButton('自动测试')
+        self.autotest_button = QPushButton('自动测试')
         ok_button = QPushButton('OK')
         cancel_button = QPushButton('Cancel')
-        button_layout.addWidget(autotest_button)
+        button_layout.addWidget(self.autotest_button)
         button_layout.addWidget(ok_button)
         button_layout.addWidget(cancel_button)
         main_layout.addLayout(button_layout)
@@ -336,7 +336,7 @@ class EvalApp(QDialog):
         self.setWindowTitle('模型评估')
 
         # 连接按钮事件
-        test_button0.clicked.connect(self.on_test0)
+        self.test_button0.clicked.connect(self.on_test0)
         settings_button1.clicked.connect(self.on_settings1)
         test_button1.clicked.connect(self.on_test1)
         settings_button_2.clicked.connect(self.on_settings2)
@@ -364,7 +364,7 @@ class EvalApp(QDialog):
         settings_button_13.clicked.connect(self.on_settings13)
         test_button_13.clicked.connect(self.on_test13)
 
-        autotest_button.clicked.connect(self.on_autotest)
+        self.autotest_button.clicked.connect(self.on_autotest)
         ok_button.clicked.connect(self.on_ok)
         cancel_button.clicked.connect(self.on_cancel)
 
@@ -455,6 +455,13 @@ class EvalApp(QDialog):
 
     def on_test0(self):
         print("测试按钮被点击")
+        # self.sender().setEnabled(False)
+        # self.test_button0.setEnabled(False)
+        button = self.sender()
+        if button == self.test_button0:
+            print("test_button0 被点击了")
+            button.setEnabled(False)
+        print("1-->")
         spark = AI_spark()
         prompt = question_speed
         time_start = datetime.now()
@@ -466,6 +473,10 @@ class EvalApp(QDialog):
         lst = list(tokens)
         speed = round(len(lst) / dur.total_seconds(), 0)
         self.speed_edit.setText(str(speed))
+        print("1-->")
+
+        button.setEnabled(True)
+
 
     def on_test1(self):
         self.on_test(llm_ability[0], self.understanding_edit)

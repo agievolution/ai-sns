@@ -164,7 +164,7 @@ class SettingDialog(QDialog):
         # 绑定按钮点击事件到对应的槽函数
         self.ok_button.clicked.connect(self.on_ok_click)
         self.cancel_button.clicked.connect(self.on_cancel_click)
-
+        # self.accepted.connect(self.emit_closed)
         # 设定垂直布局
         vbox = QVBoxLayout()
 
@@ -192,6 +192,7 @@ class SettingDialog(QDialog):
         self.setGeometry(300, 300, 300, 100)
 
     def on_ok_click(self):
+        self.ok_button.setEnabled(False)
         user_selection = self.combo_box.currentText()
         if self.items_field.text() == "":
             user_selection = f'{user_selection},10'
@@ -203,6 +204,10 @@ class SettingDialog(QDialog):
 
     def on_cancel_click(self):
         self.reject()  # 使用reject()来关闭模态对话框并返回QDialog.Rejected
+
+    # def emit_closed(self):
+    #     print("emit_closed")
+    #     self.ok_button.setEnabled(True)
 
 
 class QuestionManager(QDialog):
@@ -311,6 +316,7 @@ class QuestionManager(QDialog):
         label_txt = '能力选项:'
         comb_txt = LLM_Ability_List
         oldName = LLM_Ability_List[0]
+        self.add_ai_btn.setEnabled(False)
         dialog = SettingDialog(window_title, label_txt, comb_txt, oldName)
 
         def handle_user_selection(selection):
@@ -327,7 +333,7 @@ class QuestionManager(QDialog):
 
     def on_thread_finished(self):
         print("线程完成")
-        self.isdone = True
+        self.add_ai_btn.setEnabled(True)
         self.refresh_table()
 
     def add_question(self):

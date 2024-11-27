@@ -8,12 +8,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from db.DBFactory import query_skill_mng_all,delete_skill_mng
 from skill_editor import SkillEditor
-from pytalk.workflow_design import WorkFlowDesign
+# from pytalk.workflow_design import WorkFlowDesign
 
 
 class SkillManager(QWidget):
-    def __init__(self,type_str=""):
-        # type_str:"0","1","2"
+    def __init__(self,type_str=""):        # type_str:"0","1","2"
+
         super().__init__()
         self.type_str=type_str
         print("type_str:",type_str)

@@ -88,6 +88,8 @@ class ConfigDialog(QDialog):
         autorun=self.generalPage.autorunCheckBox.isChecked()
         showtaskbar=self.generalPage.showtaskbarCheckBox.isChecked()
         updateinfo=self.generalPage.updateinfoCheckBox.isChecked()
+        minirunontray = self.generalPage.minirunontrayCheckBox.isChecked()
+
         closebuttontype=self.generalPage.closebuttontypeCombo.currentText()
         style=self.generalPage.styleCombo.currentText()
         showinfo=self.infoPage.showinfoCheckBox.isChecked()
@@ -95,9 +97,9 @@ class ConfigDialog(QDialog):
         infosound=self.infoPage.infosoundCheckBox.isChecked()
 
         if self.agent == None:
-            add_SystemCfg(autorun,showtaskbar,updateinfo,closebuttontype,style,showinfo,showinfoicon,infosound)
+            add_SystemCfg(autorun,showtaskbar,updateinfo,minirunontray,closebuttontype,style,showinfo,showinfoicon,infosound)
         else:
-            update_SystemCfg(self.agent.id, autorun=autorun, showtaskbar=showtaskbar, updateinfo=updateinfo, closebuttontype=closebuttontype, style=style, showinfo=showinfo, showinfoicon=showinfoicon, infosound=infosound)
+            update_SystemCfg(self.agent.id, autorun=autorun, showtaskbar=showtaskbar, updateinfo=updateinfo,minirunontray = minirunontray, closebuttontype=closebuttontype, style=style, showinfo=showinfo, showinfoicon=showinfoicon, infosound=infosound)
 
         self.accept()
         self.close()
@@ -154,6 +156,8 @@ class GeneralPage(QWidget):
         self.autorunCheckBox = QCheckBox("开机自动运行")
         self.showtaskbarCheckBox = QCheckBox("在任务栏显示")
         self.updateinfoCheckBox = QCheckBox("有更新时提醒升级")
+        self.minirunontrayCheckBox = QCheckBox("关闭应用，最小化到托盘")
+
 
 
 
@@ -179,6 +183,7 @@ class GeneralPage(QWidget):
             self.autorunCheckBox.setChecked(agent.autorun)
             self.showtaskbarCheckBox.setChecked(agent.showtaskbar)
             self.updateinfoCheckBox.setChecked(agent.updateinfo)
+            self.minirunontrayCheckBox.setChecked(agent.minirunontray)
             self.closebuttontypeCombo.setCurrentText(agent.closebuttontype)
             self.styleCombo.setCurrentText(agent.style)
 
@@ -190,6 +195,7 @@ class GeneralPage(QWidget):
         updateLayout.addWidget(self.autorunCheckBox, 0, 0)
         updateLayout.addWidget(self.showtaskbarCheckBox, 0, 1)
         updateLayout.addWidget(self.updateinfoCheckBox, 1, 0)
+        updateLayout.addWidget(self.minirunontrayCheckBox, 1, 1)
 
         updateGroup.setLayout(updateLayout)
 

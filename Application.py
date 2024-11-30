@@ -15,7 +15,7 @@ import datetime
 from db.DBFactory import add_AgentCfg, query_AgentCfg_All, update_AgentCfg, delete_AgentCfg
 import copy
 from PyQt5.QtWebChannel import QWebChannel
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QShortcut
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QShortcut, QSystemTrayIcon, QAction, QMenu, QStyle
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon, QKeySequence, QFont, QColor
 from PyQt5.QtWidgets import (
@@ -75,10 +75,62 @@ from Agent import Agent
 import qdarkgraystyle
 import qtvscodestyle as qtvsc
 import qdarktheme
+from db.DBFactory import query_SystemCfg
+
+
+
+
+class CustomModernWindow(qtmodern.windows.ModernWindow):
+    def __init__(self, window):
+        super(CustomModernWindow, self).__init__(window)
+
+
+        # Init QSystemTrayIcon
+        self.tray_icon = QSystemTrayIcon(self)
+        # self.tray_icon.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
+        self.tray_icon.setIcon(QIcon('images/aisns.png'))  # 设置自定义图标
+        self.tray_icon.setVisible(True)  # 显示托盘图标
+        '''
+            Define and add steps to work with the system tray icon
+            show - show window
+            hide - hide window
+            exit - exit from application
+        '''
+        show_action = QAction("Show", self)
+        quit_action = QAction("Exit", self)
+        hide_action = QAction("Hide", self)
+        show_action.triggered.connect(self.show)
+        hide_action.triggered.connect(self.hide)
+        quit_action.triggered.connect(QApplication.instance().quit)
+        # quit_action.triggered.connect(self.close)
+        tray_menu = QMenu()
+        tray_menu.addAction(show_action)
+        tray_menu.addAction(hide_action)
+        tray_menu.addAction(quit_action)
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.show()
+
+    def closeEvent(self, event):
+        # 忽略关闭事件，窗口将不会关闭
+        agent = query_SystemCfg()
+        use_tray = agent.minirunontray
+        print(use_tray)
+        if use_tray:
+            event.ignore()
+            self.hide()
+            self.tray_icon.showMessage(
+                "Pytalk",
+                "应用最小化到托盘",
+                QSystemTrayIcon.Information,
+                100
+            )
+        else:
+            super(CustomModernWindow, self).closeEvent(event)  # 调用父类的 closeEvent 方法
+        # event.ignore()
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     connectorThread = None
-
+    tray_icon = None
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
 
@@ -323,6 +375,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     #     """重写恢复事件"""
     #     super().showNormal()
     #     self.statusbar.setVisible(True)
+
+
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -617,6 +671,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def closeEvent(self, event):
         self.quit()
+        # if use_tray:
+        #     self.hide()
+        #     event.ignore()
+        #     # self.tray_icon.showMessage(
+        #     #     "Tray Program",
+        #     #     "Application was minimized to Tray",
+        #     #     QSystemTrayIcon.Information,
+        #     #     1000
+        #     # )
+        # else:
+        #     self.quit()
 
     def quit(self):
         self.disconnect()
@@ -878,7 +943,8 @@ if __name__ == "__main__":
     #
     # app.setStyle('Windows')
     qtmodern.styles.light(app)  # qtmodern dark or light
-    mw = qtmodern.windows.ModernWindow(window)  # qtmodern
+    # mw = qtmodern.windows.ModernWindow(window)  # qtmodern
+    mw = CustomModernWindow(window)
 
     #
 
@@ -900,88 +966,88 @@ if __name__ == "__main__":
     # window.showMaximized()
     sys.exit(app.exec_())
 
-if __name__ == "__main__bak":
-    if sys.platform == 'win32':
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    qdarktheme.enable_hi_dpi()
-    app = QApplication(sys.argv)
-    qdarktheme.setup_theme("dark")
-
-    __cli_args = __init_cli().parse_args()
-    print("cjrok")
-    print(__cli_args.log)
-    print("cjrok2")
-
-    # load plugins load插件
-    # initiate plugins 初始化插件
-    __init_app({
-        'log_level': __cli_args.log,
-        'directory': __cli_args.directory
-    })
-
-    print(global_plugin_list)
-
-    window = MainWindow()
-    window.setWindowIcon(QIcon("C:\\dev\\ai-sns\\PyTalk\\pytalk\\images\\aisns.png"))
-
-    # window.showMaximized()
-    #
-    # apply_stylesheet(app, theme='dark_blue.xml')#qt_material
-    #
-    # app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt5')) #qdarkstyle
-    # app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt5', palette=LightPalette())) #qdarkstyle
-    window.showagenthome()
-
-    # channel = QWebChannel()
-    # shared = Myshared()
-    # channel2 = QWebChannel()
-    # shared2 = Myshared()
-    # setup_web_channel(channel2,shared2)
-    # window.show()
-    # showchannel(window)
-    # # channel = QWebChannel()
-    # # shared = Myshared()
-    # # channel.registerObject("con", shared)
-    # #
-    # # window.agent_home.page().setWebChannel(channel)
-    #
-    #
-    # channel = QWebChannel()
-    # shared = Myshared()
-    # channel.registerObject("con", shared)
-    #
-    # window.agent_home.page().setWebChannel(channel)
-    #
-    #
-    #
-    #
-    #
-    # qtmodern.styles.light(app)  # qtmodern dark or light
-    # mw = qtmodern.windows.ModernWindow(window)  # qtmodern
-    #
-    # #
-    #
-    # if sys.platform == "win32":
-    #     mw.showMaximized()  # qtmodern 保留操作系统工具栏
-    # elif sys.platform == "darwin":
-    #     mw.showFullScreen()  # 不保留操作系统工具栏
-    # else:
-    #     mw.showMaximized()  # qtmodern 保留操作系统工具栏
-    # #
-    # mw.setWindowIcon(QIcon("C:\\dev\\ai-sns\\PyTalk\\pytalk\\images\\aisns.png"))
-    # app.setWindowIcon(QIcon("C:\\dev\\ai-sns\\PyTalk\\pytalk\\images\\aisns.png"))
-    #
-    # __eb = ExplanationBalloon(window.toolBox_Workflow, 300.0, 200.0, 'This is explanation balloon made out of PyQt')
-    # __eb.setFont(QFont('Arial', 14))
-    # __eb.setBackgroundColor(QColor(50, 50, 50, 255))
-    # __eb.show()
-
-    # setup stylesheet
-    # stylesheet = qtvsc.load_stylesheet(qtvsc.Theme.DARK_VS)
-    # stylesheet = qtvsc.load_stylesheet(qtvsc.Theme.KIMBIE_DARK)
-    # app.setStyleSheet(stylesheet)
-
-    # app.setStyleSheet(qdarkgraystyle.load_stylesheet())
-
-    window.showMaximized()
-    sys.exit(app.exec_())
+# if __name__ == "__main__bak":
+#     if sys.platform == 'win32':
+#         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+#     qdarktheme.enable_hi_dpi()
+#     app = QApplication(sys.argv)
+#     qdarktheme.setup_theme("dark")
+#
+#     __cli_args = __init_cli().parse_args()
+#     print("cjrok")
+#     print(__cli_args.log)
+#     print("cjrok2")
+#
+#     # load plugins load插件
+#     # initiate plugins 初始化插件
+#     __init_app({
+#         'log_level': __cli_args.log,
+#         'directory': __cli_args.directory
+#     })
+#
+#     print(global_plugin_list)
+#
+#     window = MainWindow()
+#     window.setWindowIcon(QIcon("C:\\dev\\ai-sns\\PyTalk\\pytalk\\images\\aisns.png"))
+#
+#     # window.showMaximized()
+#     #
+#     # apply_stylesheet(app, theme='dark_blue.xml')#qt_material
+#     #
+#     # app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt5')) #qdarkstyle
+#     # app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt5', palette=LightPalette())) #qdarkstyle
+#     window.showagenthome()
+#
+#     # channel = QWebChannel()
+#     # shared = Myshared()
+#     # channel2 = QWebChannel()
+#     # shared2 = Myshared()
+#     # setup_web_channel(channel2,shared2)
+#     # window.show()
+#     # showchannel(window)
+#     # # channel = QWebChannel()
+#     # # shared = Myshared()
+#     # # channel.registerObject("con", shared)
+#     # #
+#     # # window.agent_home.page().setWebChannel(channel)
+#     #
+#     #
+#     # channel = QWebChannel()
+#     # shared = Myshared()
+#     # channel.registerObject("con", shared)
+#     #
+#     # window.agent_home.page().setWebChannel(channel)
+#     #
+#     #
+#     #
+#     #
+#     #
+#     # qtmodern.styles.light(app)  # qtmodern dark or light
+#     # mw = qtmodern.windows.ModernWindow(window)  # qtmodern
+#     #
+#     # #
+#     #
+#     # if sys.platform == "win32":
+#     #     mw.showMaximized()  # qtmodern 保留操作系统工具栏
+#     # elif sys.platform == "darwin":
+#     #     mw.showFullScreen()  # 不保留操作系统工具栏
+#     # else:
+#     #     mw.showMaximized()  # qtmodern 保留操作系统工具栏
+#     # #
+#     # mw.setWindowIcon(QIcon("C:\\dev\\ai-sns\\PyTalk\\pytalk\\images\\aisns.png"))
+#     # app.setWindowIcon(QIcon("C:\\dev\\ai-sns\\PyTalk\\pytalk\\images\\aisns.png"))
+#     #
+#     # __eb = ExplanationBalloon(window.toolBox_Workflow, 300.0, 200.0, 'This is explanation balloon made out of PyQt')
+#     # __eb.setFont(QFont('Arial', 14))
+#     # __eb.setBackgroundColor(QColor(50, 50, 50, 255))
+#     # __eb.show()
+#
+#     # setup stylesheet
+#     # stylesheet = qtvsc.load_stylesheet(qtvsc.Theme.DARK_VS)
+#     # stylesheet = qtvsc.load_stylesheet(qtvsc.Theme.KIMBIE_DARK)
+#     # app.setStyleSheet(stylesheet)
+#
+#     # app.setStyleSheet(qdarkgraystyle.load_stylesheet())
+#
+#     window.showMaximized()
+#     sys.exit(app.exec_())

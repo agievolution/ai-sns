@@ -27,11 +27,12 @@ from qtpy.QtCore import Qt, QMetaObject, Signal, Slot, QEvent
 from pathlib import Path
 from langchainhandler import get_file_content_tuple
 
-from pytalk.speaker import Speaker
+
 import json
 from util import generate_random_id,extract_json_string_from_llm
 sys.path.append("../..")
 sys.path.append("../../..")
+from speaker import Speaker
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QApplication, QMessageBox, QMainWindow, QPushButton, QVBoxLayout,QTabWidget

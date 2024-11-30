@@ -210,7 +210,9 @@ class SkillEditor(QWidget,PluginInterface):
             skill_id = generate_random_id()
             name = self.skill_name_input.text()
             self.skill_id = skill_id
-            self.filename = os.path.join(os.getcwd(),"pluginsmanager","plugins_skill",name+".py")
+            filename = "steps.txt"
+            filename = os.path.join(os.getcwd(), "skilllearning", "data", skill_id, filename)
+            self.filename=filename
 
             description = self.skill_description_input.text()
             detail = self.detail_text_edit.toPlainText()
@@ -351,8 +353,8 @@ class SkillEditor(QWidget,PluginInterface):
         else:
             record =query_skill_mng(skill_id=skill_id)
             if record:
-                filename=record.file_path
-                filename = os.path.join(os.getcwd(), "pluginsmanager", "plugins_skill", filename + ".py")
+                filename="steps.txt"
+                filename = os.path.join(os.getcwd(), "skilllearning", "data",skill_id, filename)
                 if record.skill_type=="2":
                     filename = os.path.join(os.getcwd(), "agent", "tools.py")
 

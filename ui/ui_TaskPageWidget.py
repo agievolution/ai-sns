@@ -485,6 +485,7 @@ class Ui_TaskPageWidget(object):
 
         self.messageEdit.setObjectName("messageEdit")
         self.messageEdit.textChanged.connect(self.adjustHeight)
+        # self.messageEdit.keyPressEvent = self.handle_key_press
         self.hboxlayout1.addWidget(self.messageEdit)
 
         self.sendButton = QPushButton(TaskWidget)
@@ -530,6 +531,15 @@ class Ui_TaskPageWidget(object):
         # 设置新的高度
         self.messageEdit.setFixedHeight(new_height+5)
 
+    def handle_key_press(self, event):
+        # 检查是否按下了Ctrl+/组合键
+        if event.key() == Qt.Key_Slash and event.modifiers() == Qt.ControlModifier:
+            print("你好")
+            self.set_default_chat_template()
+        # else:
+        #     # 处理其他按键事件
+        #     super(QtWidgets.QTextEdit, self.messageEdit).keyPressEvent(event)
+
     def retranslateUi(self, TaskWidget):
         _translate = QtCore.QCoreApplication.translate
         TaskWidget.setWindowTitle(_translate("TaskWidget", "Message"))
@@ -540,7 +550,7 @@ class Ui_TaskPageWidget(object):
         # "</body></html>"))
 
         # self.messageBrowser.setHtml(QtCore.QCoreApplication.translate("TaskWidget", "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-        #                                                                                "p, li { white-space: pre-wrap; }\n"
+        #                                                                                   "p, li { white-space: pre-wrap; }\n"
         #                                                                                "</style><script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/1.4.4/jquery.min.js' type='text/javascript'></script><link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/styles/default.min.css'><script src='https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/highlight.min.js'></script></head><body style=\" font-family:\'Microsoft YaHei\'; font-size:14pt; font-weight:400; font-style:normal;background-color: #f0f0f0;border:\'solid 1px red;\' \">"
         #                                                                                "<script>hljs.highlightAll();</script></body></html>"))
 
@@ -798,7 +808,21 @@ class Ui_TaskPageWidget(object):
 
 
 
+    def set_default_chat_template(self):
+        title = self.prompt_combobox.currentText()
+        session = Session()
+        record = session.query(Prompt).filter(Prompt.title == title).first()
+        if record:
+            q_template = record.question
+            if q_template:
+                # self.messageEdit.setPlainText(q_template+self.messageEdit.toPlainText())
+                # self.messageEdit.insertPlainText(q_template)
+                cursor = self.messageEdit.textCursor()
+                cursor.movePosition(cursor.Start)
 
+                # Insert the text
+                cursor.insertText(q_template)
+                self.messageEdit.setTextCursor(cursor)
 
 
 
@@ -806,22 +830,23 @@ class Ui_TaskPageWidget(object):
         if event.button() == Qt.LeftButton:
             self.on_manage_button_clicked()
         elif event.button() == Qt.RightButton:
-        # if event.button() == Qt.RightButton:
-            # 处理模板的添加
-            title = self.prompt_combobox.currentText()
-            session = Session()
-            record = session.query(Prompt).filter(Prompt.title == title).first()
-            if record:
-                q_template = record.question
-                if q_template:
-                    # self.messageEdit.setPlainText(q_template+self.messageEdit.toPlainText())
-                    # self.messageEdit.insertPlainText(q_template)
-                    cursor = self.messageEdit.textCursor()
-                    cursor.movePosition(cursor.Start)
 
-                    # Insert the text
-                    cursor.insertText(q_template)
-                    self.messageEdit.setTextCursor(cursor)
+            # 处理模板的添加
+            # title = self.prompt_combobox.currentText()
+            # session = Session()
+            # record = session.query(Prompt).filter(Prompt.title == title).first()
+            # if record:
+            #     q_template = record.question
+            #     if q_template:
+            #         # self.messageEdit.setPlainText(q_template+self.messageEdit.toPlainText())
+            #         # self.messageEdit.insertPlainText(q_template)
+            #         cursor = self.messageEdit.textCursor()
+            #         cursor.movePosition(cursor.Start)
+            #
+            #         # Insert the text
+            #         cursor.insertText(q_template)
+            #         self.messageEdit.setTextCursor(cursor)
+            self.set_default_chat_template()
 
         if event.modifiers() == Qt.ShiftModifier:
             print("shiftclick")

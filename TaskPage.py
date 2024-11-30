@@ -64,8 +64,8 @@ from pluginsmanager.plugins_headless.plugin_mng import load_plugin as load_plugi
 pyautogui.PAUSE = 0.5
 from pathlib import Path
 from util import generate_random_id, add_msg_to_message_window, get_user_ask_msg_title_formatted, get_user_ask_msg_content_formatted, get_agent_reply_msg_title_formatted, get_agent_reply_msg_content_formatted, toggle_msg_loading_status, add_agent_reply_msg_to_message_window, add_msg_to_message_window_with_markdown_and_highlight, add_attachment_to_message_window,image_to_base64,generate_img_tag
-from operationlearning.app import ScreenBar
-# from operationlearning.auto_operate import AutoOprateBar
+from skilllearning.learn_operation import LearnOperationBar
+from skilllearning.auto_operate import AutoOperateBar
 current_agent = None
 
 
@@ -254,17 +254,24 @@ class TaskPage(QWidget, Ui_TaskPageWidget):
 
         self.auto_operate_bar = None
 
-        self.screen_bar = None
+        self.learn_operation_bar = None
 
     def onLoadFinished(self):
         self.is_browser_page_loaded = True
         self.messageEdit.setFocus()
+
+
+
 
     def keyPressEvent(self, event):
         # if event.key() == Qt.Key_F and event.modifiers() == Qt.ControlModifier:
         if event.key() == Qt.Key_F1 and event.modifiers() == Qt.ControlModifier:
             print("Ctrl+F detected")
             self.toggle_search_box()
+
+        if event.key() == Qt.Key_Slash and event.modifiers() == Qt.ControlModifier:
+            print("你好")
+            self.set_default_chat_template()
 
     def increment_page_index(self):
         self.page_index += 1
@@ -729,14 +736,13 @@ class TaskPage(QWidget, Ui_TaskPageWidget):
                 opr_file_name = self.messageEdit.toPlainText()
                 opr_file_name = opr_file_name.replace("学习一下", "")
                 opr_file_name = opr_file_name.replace("学习", "")
-                if self.screen_bar is None:
-                    self.screen_bar = ScreenBar()
-                self.screen_bar.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-                self.screen_bar.show()
+                if self.learn_operation_bar is None:
+                    self.learn_operation_bar = LearnOperationBar()
+                self.learn_operation_bar.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+                self.learn_operation_bar.show()
+                self.learn_operation_bar.auto_start()
 
-                # bar = ScreenBar()
-                # bar.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-                # bar.show()
+
 
 
 
@@ -762,14 +768,32 @@ class TaskPage(QWidget, Ui_TaskPageWidget):
 
                 # os.system("C:\\dev\\ai-sns\\record-and-play-pynput\\record-and-play-pynput\\venv\\Scripts\\python.exe C:/dev/ai-sns/record-and-play-pynput/record-and-play-pynput/play.py test001 1")
                 print("演示....")
-                opr_file_name = self.messageEdit.toPlainText()
-                opr_file_name = opr_file_name.replace("演示一下", "")
-                opr_file_name = opr_file_name.replace("演示", "")
-                # os.system(f"python C:/dev/ai-sns/record-and-play-pynput/record-and-play-pynput/play.py {opr_file_name} 1")
-                self.auto_operate_bar = AutoOprateBar()
+
+                skill_id = ""
+                skill_index = ""
+                text = self.messageEdit.toPlainText()
+                if "演示一下,skill_id:" in text:
+                    skill_id = text.replace("演示一下,skill_id:", "")
+
+                if text.startswith("yan"):
+                    skill_index = text.replace("yan", "")
+
+
+                if skill_id == "":
+                   if self.learn_operation_bar is not None:
+                       if skill_index=="":
+                           skill_index="0"
+                       skill_id = self.learn_operation_bar.skill_id_history_list[int(skill_index)-1]
+
+
+
+                if self.auto_operate_bar is None:
+                    self.auto_operate_bar = AutoOperateBar()
                 self.auto_operate_bar.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
                 self.auto_operate_bar.wait_for_input_from_ai_signal.connect(self.request_value_for_auto_operate_bar)
                 self.auto_operate_bar.show()
+                self.auto_operate_bar.set_skill_id(skill_id)
+                self.auto_operate_bar.auto_start()
 
 
             elif "//中国象棋" in self.messageEdit.toPlainText():
@@ -1502,7 +1526,9 @@ class TaskPage(QWidget, Ui_TaskPageWidget):
         print("agent get imgsrc",img_path)
         self.pre_system_role_prompt = self.system_role_prompt
         # self.system_role_prompt = "请直接提供问题的最终答案，要求：1.不要做任何解释和说明。2.不要重复我的问题。记住这些规则，然后回答我的问题"
-        question = "请直接提供问题的最终答案，要求：1.不要做任何解释和说明。2.不要重复我的问题。记住这些规则，然后回答我的问题，我的问题是：" + question
+        # question = "请直接提供问题的最终答案，要求：1.不要做任何解释和说明。2.不要重复我的问题。记住这些规则，然后回答我的问题，我的问题是：" + question
+        question = f"我正在指导你填表，如果我说：{question}。你将填入什么内容，请直接提供问题的最终答案，要求：1.不要做任何解释和说明。2.不要重复我的问题。记住这些规则，然后直接给出填入的内容"
+
         self.is_waiting_for_feedback_to_auto_operation = True
         self.messageEdit.setPlainText(question)
         self.sendMessage()

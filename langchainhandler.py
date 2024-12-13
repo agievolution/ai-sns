@@ -1,17 +1,17 @@
 import os
 from typing import Union, List
 import jieba
-from langchain_text_splitters import RecursiveCharacterTextSplitter, CharacterTextSplitter
+# from langchain_text_splitters import RecursiveCharacterTextSplitter, CharacterTextSplitter
 
 os.environ['HUGGINGFACEHUB_API_TOKEN'] = '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'
 os.environ[
     "OPENAI_API_KEY"] = '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'
 os.environ["GOOGLE_CSE_ID"] = "53b9c3fd76d8d4cbb"
 os.environ["GOOGLE_API_KEY"] = "AIzaSyAYEpRPu24tU41bFn4QQB_2cZFmlOZxEEE"
-from langchain_community.document_loaders import TextLoader, powerpoint, word_document, excel, PyPDFLoader, \
-    markdown, html, csv_loader
+# from langchain_community.document_loaders import TextLoader, powerpoint, word_document, excel, PyPDFLoader, \
+#     markdown, html, csv_loader
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.text_splitter import TokenTextSplitter
+# from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores.chroma import Chroma
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from util import image_to_base64

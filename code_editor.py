@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QPlainTextEdit
 import os
 import webbrowser
 from db.DBFactory import query_function_mng,add_function_mng,update_function_mng
-from pytalk.util import generate_random_id
+from util import generate_random_id
 import autogen
 from autogen import AssistantAgent, UserProxyAgent
 

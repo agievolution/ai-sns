@@ -1,7 +1,7 @@
 import argparse
 
 from engine import PluginEngine
-from pytalk.util import FileSystem
+from util import FileSystem
 
 
 def __description() -> str:

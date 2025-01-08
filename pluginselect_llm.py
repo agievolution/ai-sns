@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QApplication, QDialog, QMenu, QTableView, QVBoxLayo
 from model_metric import ModelEvaluationDialog
 from globals import global_plugin_list
 from frequentllmmng import FreezeTableDialog as FrequentFreezeTableDialog
-from pytalk.db.DBFactory import query_llm_frequents,add_llm_frequent
+from db.DBFactory import query_llm_frequents,add_llm_frequent
 
 
 class ComboBoxDelegate(QItemDelegate):

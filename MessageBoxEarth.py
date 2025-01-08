@@ -10,7 +10,7 @@ from ui.ui_MessageWidgetEarth import Ui_MessageWidget
 import hashlib
 import webbrowser
 import emoji
-from pytalk.speaker import Speaker_Log
+from speaker import Speaker_Log
 # 主要用于发送附件
 import asyncio
 from typing import Optional

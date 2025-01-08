@@ -4,13 +4,13 @@ from PyQt5.QtCore import QSize
 
 from pluginsmanager.plugins_gui.plugin_interface import PluginInterface
 from PyQt5.QtWidgets import QTextEdit, QHBoxLayout, QGroupBox, QLineEdit, QRadioButton, QLabel, QDialog, QFormLayout, QComboBox
-from pytalk.pluginsmanager.plugins_gui.plugins.code_editor import syntax_pars
+from pluginsmanager.plugins_gui.plugins.code_editor import syntax_pars
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QPlainTextEdit
 import os
 import webbrowser
 from db.DBFactory import query_skill_mng,add_skill_mng,update_skill_mng,query_AgentCfg_All
-from pytalk.util import generate_random_id
+from util import generate_random_id
 from TaskPage import TaskPage
 from pathlib import Path
 

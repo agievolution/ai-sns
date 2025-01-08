@@ -4,14 +4,14 @@ import openai
 import yaml
 from logging import Logger
 # from datetime import datetime
-from pytalk.pluginsmanager.engine import PluginCore
-from pytalk.pluginsmanager.model import Meta, Device
+from pluginsmanager.engine import PluginCore
+from pluginsmanager.model import Meta, Device
 from logging import Logger
 import json
 import requests
 import pandas as pd
 import datetime
-from pytalk.util import generate_random_id, download_image
+from util import generate_random_id, download_image
 from .OpenAIConnectionDialog import OpenAIConnectionDialog
 sys.path.append("..")
 sys.path.append("../..")

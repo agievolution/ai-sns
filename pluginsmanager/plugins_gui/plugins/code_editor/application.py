@@ -17,8 +17,8 @@ from pathlib import Path
 
 from autogen.coding import CodeBlock, LocalCommandLineCodeExecutor
 
-from pytalk.db.DBFactory import add_function_mng
-from pytalk.util import generate_random_id
+from db.DBFactory import add_function_mng
+from util import generate_random_id
 
 
 class Main(QWidget, PluginInterface):

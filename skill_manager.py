@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt
 from db.DBFactory import query_skill_mng_all,delete_skill_mng,query_AgentCfg_All
 from globals import global_agent_list
 from skill_editor import SkillEditor
-# from pytalk.workflow_design import WorkFlowDesign
+# from workflow_design import WorkFlowDesign
 from TaskPage import TaskPage
 
 class SkillManager(QWidget):

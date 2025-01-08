@@ -23,7 +23,7 @@ from autogen.io.base import IOStream
 from db.DBFactory import query_MutiAgentCfg, query_AgentCfg
 
 from langchainhandler import getvectorkm_String
-from pytalk.agent.io import AISNSIOStream
+from agent.io import AISNSIOStream
 from ui.ui_TaskPageWidget import Ui_TaskPageWidget
 import hashlib
 import webbrowser

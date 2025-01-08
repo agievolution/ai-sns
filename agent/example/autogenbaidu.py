@@ -1,5 +1,5 @@
 from sparkai.frameworks.autogen import SparkAI
-from pytalk.agent.llm.baidu_qianfan import BaiduQianFanClient
+from agent.llm.baidu_qianfan import BaiduQianFanClient
 import autogen
 from autogen.agentchat.contrib.retrieve_assistant_agent import RetrieveAssistantAgent
 from autogen import AssistantAgent, UserProxyAgent

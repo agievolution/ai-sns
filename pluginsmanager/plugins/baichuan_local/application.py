@@ -5,7 +5,7 @@ from ...engine import PluginCore
 from ...model import Meta, Device
 import http.client
 import json
-from .OpenAIConnectionDialog import OpenAIConnectionDialog
+from .SettingDialog import SettingDialog
 class Connector_Baichuan2_13B_Plugin(PluginCore):
 
     def __init__(self, logger: Logger) -> None:
@@ -33,7 +33,7 @@ class Connector_Baichuan2_13B_Plugin(PluginCore):
 
     def invoke(self,command) -> str:
         # agetnconfigdlg=ConnectionDialog
-        connection = OpenAIConnectionDialog(self)
+        connection = SettingDialog(self)
         content=""
         # self.actionConnection.triggered.connect(connection.exec_)  #
 

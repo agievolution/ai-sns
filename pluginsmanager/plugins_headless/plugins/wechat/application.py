@@ -89,14 +89,7 @@ class Connector_OpenAI_Plugin(PluginCore):
         self.type = "Tool_Headless"
         self.connection_mode="OpenAI"
 
-    @staticmethod
-    def __create_device() -> Device:
-        return Device(
-            name='Jiuzhou Device',
-            firmware=0xa2c3f,
-            protocol='LLM',
-            errors=[0x0000]
-        )
+
 
 
 

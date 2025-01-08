@@ -825,7 +825,7 @@ class TaskPage(QWidget, Ui_TaskPageWidget):
                 self.learn_operation_bar.show()
                 self.learn_operation_bar.auto_start()
 
-            elif "演示" in self.messageEdit.toPlainText() or "yanshi" in self.messageEdit.toPlainText() or "yan" in self.messageEdit.toPlainText() or "skill_id:" in self.messageEdit.toPlainText():
+            elif "//演示" in self.messageEdit.toPlainText() or "//yanshi" in self.messageEdit.toPlainText() or "skill_id:" in self.messageEdit.toPlainText():
                 print("演示....")
 
                 message = f"""<strong><em><span style='color: darkred;font-size:14px;'>{self.tr("用户")}: </span><span style='color: #c0c0c0; font-size:14px;'>{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</span></em></strong>"""

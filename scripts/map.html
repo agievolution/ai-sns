@@ -112,7 +112,7 @@
             color: #fff;
         }
 
-      /* 子菜单样式 */
+        /* 子菜单样式 */
         .submenu {
             display: none;
             position: absolute;
@@ -215,15 +215,37 @@
             cursor: crosshair !important;
         }
 
+        /* 现代 Tooltip 样式 */
         .tooltip {
             position: absolute;
-            background-color: white;
-            padding: 5px;
-            border: 1px solid black;
-            border-radius: 3px;
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
             pointer-events: none;
             visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
             white-space: nowrap;
+            z-index: 1000;
+        }
+
+        .tooltip.visible {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 10%;
+            transform: translateX(-50%);
+            border-width: 10px 10px 0;
+            border-style: solid;
+            border-color: #6a11cb transparent transparent transparent;
         }
     </style>
     <script src="https://unpkg.com/three@0.126.0/build/three.min.js"></script>
@@ -266,7 +288,7 @@
 
 <ul class="btn-wrap" style="z-index: 99;">
     <li class="btn" id="refreshbtn" style="display: inline" onclick="refresh()">刷新</li>
-        <li class="btn" id="hidebtn" style="display: none" onclick="hideHistory()">活动看板</li>
+    <li class="btn" id="hidebtn" style="display: none" onclick="hideHistory()">活动看板</li>
     <li class="btn" id="showbtn" style="display: inline" onclick="showHistory()">活动看板</li>
     <li class="btn" id="initbtn" style="display: inline" onclick="initPos()">初始位置</li>
     <li class="btn" id="fhbtn" style="display: inline" onclick="findHim()">定位</li>
@@ -423,7 +445,6 @@
     }
 
 
-
     // 创建自定义覆盖物DOM
     function createDOM(feature) {
         var img = document.createElement('img');
@@ -486,6 +507,7 @@
 
     // 调用函数并指定远程服务器的 URL
     var personsdata = {};
+    var personsdata3d = [];
     const dataUrl = "http://www.ai-sns.org/personsdata.json"; // 替换为实际的 API URL
     loadPersonsData(dataUrl).then(data => {
         if (data) {
@@ -496,6 +518,22 @@
             person_me_layer = getPersonLayerByNationId("AI123451234567890ABCDEF7890");
             person_me = person_me_layer.properties;
             // 在这里可以调用其他函数来处理加载的数据
+
+            // 遍历 features 列表
+            data.features.forEach(feature => {
+                // 提取 geometry 中的 coordinates
+                const coordinates = feature.geometry.coordinates;
+
+                // 将 coordinates 添加到 properties 中
+                feature.properties.points = coordinates;
+
+                // 将 properties 添加到 propertiesList 列表中
+                personsdata3d.push(feature.properties);
+                persondata = feature.properties;
+                loadModel(persondata);
+            });
+
+
         } else {
             console.error("Failed to load persons data.");
         }
@@ -606,12 +644,12 @@
         location.reload(true);
     }
 
-    function initPos(){
+    function initPos() {
         map.centerAndZoom(new BMapGL.Point(121.473701, 31.230416), 19);
     }
 
 
-    function findHim(){
+    function findHim() {
 
         map.centerAndZoom(person_me_layer.getPoint());
     }
@@ -662,11 +700,13 @@
         var submenu = document.getElementById("chatSubMenu");
         submenu.style.display = submenu.style.display === "block" ? "none" : "block";
     }
+
     // 打开子菜单
     function openSubMenu() {
         var submenu = document.getElementById("chatSubMenu");
         submenu.style.display = "block";
     }
+
     // 延迟关闭子菜单
     function delayedCloseSubMenu() {
         setTimeout(closeSubMenu, 1); // 延迟200毫秒关闭
@@ -677,7 +717,6 @@
         var submenu = document.getElementById("chatSubMenu");
         submenu.style.display = "none";
     }
-
 
 
     // 中断交谈
@@ -788,28 +827,28 @@
         console.log(person_target_point.lat);
         // cusLayer.updateData(personsdata2);
 
-        my_new_point =  new BMapGL.Point(person_target_point.lng, person_target_point.lat - 0.01);
+        my_new_point = new BMapGL.Point(person_target_point.lng, person_target_point.lat - 0.01);
 
         person_me_layer.setPoint(my_new_point, false);
         // var point = new BMapGL.Point(116.28882, 39.72164);
         point = my_new_point;
 
         let opts = {
-        width: 200,     // 信息窗口宽度200
-        height: 100,     // 信息窗口高度100
-        title: "", // 信息窗口标题
-        offset: new BMapGL.Size(30, -70),
-    }
+            width: 200,     // 信息窗口宽度200
+            height: 100,     // 信息窗口高度100
+            title: "", // 信息窗口标题
+            offset: new BMapGL.Size(30, -70),
+        }
         let hello_msg = "你好呀，我是Y宝";
         let infoWindow_me = new BMapGL.InfoWindow(hello_msg, opts);  // 创建信息窗口对象
 
         map.openInfoWindow(infoWindow_me, point); //开启信息窗口
 
 
-        send_im(person_me["account"],person_target["account"],hello_msg);
+        send_im(person_me["account"], person_target["account"], hello_msg);
 
         // var point2 = new BMapGL.Point(116.28882, 39.71564);
-        point2=person_target_point;
+        point2 = person_target_point;
         // 使用setTimeout来延迟1.5秒后打开第二个信息窗口
         let infoWindow_person_target = new BMapGL.InfoWindow("Hello,你好！", opts);  // 创建信息窗口对象
 
@@ -926,39 +965,49 @@
         if (instruct_to_move_flag == true) {
 
 
-            my_point=person_me_layer.getPoint();
+            my_point = person_me_layer.getPoint();
 
             alert('我当前位置经纬度：' + my_point.lng + ',' + my_point.lat);
 
             alert('点击位置经纬度：' + e.latlng.lng + ',' + e.latlng.lat);
 
 
-            click_point =new BMapGL.Point(e.latlng.lng, e.latlng.lat);
+            click_point = new BMapGL.Point(e.latlng.lng, e.latlng.lat);
 
-            distance = map.getDistance(my_point,click_point);
+            distance = map.getDistance(my_point, click_point);
             alert('当前位置到点击位置相距：' + distance);
 
 
             centerpoint = map.getCenter();
-            alert('地图中心点位置经纬度：' +centerpoint.lng + ',' + centerpoint.lat);
+            alert('地图中心点位置经纬度：' + centerpoint.lng + ',' + centerpoint.lat);
 
 
-            Viewport=map.getViewport();
+            Viewport = map.getViewport();
             viewcenter = Viewport.center;
-            alert('视野中心点位置经纬度：' +viewcenter.lng + ',' + viewcenter.lat);
+            alert('视野中心点位置经纬度：' + viewcenter.lng + ',' + viewcenter.lat);
 
             var list = cusLayer.getCustomOverlays();
             console.log(list[0]);
             list[0].setPoint(new BMapGL.Point(e.latlng.lng, e.latlng.lat), false);
+
+            mercatorPoint = new BMapGL.Point(e.latlng.lng, e.latlng.lat);
+            console.log("mercatorPoint", mercatorPoint);
+            const geoCoord2 = BMapGL.Projection.convertLL2MC(mercatorPoint);
+            console.log("geoCoord2", geoCoord2)
+
+
+            currentAircraft.position.set(geoCoord2.lng, geoCoord2.lat, 0);
+
+
             console.log(list[0]);
 
             service = getServiceForUser();
-            if (service !== null){
+            if (service !== null) {
                 const userConfirmed = confirm("此处有相应的应用服务，要继续吗？");
                 if (userConfirmed) {
 
                     alert("您选择了确定！");
-                    api_object.request_service(service.type,service.address);
+                    api_object.request_service(service.type, service.address);
                 } else {
                     return;
                 }
@@ -1058,12 +1107,12 @@
     </p></div>`;
 
         var opts = {
-        width: 200,     // 信息窗口宽度200
-        height: 100,     // 信息窗口高度100
-        title: "", // 信息窗口标题
-        offset: new BMapGL.Size(30, -50),
-    }
-        var infoWindow3 = new BMapGL.InfoWindow(sContent,opts);
+            width: 200,     // 信息窗口宽度200
+            height: 100,     // 信息窗口高度100
+            title: "", // 信息窗口标题
+            offset: new BMapGL.Size(30, -50),
+        }
+        var infoWindow3 = new BMapGL.InfoWindow(sContent, opts);
 
 
         // var point = new BMapGL.Point(116.28882, 39.72164);
@@ -1076,13 +1125,13 @@
         };
     };
 
-    function send_im(from,to,msg){
-        api_object.send_im(from,to,msg);
+    function send_im(from, to, msg) {
+        api_object.send_im(from, to, msg);
     }
 
 </script>
 
-<script type="text/javascript">
+<script>
     // GL版命名空间为BMapGL
     // 按住鼠标右键，修改倾斜角和角度
 
@@ -1185,7 +1234,7 @@
             console.log('end')
         });
         // 开始播放动画
-        setTimeout('map.startViewAnimation(animation)', 00);
+        setTimeout('map.startViewAnimation(animation)', 1);
     }
 </script>
 
@@ -1208,7 +1257,7 @@
     var show_talk_message = function (from, to, msg) {
         console.log(from);
         console.log(to);
-        from_point=getPersonPointByAccount(from);
+        from_point = getPersonPointByAccount(from);
         send_chat_msg(from_point.lng, from_point.lat, msg);
 
         // if (from == "chenchen@xabber.de") {
@@ -1229,25 +1278,26 @@
 </script>
 
 <script>
-//添加地面建筑
+    //添加地面建筑
 
-//平面游乐场
-// var pStart = new BMapGL.Point(117.19635, 36.24093);
-// var pEnd = new BMapGL.Point(117.20350, 36.24764);
-var pStart = new BMapGL.Point(116.22971, 39.74441);
-var pEnd = new BMapGL.Point(116.25646, 39.76812);
-var bounds = new BMapGL.Bounds(new BMapGL.Point(pStart.lng, pEnd.lat), new BMapGL.Point(pEnd.lng, pStart.lat));
-var imgOverlay = new BMapGL.GroundOverlay(bounds, {
-    type: 'image',
-    url: 'shouhuimap.png',
-    opacity: 1
-});
-map.addOverlay(imgOverlay);
+    //平面游乐场
+    // var pStart = new BMapGL.Point(117.19635, 36.24093);
+    // var pEnd = new BMapGL.Point(117.20350, 36.24764);
+    var pStart = new BMapGL.Point(116.22971, 39.74441);
+    var pEnd = new BMapGL.Point(116.25646, 39.76812);
+    var bounds = new BMapGL.Bounds(new BMapGL.Point(pStart.lng, pEnd.lat), new BMapGL.Point(pEnd.lng, pStart.lat));
+    var imgOverlay = new BMapGL.GroundOverlay(bounds, {
+        type: 'image',
+        url: 'shouhuimap.png',
+        opacity: 1
+    });
+    map.addOverlay(imgOverlay);
 
-//添加3D覆盖物
+    //添加3D覆盖物
     var three = null;
+
     function addThree() {
-        if(three){
+        if (three) {
             return;
         }
         three = new BMapGL.ThreeLayer({
@@ -1273,20 +1323,6 @@ map.addOverlay(imgOverlay);
                 mesh.scale.set(1, 1, 1);
                 this.add(mesh);
 
-                const material2 = new THREE.MeshLambertMaterial({ color: 0x03a9f4 });
-                // 设置锥体的位置
-                const coneGeometry = new THREE.ConeGeometry(100, 200, 50);
-                const cone = new THREE.Mesh(coneGeometry, material2);
-                cone.position.set(result[0][0], result[0][1], 100);
-                cone.rotation.x = Math.PI * 1 / 2;
-                if (!this.step) {
-                    this.step = 1;
-                }
-                this.grow = true;
-                cone.scale.set(this.step, this.step, this.step);
-                this.cone = cone;
-                this.add(cone);
-
                 //加载glb模型
                 const loader = new THREE.GLTFLoader();
                 var result2 = three.customCoords([[116.36200604013413, 39.94527332861826]]);
@@ -1299,7 +1335,7 @@ map.addOverlay(imgOverlay);
                         gltf.scene.position.set(result2[0][0], result2[0][1], 3);
                         gltf.scene.rotation.x = Math.PI * 1 / 2;
                         //gltf.scene.scale.set(30,30,30);
-                        gltf.scene.scale.set(0.4,0.4,0.4);
+                        gltf.scene.scale.set(0.4, 0.4, 0.4);
                         scene.add(gltf.scene);
                     }
                 );
@@ -1307,19 +1343,7 @@ map.addOverlay(imgOverlay);
                 this.triggerRepaint();
             },
             preRender: function () {
-                if (this.step > 1 && !this.grow) {
-                    this.step -= .1;
-                }
-                if (this.step < 10 && this.grow) {
-                    this.step += .1;
-                }
-                if (this.step < 1) {
-                    this.grow = true;
-                }
-                if (this.step > 10) {
-                    this.grow = false;
-                }
-                this.cone.scale.set(this.step, this.step, this.step);
+                console.log("in prerender");
 
             },
             onRender: function (renderer, scene, camera) {
@@ -1331,31 +1355,32 @@ map.addOverlay(imgOverlay);
         var raycaster = new THREE.Raycaster();
         var mouse = new THREE.Vector2();
         three.addEventListener('click', function (e) {
-            var fs = this.scene.children;
+                var fs = this.scene.children;
 
-            // 范围-1 1,原点在中心
-            mouse.x = (e.pixel.x / map.width) * 2 - 1;
-            mouse.y = -(e.pixel.y / map.height) * 2 + 1;
-                        alert(mouse.x);
-            alert(mouse.y);
-            console.log(mouse);
-            alert("the inside event:three is clicked");
-            console.log(e.target);
-            raycaster.setFromCamera(mouse, this.camera);
+                // 范围-1 1,原点在中心
+                mouse.x = (e.pixel.x / map.width) * 2 - 1;
+                mouse.y = -(e.pixel.y / map.height) * 2 + 1;
+                alert(mouse.x);
+                alert(mouse.y);
+                console.log(mouse);
+                alert("the inside event:three is clicked");
+                console.log(e.target);
+                raycaster.setFromCamera(mouse, this.camera);
 
-            var intersects = raycaster.intersectObjects(fs);
-            intersects.length && console.log(intersects);
+                var intersects = raycaster.intersectObjects(fs);
+                intersects.length && console.log(intersects);
 
             }
-
         );
         map.addNormalLayer(three);
     }
+
     addThree();
 
     var three2 = null;
+
     function addThree2() {
-        if(three2){
+        if (three2) {
             return;
         }
         three2 = new BMapGL.ThreeLayer({
@@ -1376,7 +1401,7 @@ map.addOverlay(imgOverlay);
                         gltf2.scene.position.set(result2_2[0][0], result2_2[0][1], 3);
                         gltf2.scene.rotation.x = Math.PI * 1 / 2;
                         //gltf.scene.scale.set(30,30,30);
-                        gltf2.scene.scale.set(150,150,150);
+                        gltf2.scene.scale.set(150, 150, 150);
                         scene.add(gltf2.scene);
                     }
                 );
@@ -1395,31 +1420,32 @@ map.addOverlay(imgOverlay);
         var raycaster2 = new THREE.Raycaster();
         var mouse2 = new THREE.Vector2();
         three2.addEventListener('click', function (e) {
-            var fs2 = this.scene.children;
+                var fs2 = this.scene.children;
 
-            // 范围-1 1,原点在中心
-            mouse2.x = (e.pixel.x / map.width) * 2 - 1;
-            mouse2.y = -(e.pixel.y / map.height) * 2 + 1;
-            alert(mouse2.x);
-            alert(mouse2.y);
-            console.log(mouse2);
-            alert("the inside event:three2 is clicked");
-            console.log(e.target);
-            raycaster2.setFromCamera(mouse2, this.camera);
+                // 范围-1 1,原点在中心
+                mouse2.x = (e.pixel.x / map.width) * 2 - 1;
+                mouse2.y = -(e.pixel.y / map.height) * 2 + 1;
+                alert(mouse2.x);
+                alert(mouse2.y);
+                console.log(mouse2);
+                alert("the inside event:three2 is clicked");
+                console.log(e.target);
+                raycaster2.setFromCamera(mouse2, this.camera);
 
-            var intersects2 = raycaster2.intersectObjects(fs2);
-            intersects2.length && console.log(intersects2);
+                var intersects2 = raycaster2.intersectObjects(fs2);
+                intersects2.length && console.log(intersects2);
 
             }
-
         );
         map.addNormalLayer(three2);
     }
+
     addThree2();
 
     var three3 = null;
+
     function addThree3() {
-        if(three3){
+        if (three3) {
             return;
         }
         three3 = new BMapGL.ThreeLayer({
@@ -1429,7 +1455,7 @@ map.addOverlay(imgOverlay);
 
                 //加载glb模型
                 const loader3 = new THREE.GLTFLoader();
-                var result2_3 = three.customCoords([[116.30873909340876,40.063344012305905]]);
+                var result2_3 = three.customCoords([[116.30873909340876, 40.063344012305905]]);
                 loader3.load(
                     // 'https://docs.mapbox.com/mapbox-gl-js/assets/34M_17/34M_17.gltf',
                     // 'https://cdn.jsdelivr.net/gh/photonchen/photonchen.github.io/aisnsbuilding.glb',
@@ -1438,7 +1464,7 @@ map.addOverlay(imgOverlay);
                         gltf3.scene.position.set(result2_3[0][0], result2_3[0][1], 3);
                         gltf3.scene.rotation.x = Math.PI * 1 / 2;
                         //gltf.scene.scale.set(30,30,30);
-                        gltf3.scene.scale.set(5,5,5);
+                        gltf3.scene.scale.set(5, 5, 5);
                         scene.add(gltf3.scene);
                     }
                 );
@@ -1457,29 +1483,30 @@ map.addOverlay(imgOverlay);
         var raycaster3 = new THREE.Raycaster();
         var mouse3 = new THREE.Vector2();
         three3.addEventListener('click', function (e) {
-            var fs3 = this.scene.children;
+                var fs3 = this.scene.children;
 
-            // 范围-1 1,原点在中心
-            mouse3.x = (e.pixel.x / map.width) * 2 - 1;
-            mouse3.y = -(e.pixel.y / map.height) * 2 + 1;
-            console.log(mouse3);
-            alert("the inside event:three3 is clicked");
-            console.log(e.target);
-            raycaster3.setFromCamera(mouse3, this.camera);
+                // 范围-1 1,原点在中心
+                mouse3.x = (e.pixel.x / map.width) * 2 - 1;
+                mouse3.y = -(e.pixel.y / map.height) * 2 + 1;
+                console.log(mouse3);
+                alert("the inside event:three3 is clicked");
+                console.log(e.target);
+                raycaster3.setFromCamera(mouse3, this.camera);
 
-            var intersects3 = raycaster3.intersectObjects(fs3);
-            intersects3.length && console.log(intersects3);
+                var intersects3 = raycaster3.intersectObjects(fs3);
+                intersects3.length && console.log(intersects3);
 
             }
-
         );
         map.addNormalLayer(three3);
     }
+
     addThree3();
 
-var th4 = null;
+    var th4 = null;
+
     function addTh4() {
-        if(th4){
+        if (th4) {
             return;
         }
         th4 = new BMapGL.ThreeLayer({
@@ -1489,7 +1516,7 @@ var th4 = null;
 
                 //加载glb模型
                 const loader4 = new THREE.GLTFLoader();
-                var result2_4 = three.customCoords([[116.20683342989894,39.96289480301391]]);
+                var result2_4 = three.customCoords([[116.20683342989894, 39.96289480301391]]);
                 loader4.load(
                     // 'https://docs.mapbox.com/mapbox-gl-js/assets/34M_17/34M_17.gltf',
                     // 'https://cdn.jsdelivr.net/gh/photonchen/photonchen.github.io/aisnsbuilding.glb',
@@ -1498,7 +1525,7 @@ var th4 = null;
                         gltf4.scene.position.set(result2_4[0][0], result2_4[0][1], 3);
                         gltf4.scene.rotation.x = Math.PI * 1 / 2;
                         //gltf.scene.scale.set(30,30,30);
-                        gltf4.scene.scale.set(0.1,0.1,0.1);
+                        gltf4.scene.scale.set(0.1, 0.1, 0.1);
                         scene.add(gltf4.scene);
                     }
                 );
@@ -1517,24 +1544,24 @@ var th4 = null;
         var raycaster4 = new THREE.Raycaster();
         var mouse4 = new THREE.Vector2();
         th4.addEventListener('click', function (e) {
-            var fs4 = this.scene.children;
+                var fs4 = this.scene.children;
 
-            // 范围-1 1,原点在中心
-            mouse4.x = (e.pixel.x / map.width) * 2 - 1;
-            mouse4.y = -(e.pixel.y / map.height) * 2 + 1;
-            console.log(mouse4);
-            alert("the inside event:th4 is clicked");
-            console.log(e.target);
-            raycaster4.setFromCamera(mouse4, this.camera);
+                // 范围-1 1,原点在中心
+                mouse4.x = (e.pixel.x / map.width) * 2 - 1;
+                mouse4.y = -(e.pixel.y / map.height) * 2 + 1;
+                console.log(mouse4);
+                alert("the inside event:th4 is clicked");
+                console.log(e.target);
+                raycaster4.setFromCamera(mouse4, this.camera);
 
-            var intersects4 = raycaster4.intersectObjects(fs4);
-            intersects4.length && console.log(intersects4);
+                var intersects4 = raycaster4.intersectObjects(fs4);
+                intersects4.length && console.log(intersects4);
 
             }
-
         );
         map.addNormalLayer(th4);
     }
+
     addTh4();
 
     function removeThree() {
@@ -1544,291 +1571,345 @@ var th4 = null;
     }
 
 
-
     // 批量绑定事件
-var clickEvts = ['click', 'dblclick', 'rightclick'];
-var moveEvts = ['mouseover', 'mouseout'];
-var overlays = [imgOverlay, three];
+    var clickEvts = ['click', 'dblclick', 'rightclick'];
+    var moveEvts = ['mouseover', 'mouseout'];
+    var overlays = [imgOverlay, three];
 
-for (let i = 0; i < clickEvts.length; i++) {
-    const event = clickEvts[i];
-    for (let j = 0; j < overlays.length; j++) {
-        const overlay = overlays[j];
-        overlay.addEventListener(event, e => {
-            switch (event) {
-                case 'click':
-                    var res = overlay.toString() +  '被单击!';
-                    break;
-                case 'dbclick':
-                    var res = overlay.toString() + '被双击!';
-                    break;
-                case 'rightclick':
-                    var res = overlay.toString() + '被右击!';
-            }
-            alert(res);
-        });
+    for (let i = 0; i < clickEvts.length; i++) {
+        const event = clickEvts[i];
+        for (let j = 0; j < overlays.length; j++) {
+            const overlay = overlays[j];
+            overlay.addEventListener(event, e => {
+                switch (event) {
+                    case 'click':
+                        var res = overlay.toString() + '被单击!';
+                        break;
+                    case 'dbclick':
+                        var res = overlay.toString() + '被双击!';
+                        break;
+                    case 'rightclick':
+                        var res = overlay.toString() + '被右击!';
+                }
+                alert(res);
+            });
+        }
     }
-}
 
-for (let i = 0; i < moveEvts.length; i++) {
-    const event = moveEvts[i];
-    for (let j = 1; j < overlays.length; j++) {
-        const overlay = overlays[j];
-        overlay.addEventListener(event, e => {
-            switch (event) {
-                case 'mouseover':
-                    overlay.setFillColor('#6f6cd8')
-                    break;
-                case 'mouseout':
-                    overlay.setFillColor('#fff');
-                    break;
-            }
-        });
+    for (let i = 0; i < moveEvts.length; i++) {
+        const event = moveEvts[i];
+        for (let j = 1; j < overlays.length; j++) {
+            const overlay = overlays[j];
+            overlay.addEventListener(event, e => {
+                switch (event) {
+                    case 'mouseover':
+                        overlay.setFillColor('#6f6cd8')
+                        break;
+                    case 'mouseout':
+                        overlay.setFillColor('#fff');
+                        break;
+                }
+            });
+        }
     }
-}
 
 </script>
 
 <script>
-        /* global BMapGL */
-        // var map = new BMapGL.Map('map_container', {
-        //     forceRenderType: 'webgl',
-        //     style: { styleJson: snowStyle }
-        // });
-        const dataSet1 = {
-    id: 'AI123451234567890ABCDEF7890',
-    name: 'First Aircraft',
-    info: 'This is the first aircraft data.AI123451234567890ABCDEF7890'
-};
-
-const dataSet2 = {
-    id: 'AI9876543210987654321098765',
-    name: 'Second Aircraft',
-    info: 'This is the second aircraft data.AI9876543210987654321098765'
-};
+    /* global BMapGL */
+    // var map = new BMapGL.Map('map_container', {
+    //     forceRenderType: 'webgl',
+    //     style: { styleJson: snowStyle }
+    // });
 
 
-        var pois = [
-            { x: 12957233.27, y: 4827428.09, z: 5000 },
-            { x: 13058770.95, y: 4708055.75, z: 5000 },
-            { x: 12536531.03, y: 4538071.76, z: 5000 }
-        ];
+    // 定义数据集
+    const dataSet1 = {
+        id: 'AI123451234567890ABCDEF7890',
+        name: 'First Aircraft',
+        info: 'This is the first aircraft data.AI123451234567890ABCDEF7890'
+    };
 
-        var point = new BMapGL.Point(pois[0].x, pois[0].y);
-        var center = BMapGL.Projection.convertMC2LL(point);
+    const dataSet2 = {
+        id: 'AI9876543210987654321098765',
+        name: 'Second Aircraft',
+        info: 'This is the second aircraft data.AI9876543210987654321098765'
+    };
 
-        map.centerAndZoom(center, 12);
-        map.setHeading(90);
-        map.setTilt(80);
+    // 定义POI点
+    var pois = [
+        {x: 12957233.27, y: 4827428.09, z: 5000},
+        {x: 13058770.95, y: 4708055.75, z: 5000},
+        {x: 12536531.03, y: 4538071.76, z: 5000}
+    ];
 
-        map.enableKeyboard();
-        map.enableScrollWheelZoom();
-        map.enableInertialDragging();
-        map.enableContinuousZoom();
+    // 设置地图中心点
+    var point = new BMapGL.Point(pois[0].x, pois[0].y);
+    var center = BMapGL.Projection.convertMC2LL(point);
+    map.centerAndZoom(center, 12);
+    map.setHeading(90);
+    map.setTilt(80);
 
-        for (var i = 0; i < pois.length; i++) {
-            var _point = new BMapGL.Point(pois[i].x, pois[i].y);
-            var marker = new BMapGL.Marker(BMapGL.Projection.convertMC2LL(_point));
-            map.addOverlay(marker);
-        }
+    // 启用地图功能
+    map.enableKeyboard();
+    map.enableScrollWheelZoom();
+    map.enableInertialDragging();
+    map.enableContinuousZoom();
 
-        var view = new mapvgl.View({ map: map });
 
-        var threeLayer = new mapvgl.ThreeLayer({ notUpdateSize: false });
-        view.addLayer(threeLayer);
+    // 初始化3D视图
+    var view = new mapvgl.View({map: map});
+    var threeLayer = new mapvgl.ThreeLayer({notUpdateSize: false});
+    view.addLayer(threeLayer);
 
-        var lights = [];
-        lights[0] = new THREE.PointLight(0xffffff, 1, 0);
-        lights[0].position.set(0, -1000, 1000);
-        threeLayer.scene.add(lights[0]);
+    // 添加光源
+    var lights = [];
+    lights[0] = new THREE.PointLight(0xffffff, 1, 0);
+    lights[0].position.set(0, -1000, 1000);
+    threeLayer.scene.add(lights[0]);
 
-        const geometry = new THREE.ConeGeometry(1000, 5000, 3);
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
-        const cone = new THREE.Mesh(geometry, material);
-        cone.position.x = point.lng;
-        cone.position.y = point.lat;
-        cone.position.z = 2500;
-        cone.rotateX(90 / 180 * Math.PI);
-        threeLayer.add(cone);
 
-        var clock = new THREE.Clock();
-        var mixer1, mixer2;
-        var meshes1 = [], meshes2 = []; // 用于保存模型中的所有 Mesh
+    // 动画循环
+    var clock = new THREE.Clock();
+    var mixer1, mixer2;
+    var meshes1 = [], meshes2 = []; // 用于保存模型中的所有 Mesh
+    var mixers = []; // 用于保存动画混合器
+    var meshes = []; // 用于保存所有的 Mesh
+    var geoGroups = []; // 用于保存所有的 THREE.Group 实例
 
-        function animate() {
-            requestAnimationFrame(animate);
-            const delta = clock.getDelta();
-            if (mixer1) mixer1.update(delta);
-            if (mixer2) mixer2.update(delta);
-            threeLayer.update();
-
-            updateTooltipPosition();
-        }
+    function animate() {
         requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+
+        mixers.forEach(mixer => {
+            if (mixer) mixer.update(delta);
+        })
+
+        threeLayer.update();
+        updateTooltipPosition();
+    }
+
+    requestAnimationFrame(animate);
+
+    // 加载GLTF模型的函数
+    function loadModel(persondata) {
+        let url = persondata["avatar"];
+        url = "cbot.glb";
+        let pos = persondata["points"];
+
+        let llPoint = new BMapGL.Point(pos[0], pos[1]);
+        console.log("llPoint", llPoint);
+        const mcpoint = BMapGL.Projection.convertLL2MC(llPoint);
+        console.log("mcpoint", mcpoint)
 
         let gltfLoader = new mapvgl.THREELoader.GLTFLoader();
+        gltfLoader.load(url, function (obj) {
+            let flyGltf = obj.scene;
+            flyGltf.rotateX(90 / 180 * Math.PI); // 旋转模型
+            flyGltf.scale.set(110, 110, 110); // 缩放模型
 
-        gltfLoader.load('roleplay2.glb', function (obj) {
-            flyGltf1 = obj.scene;
-            flyGltf1.rotateX(90 / 180 * Math.PI);
-            flyGltf1.scale.set(50, 50, 50);
+            let geoGroup = new THREE.Group();
+            geoGroup.add(flyGltf);
+            geoGroup.position.set(mcpoint.lng, mcpoint.lat, 0);
+            console.log("mcpoint.lng", mcpoint.lng);
+            console.log("mcpoint.lat", mcpoint.lat);
+            console.log("point.lng", point.lng);
+            console.log("point.lat", point.lat);
+            geoGroup.position.set(point.lng, point.lat, 0);
+            geoGroup.position.set(mcpoint.lng, mcpoint.lat, 0);
+            geoGroup.name = persondata["nation_id"];
+            geoGroup.userData = persondata;
+            threeLayer.add(geoGroup);
+            geoGroups.push(geoGroup); // 将 geoGroup 添加到数组中
 
-            geoGroup1 = new THREE.Group();
-            geoGroup1.add(flyGltf1);
-            geoGroup1.position.set(point.lng, point.lat, pois[0].z);
-            threeLayer.add(geoGroup1);
+            let mixer = new THREE.AnimationMixer(obj.scene);
+            const action = mixer.clipAction(obj.animations[0]);
+            mixer.timeScale = 0.5;
+            action.setDuration(2).play();
+            mixers.push(mixer); // 将混合器添加到数组中
 
-            mixer1 = new THREE.AnimationMixer(obj.scene);
-            const action1 = mixer1.clipAction(obj.animations[0]);
-            mixer1.timeScale = 0.5;
-            action1.setDuration(2).play();
-
-            meshes1 = findMeshes(flyGltf1); // 查找所有 Mesh
-
-            meshes1.forEach(mesh => {
-        mesh.userData = dataSet1; // 将数据集绑定到每个 Mesh 的 userData 属性
-    });
-        });
-
-        function findMeshes(object) {
-            const meshes = [];
-            object.traverse((child) => {
-                if (child.isMesh) {
-                    meshes.push(child);
-                }
+            let modelMeshes = findMeshes(flyGltf); // 查找所有 Mesh
+            modelMeshes.forEach(mesh => {
+                mesh.userData = persondata; // 将数据集绑定到每个 Mesh 的 userData 属性
             });
-            return meshes;
+            meshes.push(...modelMeshes); // 添加到全局 meshes 数组中
+        });
+    }
+
+
+    // 加载GLTF模型
+    // let gltfLoader = new mapvgl.THREELoader.GLTFLoader();
+    //
+    // gltfLoader.load('ybot.glb', function (obj) {
+    //     flyGltf1 = obj.scene;
+    //     flyGltf1.rotateX(90 / 180 * Math.PI);
+    //     flyGltf1.scale.set(10, 10, 10);
+    //
+    //     geoGroup1 = new THREE.Group();
+    //     geoGroup1.add(flyGltf1);
+    //     geoGroup1.position.set(point.lng, point.lat, 0);
+    //     geoGroup1.name = "geoGroup1";
+    //     threeLayer.add(geoGroup1);
+    //
+    //     mixer1 = new THREE.AnimationMixer(obj.scene);
+    //     const action1 = mixer1.clipAction(obj.animations[0]);
+    //     mixer1.timeScale = 0.5;
+    //     action1.setDuration(2).play();
+    //
+    //     meshes1 = findMeshes(flyGltf1); // 查找所有 Mesh
+    //     meshes1.forEach(mesh => {
+    //         mesh.userData = dataSet1; // 将数据集绑定到每个 Mesh 的 userData 属性
+    //     });
+    // });
+    //
+    // gltfLoader.load('cbot.glb', function (obj) {
+    //     flyGltf2 = obj.scene;
+    //     flyGltf2.rotateX(90 / 180 * Math.PI);
+    //     flyGltf2.scale.set(10, 10, 10);
+    //
+    //     geoGroup2 = new THREE.Group();
+    //     geoGroup2.add(flyGltf2);
+    //     alert(point.lng);
+    //     alert(point.lat);
+    //
+    //     geoGroup2.position.set(point.lng + 10, point.lat + 10, 0);
+    //
+    //     threeLayer.add(geoGroup2);
+    //
+    //     mixer2 = new THREE.AnimationMixer(obj.scene);
+    //     const action1 = mixer2.clipAction(obj.animations[1]);
+    //     mixer2.timeScale = 0.5;
+    //     action1.setDuration(1).play();
+    //
+    //     meshes2 = findMeshes(flyGltf2); // 查找所有 Mesh
+    //     meshes2.forEach(mesh => {
+    //         mesh.userData = dataSet2; // 将数据集绑定到每个 Mesh 的 userData 属性
+    //     });
+    // });
+
+    // 查找所有 Mesh
+    function findMeshes(object) {
+        const meshes = [];
+        object.traverse((child) => {
+            if (child.isMesh) {
+                meshes.push(child);
+            }
+        });
+        return meshes;
+    }
+
+    // 点击事件处理
+    var raycaster = new THREE.Raycaster();
+    var mouse = new THREE.Vector2();
+    var tooltip = document.getElementById('tooltip');
+    var currentAircraft = null;
+
+    map.addEventListener('click', function (e) {
+        mouse.x = (e.x / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.y / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, threeLayer.camera);
+
+        // 使用已找到的 Mesh 对象进行点击检测
+        // const intersects = raycaster.intersectObjects([...meshes1, ...meshes2], true);
+        const intersects = raycaster.intersectObjects([...meshes], true);
+
+        if (intersects.length > 0) {
+            const intersectedObject = intersects[0].object;
+            alert(intersectedObject.userData.nation_id);
+            alert(intersectedObject.userData["nation_id"]);
+            nation_id = intersectedObject.userData.nation_id;
+            currentAircraft = threeLayer.scene.getObjectByName(nation_id);
+            tooltip.textContent = 'The clicked person is: ' + intersectedObject.userData.nation_id; // 显示相关信息
+            tooltip.style.visibility = 'visible';
+
+            showprofile3d(currentAircraft);
+
+
+        } else {
+            tooltip.style.visibility = 'hidden';
+            currentAircraft = null;
         }
-
-        gltfLoader.load('bluebotshake2.glb', function (obj) {
-            flyGltf2 = obj.scene;
-            flyGltf2.rotateX(90 / 180 * Math.PI);
-            flyGltf2.scale.set(450, 450, 450);
-
-            geoGroup2 = new THREE.Group();
-            geoGroup2.add(flyGltf2);
-            // geoGroup2.position.set(point.lng + 0.01, point.lat + 0.01, pois[0].z);
-            geoGroup2.position.set(point.lng + 0.11, point.lat + 0.11, 0);
-            threeLayer.add(geoGroup2);
-
-            mixer2 = new THREE.AnimationMixer(obj.scene);
-            const action1 = mixer2.clipAction(obj.animations[2]);
-            mixer2.timeScale = 0.5;
-            action1.setDuration(1).play();
-
-            meshes2 = findMeshes(flyGltf2); // 查找所有 Mesh
-            meshes2.forEach(mesh => {
-        mesh.userData = dataSet2; // 将数据集绑定到每个 Mesh 的 userData 属性
     });
-        });
 
-        function getDistanceByPixel(px1, px2) {
-            if (!px1 || !px2) {
-                return;
-            }
-            return Math.round(Math.sqrt(Math.pow(px1.x - px2.x, 2) + Math.pow(px1.y - px2.y, 2)));
+    // 更新工具提示位置
+    function updateTooltipPosition() {
+        if (currentAircraft) {
+            const vector = new THREE.Vector3();
+            vector.setFromMatrixPosition(currentAircraft.matrixWorld);
+            vector.project(threeLayer.camera);
+
+            const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+            tooltip.style.left = `${x}px`;
+            tooltip.style.top = `${y - 150}px`;
+            tooltip.classList.add('visible');
         }
+    }
 
-        function segLinePoints(pois) {
-            var segTotalLength = [0];
-            var segDegree = [0];
-            for (var i = 1, length = pois.length; i < length; i++) {
-                segTotalLength[i] = segTotalLength[i - 1] + getDistanceByPixel(pois[i], pois[i - 1]);
-                segDegree[i] = 0.5 * Math.PI + Math.atan2(pois[i].y - pois[i - 1].y, pois[i].x - pois[i - 1].x);
-            }
-            return function (distance) {
-                if (distance <= 0) {
-                    return { point: pois[0], segDegree: segDegree[1], index: 1 };
-                } else if (distance >= segTotalLength[segTotalLength.length - 1]) {
-                    if (fly) {
-                        clearInterval(fly);
-                        fly = null;
-                    }
-                    return { point: pois[segTotalLength.length - 1], segDegree: segDegree[segTotalLength.length - 1], index: segTotalLength.length - 1 };
-                } else {
-                    var index = segTotalLength.findIndex(item => item > distance);
-                    var startPoint = pois[index - 1],
-                        endPoint = pois[index];
-                    var offsetRatio = (distance - segTotalLength[index - 1]) / (segTotalLength[index] - segTotalLength[index - 1]);
-                    var x = startPoint.x + (endPoint.x - startPoint.x) * offsetRatio;
-                    var y = startPoint.y + (endPoint.y - startPoint.y) * offsetRatio;
-                    var z = startPoint.z + (endPoint.z - startPoint.z) * offsetRatio;
-                    return { point: { x, y, z }, segDegree: segDegree[index], index: index };
-                }
-            }
+    // marker添加点击事件
+    function showprofile3d(geoGroup) {
+        nation_id = geoGroup.userData.nation_id;
+        let person = geoGroup.userData;
+        var sContent = `<h4 style='margin:0 0 5px 0;'>${person["nick_name"]}</h4>
+    <p style='margin:0;line-height:1.5;font-size:13px;text-indent:2em'>
+    ${person["profile"]}
+    <a href="#" onclick="talk_to_him('${nation_id}');return false;">和Ta聊天</a>
+    </p></div>`;
+
+        var opts = {
+            width: 200,     // 信息窗口宽度200
+            height: 100,     // 信息窗口高度100
+            title: "", // 信息窗口标题
+            offset: new BMapGL.Size(30, -50),
         }
+        var infoWindow3 = new BMapGL.InfoWindow(sContent, opts);
 
-        var calPoint = new segLinePoints(pois);
 
-        var speed = 25 * 1;
-        var distance = 0;
-        var currentPoint = null;
-        var fly = setInterval(function () {
-            if (geoGroup1) {
-                distance += speed * 0.01;
-                var result = calPoint(distance);
-                currentPoint = result;
-                geoGroup1.position.x = result.point.x;
-                geoGroup1.position.y = result.point.y;
-                geoGroup1.position.z = result.point.z;
-                geoGroup1.rotation.z = result.segDegree;
+        // 假设 geoGroup2.position 的 x 和 y 是墨卡托坐标
+        const mercatorX = geoGroup.position.x;
+        const mercatorY = geoGroup.position.y;
+// const mercatorX = intersectedObject.position.x;
+// const mercatorY = intersectedObject.position.y;
 
-                cone.position.x = result.point.x;
-                cone.position.y = result.point.y;
-            }
-        }, 1000 * 0.01);
+// 创建百度地图的 Point 对象
+        const mercatorPoint = new BMapGL.Point(mercatorX, mercatorY);
 
-        var raycaster = new THREE.Raycaster();
-        var mouse = new THREE.Vector2();
-        var tooltip = document.getElementById('tooltip');
-        var currentAircraft = null;
+// 将墨卡托坐标转换为经纬度坐标
+        const geoCoord2 = BMapGL.Projection.convertMC2LL(mercatorPoint);
 
-        map.addEventListener('click', function (e) {
-            mouse.x = (e.x / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.y / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, threeLayer.camera);
+        console.log('经度:', geoCoord2.lng); // 输出经度
+        console.log('纬度:', geoCoord2.lat); // 输出纬度
+        point = geoCoord2;
 
-            // 使用已找到的 Mesh 对象进行点击检测
-            const intersects = raycaster.intersectObjects([...meshes1, ...meshes2], true);
 
-            if (intersects.length > 0) {
-                const intersectedObject = intersects[0].object;
+        map.openInfoWindow(infoWindow3, point); //开启信息窗口
 
-                if (meshes1.includes(intersectedObject)) {
-                    alert(1);
-                    tooltip.textContent = 'First Aircraft: ' + intersectedObject.userData.info; // 显示相关信息
-                    currentAircraft = geoGroup1;
-                } else if (meshes2.includes(intersectedObject)) {
-                    alert(2);
-                    // showprofile('AI123451234567890ABCDEF7890');
-                    tooltip.textContent = 'Second Aircraft: ' + intersectedObject.userData.info; // 显示相关信息
-                    currentAircraft = geoGroup2;
-                }
-                tooltip.style.visibility = 'visible';
-            } else {
-                tooltip.style.visibility = 'hidden';
-                currentAircraft = null;
+
+        // 获取 threeLayer 中的所有 THREE.Group
+        const allGroups = getAllGroups(threeLayer.scene);
+        console.log(allGroups); // 输出所有 THREE.Group 实例
+
+        var retrievedGeoGroup1 = threeLayer.scene.getObjectByName("geoGroup1");
+        console.log("retrievedGeoGroup1", retrievedGeoGroup1);
+
+
+        // 图片加载完毕重绘infoWindow
+        document.getElementById('imgDemo').onload = function () {
+            infoWindow.redraw(); // 防止在网速较慢时生成的信息框高度比图片总高度小，导致图片部分被隐藏
+        };
+    };
+
+
+    function getAllGroups(scene) {
+        const groups = [];
+        scene.traverse((object) => {
+            if (object.isGroup) { // 检查是否是 THREE.Group
+                groups.push(object);
             }
         });
+        return groups;
+    }
 
-        function updateTooltipPosition() {
-            if (currentAircraft) {
-                const vector = new THREE.Vector3();
-                vector.setFromMatrixPosition(currentAircraft.matrixWorld);
-                vector.project(threeLayer.camera);
 
-                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
-                const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
-
-                tooltip.style.left = `${x}px`;
-                tooltip.style.top = `${y}px`;
-            }
-        }
-
-        function targetToFly() {
-            if (currentPoint) {
-                var point = new BMapGL.Point(currentPoint.point.x, currentPoint.point.y);
-                map.flyToIn(point, 12);
-            }
-        }
-    </script>
+</script>

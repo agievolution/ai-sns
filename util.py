@@ -5,7 +5,7 @@ import string
 import re
 import base64
 import os
-
+import shutil
 
 # Format
 import subprocess
@@ -519,7 +519,7 @@ def download_image(url, save_path):
     except requests.exceptions.RequestException as e:
         print(f"Error downloading image: {e}")
 
-def open_file( file_path):
+def open_file(file_path):
     if sys.platform == "win32":
         os.startfile(file_path)
     elif sys.platform == "darwin":
@@ -547,3 +547,49 @@ def extract_json_string_from_llm(input_string):
     else:
         # 如果没有找到，则返回空字符串
         return ""
+
+
+def copy_directory(src_dir, dst_dir):
+    """
+    拷贝一个目录及其所有内容到目标目录。
+
+    参数:
+    src_dir (str): 源目录路径。
+    dst_dir (str): 目标目录路径。
+
+    返回:
+    None
+    """
+    try:
+        # 如果目标目录已经存在，shutil.copytree会抛出错误，因此需要先检查
+        if os.path.exists(dst_dir):
+            print(f"目标目录 '{dst_dir}' 已存在，无法拷贝。")
+            return
+
+        # 使用shutil.copytree递归拷贝目录
+        shutil.copytree(src_dir, dst_dir)
+        print(f"目录 '{src_dir}' 已成功拷贝到 '{dst_dir}'。")
+    except Exception as e:
+        print(f"拷贝目录时发生错误: {e}")
+
+
+def build_full_path(path_str):
+    """
+    将传入的字符串与当前工作目录组合成一个完整的路径。
+
+    参数:
+    path_str (str): 以逗号分隔的路径字符串，例如 "scripts,baicuan,app"
+
+    返回:
+    str: 完整的路径
+    """
+    # 获取当前工作目录
+    current_directory = os.getcwd()
+
+    # 将传入的字符串按逗号拆分成列表
+    path_parts = path_str.split(',')
+
+    # 使用 os.path.join 将当前工作目录与路径部分组合成完整路径
+    full_path = os.path.join(current_directory, *path_parts)
+
+    return full_path

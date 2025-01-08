@@ -10,15 +10,15 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QSettings
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtCore, QtGui, QtWidgets
-from .ui_OpenAIConnectionDialog import ui_OpenAIConnectionDialog
+from .ui_SettingDialog import  ui_SettingDialog
 
 
-class OpenAIConnectionDialog(QDialog, ui_OpenAIConnectionDialog):
+class SettingDialog(QDialog, ui_SettingDialog):
     configured = pyqtSignal()
 
     def __init__(self, parent=None):
         parent = None  # 程序调用没有parent
-        super(OpenAIConnectionDialog, self).__init__(parent)
+        super(SettingDialog, self).__init__(parent)
         self.setupUi(self)
         self.accepted.connect(self.saveSettings)  # 点击确认了之后，将调用saveSettings函数
         self.readSettings()

@@ -8,7 +8,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5 import QtCore, QtGui, QtWidgets
 import json
 
-class ui_OpenAIConnectionDialog(object):
+class ui_SettingDialog(object):
     def setupUi(self, ConnectionDialog):
         ConnectionDialog.setObjectName("ConnectionDialog")
         ConnectionDialog.resize(400, 400)

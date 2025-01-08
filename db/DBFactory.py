@@ -1477,6 +1477,50 @@ def add_PluginMng(plugin_id, company, company_abbr, name, version, alias_name, f
     session.commit()
     session.close()
 
+def copy_plugin_record(plugin_id,new_plugin_id, **kwargs):
+    session = Session()
+    try:
+        # 查找要拷贝的记录
+        record_to_copy = session.query(PluginMng).filter_by(plugin_id=plugin_id).first()
+        if not record_to_copy:
+            print(f"No record found with plugin_id: {plugin_id}")
+            return None
+
+        # 创建拷贝的记录
+        new_record = PluginMng(
+            plugin_id=new_plugin_id,  # 可以根据需要修改此字段
+            company=kwargs.get('company', record_to_copy.company),
+            company_abbr=kwargs.get('company_abbr', record_to_copy.company_abbr),
+            name=kwargs.get('name', record_to_copy.name),
+            version=kwargs.get('version', record_to_copy.version),
+            alias_name=kwargs.get('alias_name', record_to_copy.alias_name),
+            filename=kwargs.get('filename', record_to_copy.filename),
+            run_mode=kwargs.get('run_mode', record_to_copy.run_mode),
+            run_scope=kwargs.get('run_scope', record_to_copy.run_scope),
+            instruction=kwargs.get('instruction', record_to_copy.instruction),
+            runtime_main=kwargs.get('runtime_main', record_to_copy.runtime_main),
+            runtime_test=kwargs.get('runtime_test', record_to_copy.runtime_test),
+            description=kwargs.get('description', record_to_copy.description),
+            plugin_directory=kwargs.get('plugin_directory', record_to_copy.plugin_directory),
+            plugin_type=kwargs.get('plugin_type', record_to_copy.plugin_type),
+            plugin_executed=kwargs.get('plugin_executed', record_to_copy.plugin_executed),
+            plugin_event=kwargs.get('plugin_event', record_to_copy.plugin_event),
+            plugin_title=kwargs.get('plugin_title', record_to_copy.plugin_title),
+            detail=kwargs.get('detail', record_to_copy.detail),
+            creator=kwargs.get('creator', record_to_copy.creator),
+            is_delete=record_to_copy.is_delete,
+            create_time=datetime.now()  # 新记录的创建时间为当前时间
+        )
+
+        # 添加新记录到会话
+        session.add(new_record)
+        session.commit()
+        return new_record
+    except Exception as e:
+        session.rollback()
+        print(f"Error occurred while copying record: {e}")
+    finally:
+        session.close()
 
 def query_PluginMng_All(**kwargs):
     session = Session()
@@ -1526,9 +1570,9 @@ def update_PluginMng(id, **kwargs):
     session.close()
 
 
-def delete_PluginMng(id):
+def delete_PluginMng(**kwargs):
     session = Session()
-    record = session.query(PluginMng).filter_by(id=id).first()
+    record = session.query(PluginMng).filter_by(**kwargs).first()
     if record:
         session.delete(record)
         session.commit()

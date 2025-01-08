@@ -1,4 +1,5 @@
 import copy
+import re
 import zipfile
 import shutil
 import sys
@@ -15,7 +16,7 @@ from PyQt5.QtWidgets import (QAction, QApplication, QButtonGroup, QComboBox,
                              QFontComboBox, QGraphicsItem, QGraphicsLineItem, QGraphicsPolygonItem,
                              QGraphicsScene, QGraphicsTextItem, QGraphicsView, QGridLayout,
                              QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox, QSizePolicy,
-                             QToolBox, QToolButton, QWidget, QToolBar, QDialog, QTabWidget, QLineEdit, QVBoxLayout)
+                             QToolBox, QToolButton, QWidget, QToolBar, QDialog, QTabWidget, QLineEdit, QVBoxLayout, QFormLayout)
 
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtGui import QFont, QPalette
@@ -65,6 +66,7 @@ from db.DBFactory import add_MutiAgentCfg, query_MutiAgentCfg_All, update_MutiAg
 from db.DBFactory import add_PluginMng, query_PluginMng_All, query_PluginMng, update_PluginMng, delete_PluginMng, \
     query_PluginMng_All_Tool
 from db.DBFactory import add_LogsMng, query_LogsMng_All, update_LogsMng, delete_LogsMng, query_LogsMng
+import db.DBFactory as dbfactory
 
 from pluginsmanager import PluginEngine
 from pluginsmanager.plugins_headless.plugin_mng import load_plugin as load_plugin_tool
@@ -104,6 +106,7 @@ from noteeditor.msword import Main as NoteEditor
 from function_manager import FunctionManager
 from skill_manager import SkillManager
 from util import open_file
+import util
 from keyvalue_mng import KeyValueManager
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -1845,6 +1848,37 @@ class Ui_MainWindow(object):
     def createToolBoxUnit_Plugin(self, record):
         pass
 
+    def load_llm_plugin_records(self):
+        """加载当前记录并更新工具箱内容"""
+        # 清空布局中的当前插件按钮
+        for i in reversed(range(self.layout.count())):
+            if i>2:
+                widget = self.layout.itemAt(i).widget()
+                if widget is not None:
+                    widget.deleteLater()  # 删除现有的按钮以准备重新加载
+
+
+
+        # 获取当前插件记录
+        records = query_PluginMng_All(plugin_type="LLM_Connector")
+        row = 2  # 重置行计数
+        col = 0  # 重置列计数
+
+        # 遍历记录并添加到布局
+        for record in records:
+            print(f"ID: {record.id}, Name: {record.name}, Memo: {record.description}")
+            self.layout.addWidget(self.create_plugin_cfg_button(record, DiagramItem.Conditional), row, col % 2)
+
+            if (col % 2) == 1:
+                row += 1  # 每两列换行
+            col += 1
+
+        return row
+
+    def refresh_toolbox_llm_plugin(self):
+        """刷新工具箱以显示最新的插件记录"""
+        self.load_llm_plugin_records()  # 重新加载插件记录
+
     def createToolBox_Plugin(self):
         self.toolBox_Plugin = QToolBox()
         self.toolBox_Plugin.setSizePolicy(QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Ignored))
@@ -1862,26 +1896,13 @@ class Ui_MainWindow(object):
         self.layout.addWidget(self.textEdit, 0, 0, 1, 2)
         self.layout.addWidget(self.create_install_llm_plugin_local_button("导入/拷贝插件",
                                                                                 'images/add.png'), 1, 0)
-        self.layout.addWidget(self.create_install_llm_plugin_local_button("删除模型插件",
-                                                                                'images/delete.png'), 1, 1)
-        i = 0
-        row = 2
-        col = 0
-        records = query_PluginMng_All(plugin_type="LLM_Connector")
-        # print("records-->:", records)
-        for record in records:
-            print(f"ID: {record.id}, Name: {record.name}, Memo: {record.description}")
-            # self.createToolBoxUnit_AgentChat(record)
-            print("row:", row)
-            print("col:", col)
-            print("col % 2：", col % 2)
-            print("cjr in plugin...")
-            self.layout.addWidget(self.create_plugin_cfg_button(record, DiagramItem.Conditional),
-                                  row, col % 2)
+        self.layout.addWidget(self.create_remove_llm_plugin_local_button("删除模型插件",'images/delete.png')
+        , 1, 1)
+        # 连接删除按钮的点击事件到刷新功能
 
-            if (col % 2) == 1:
-                row = row + 1
-            col = col + 1
+
+        # 初始化加载插件记录
+        row=self.load_llm_plugin_records()
 
         self.layout.setRowStretch(row + 1, 10)
         self.layout.setColumnStretch(0, 1)  # 设置第0列的拉伸系数以均衡布局
@@ -1905,9 +1926,9 @@ class Ui_MainWindow(object):
         self.textEdit_tool.setPlaceholderText("搜索...")
         self.textEdit_tool.textChanged.connect(self.filterTextEditTool)
         self.layout_tool.addWidget(self.textEdit_tool, 0, 0, 1, 2)
-        self.layout_tool.addWidget(self.create_install_llm_plugin_local_button("导入本地插件",
+        self.layout_tool.addWidget(self.create_install_plugin_local_button("导入本地插件",
                                                                                 'images/add.png'), 1, 0)
-        self.layout_tool.addWidget(self.create_install_llm_plugin_local_button("删除插件",
+        self.layout_tool.addWidget(self.create_remove_plugin_local_button("删除插件",
                                                                                 'images/delete.png'), 1, 1)
         i = 0
         row = 2
@@ -2739,6 +2760,9 @@ class Ui_MainWindow(object):
         button.setIconSize(QSize(50, 50))
         button.setCheckable(True)
         button.clicked.connect(lambda: self.plugin_install_dialog(plugin_data))
+        button.setStyleSheet("""QToolButton {                        
+                       background:#a9d7ff
+                    }""")
         self.buttonGroup_Plugin_install.addButton(button)
 
         layout = QGridLayout()
@@ -3054,8 +3078,243 @@ class Ui_MainWindow(object):
         if zip_file_path != "":
             self.plugin_install(zip_file_path)
 
+    def create_remove_llm_plugin_local_button(self, text, image):
+
+        button = QToolButton()
+        button.setIcon(QIcon(image))
+        button.setIconSize(QSize(50, 50))
+        button.setCheckable(True)
+        button.clicked.connect(self.remove_llm_plugin)
+
+        # self.buttonGroup_Plugin_install.addButton(button)
+
+        layout = QGridLayout()
+        layout.addWidget(button, 0, 0, Qt.AlignHCenter)
+        layout.addWidget(QLabel(text), 1, 0, Qt.AlignCenter)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+
+        return widget
+
 
     def create_install_llm_plugin_local_button(self, text, image):
+
+        button = QToolButton()
+        button.setIcon(QIcon(image))
+        button.setIconSize(QSize(50, 50))
+        button.setCheckable(True)
+        button.clicked.connect(self.show_choice_dialog)
+
+        # self.buttonGroup_Plugin_install.addButton(button)
+
+        layout = QGridLayout()
+        layout.addWidget(button, 0, 0, Qt.AlignHCenter)
+        layout.addWidget(QLabel(text), 1, 0, Qt.AlignCenter)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+
+        return widget
+
+
+    def show_choice_dialog(self):
+        # 创建消息框并设置相关属性
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle('操作选择')
+        msg_box.setText('您想通过导入还是拷贝来添加新的大模型连接器:')
+        msg_box.setIcon(QMessageBox.Question)
+
+        # 添加按钮
+        copy_button = msg_box.addButton('拷贝', QMessageBox.AcceptRole)
+        import_button = msg_box.addButton('导入', QMessageBox.RejectRole)
+
+
+        # 显示消息框
+        msg_box.exec_()
+
+        # 根据用户选择的按钮进行相应操作
+        if msg_box.clickedButton() == copy_button:
+            self.handle_copy()
+        elif msg_box.clickedButton() == import_button:
+            self.handle_import()
+
+    def handle_import(self):
+        self.plugin_install_local()
+
+    def handle_copy(self):
+        # 定义插件简称的有效性检查函数
+        def is_valid_alias(alias):
+            # 检查简称是否以字母开头，并且只包含字母、数字和下划线
+            return bool(re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', alias))
+
+        # 创建对话框
+        transfer_dialog = QDialog()
+        transfer_dialog.setWindowTitle("选择")
+        transfer_dialog.setMinimumWidth(500)
+
+        # 创建主垂直布局
+        main_layout = QVBoxLayout()
+
+        # 创建表单布局
+        form_layout = QFormLayout()
+
+        # 创建第一个组合框并填充数据
+        transfer_dialog.comboBox = QComboBox()
+        transfer_dialog.comboBox.setEditable(False)
+        records = query_PluginMng_All(plugin_type="LLM_Connector")
+
+        for record in records:
+            transfer_dialog.comboBox.addItem(record.name, record.plugin_id)
+
+        form_layout.addRow("选择要拷贝的大模型插件：", transfer_dialog.comboBox)
+
+        # 添加插件名称输入框
+        transfer_dialog.plugin_name_input = QLineEdit()
+        form_layout.addRow("插件名称：", transfer_dialog.plugin_name_input)
+
+        # 添加插件简称输入框
+        transfer_dialog.alias_name_input = QLineEdit()
+        form_layout.addRow("插件简称：", transfer_dialog.alias_name_input)
+
+        # 将表单布局添加到主布局
+        main_layout.addLayout(form_layout)
+
+        # 创建按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.addStretch(1)
+
+        # 创建确定和取消按钮
+        ok_button = QPushButton("确定")
+
+        cancel_button = QPushButton("取消")
+
+        # 连接按钮事件
+        def on_ok_clicked():
+            # 获取输入的插件名称和简称
+            plugin_name = transfer_dialog.plugin_name_input.text()
+            alias_name = transfer_dialog.alias_name_input.text()
+
+            # 检查插件简称的有效性
+            if not plugin_name.strip():
+                QMessageBox.warning(transfer_dialog, "错误", "插件名称不能为空。")
+                return
+
+            if not is_valid_alias(alias_name):
+                QMessageBox.warning(transfer_dialog, "错误", "插件简称无效。它必须以字母开头，并且只包含字母、数字和下划线。")
+                return
+
+
+            transfer_dialog.accept()
+
+        ok_button.clicked.connect(on_ok_clicked)
+        cancel_button.clicked.connect(transfer_dialog.reject)
+
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+
+        # 将按钮布局添加到主布局
+        main_layout.addLayout(button_layout)
+
+        # 设置主布局
+        transfer_dialog.setLayout(main_layout)
+
+        # 显示对话框并处理结果
+        if transfer_dialog.exec_():
+                        # 获取选择的插件ID
+            plugin_id = transfer_dialog.comboBox.currentData()
+            plugin_name = transfer_dialog.plugin_name_input.text()
+            alias_name = transfer_dialog.alias_name_input.text()
+            record = query_PluginMng(plugin_id=plugin_id)
+            src_dir = util.build_full_path(f"pluginsmanager,plugins,{record.alias_name}")
+            dst_dir = util.build_full_path(f"pluginsmanager,plugins,{alias_name}")
+            util.copy_directory(src_dir, dst_dir)
+            new_plugin_id = util.generate_random_id()
+            dbfactory.copy_plugin_record(plugin_id, new_plugin_id, alias_name=alias_name, name=plugin_name)
+            QMessageBox.information(self, '成功', f'插件拷贝成功。')
+            self.refresh_toolbox_llm_plugin()
+            # 在这里继续处理复制插件的逻辑
+            # ...
+
+    def remove_llm_plugin(self):
+        # 创建对话框
+        transfer_dialog = QDialog()
+        transfer_dialog.setWindowTitle("选择")
+        transfer_dialog.setMinimumWidth(500)
+
+        # 创建主垂直布局
+        main_layout = QVBoxLayout()
+
+        # 创建表单布局
+        form_layout = QFormLayout()
+
+        # 创建第一个组合框并填充数据
+        transfer_dialog.comboBox = QComboBox()
+        transfer_dialog.comboBox.setEditable(False)
+        records = query_PluginMng_All(plugin_type="LLM_Connector")
+
+        for record in records:
+            transfer_dialog.comboBox.addItem(record.name, record.plugin_id)
+
+        form_layout.addRow("选择要删除的大模型插件：", transfer_dialog.comboBox)
+
+        # 将表单布局添加到主布局
+        main_layout.addLayout(form_layout)
+
+        # 创建按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.addStretch(1)
+
+        # 创建确定和取消按钮
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+
+        # 连接按钮事件
+        ok_button.clicked.connect(transfer_dialog.accept)
+        cancel_button.clicked.connect(transfer_dialog.reject)
+
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+
+        # 将按钮布局添加到主布局
+        main_layout.addLayout(button_layout)
+
+        # 设置主布局
+        transfer_dialog.setLayout(main_layout)
+
+
+        # 显示对话框并处理结果
+        if transfer_dialog.exec_():
+            reply = QMessageBox.question(self, '确认',
+                                         "您确认要删除吗?",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+            # 如果用户确认删除
+            if reply == QMessageBox.Yes:
+                plugin_id = transfer_dialog.comboBox.currentData()
+                record = query_PluginMng(plugin_id=plugin_id)
+
+                path = util.build_full_path(f"pluginsmanager,plugins,{record.alias_name}")
+
+                delete_PluginMng(plugin_id=plugin_id)
+
+
+                if os.path.exists(path):
+                    try:
+                        shutil.rmtree(path)  # 递归删除目录及其内容
+                        QMessageBox.information(self, '成功', f'插件已被成功删除。')
+                        self.refresh_toolbox_llm_plugin()
+                    except Exception as e:
+                        QMessageBox.critical(self, 'Error', f'Error occurred while deleting directory: {e}')
+                else:
+                    QMessageBox.warning(self, 'Warning', 'The specified directory does not exist.')
+
+
+
+
+
+
+    def create_install_plugin_local_button(self, text, image):
 
         button = QToolButton()
         button.setIcon(QIcon(image))
@@ -3075,15 +3334,14 @@ class Ui_MainWindow(object):
         return widget
 
 
-    def create_install_plugin_local_button(self, text, image):
-
+    def create_remove_plugin_local_button(self, text, image):
         button = QToolButton()
         button.setIcon(QIcon(image))
         button.setIconSize(QSize(50, 50))
         button.setCheckable(True)
-        button.clicked.connect(self.plugin_install_local)
+        button.clicked.connect(self.remove_tool_plugin)
 
-        self.buttonGroup_Plugin_install.addButton(button)
+        # self.buttonGroup_Plugin_install.addButton(button)
 
         layout = QGridLayout()
         layout.addWidget(button, 0, 0, Qt.AlignHCenter)
@@ -3093,6 +3351,60 @@ class Ui_MainWindow(object):
         widget.setLayout(layout)
 
         return widget
+
+    def remove_tool_plugin(self):
+        # 创建对话框
+        transfer_dialog = QDialog()
+        transfer_dialog.setWindowTitle("选择")
+        transfer_dialog.setMinimumWidth(500)
+
+        # 创建主垂直布局
+        main_layout = QVBoxLayout()
+
+        # 创建表单布局
+        form_layout = QFormLayout()
+
+        # 创建第一个组合框并填充数据
+        transfer_dialog.comboBox = QComboBox()
+        transfer_dialog.comboBox.setEditable(False)
+        records = query_PluginMng_All_Tool()
+
+        for record in records:
+            transfer_dialog.comboBox.addItem(record.name, record.plugin_id)
+
+        form_layout.addRow("选择要删除的插件：", transfer_dialog.comboBox)
+
+        # 将表单布局添加到主布局
+        main_layout.addLayout(form_layout)
+
+        # 创建按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.addStretch(1)
+
+        # 创建确定和取消按钮
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+
+        # 连接按钮事件
+        ok_button.clicked.connect(transfer_dialog.accept)
+        cancel_button.clicked.connect(transfer_dialog.reject)
+
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+
+        # 将按钮布局添加到主布局
+        main_layout.addLayout(button_layout)
+
+        # 设置主布局
+        transfer_dialog.setLayout(main_layout)
+
+
+        # 显示对话框并处理结果
+        if transfer_dialog.exec_():
+            plugin_id = transfer_dialog.comboBox.currentData()
+            plugin_name = transfer_dialog.comboBox.currentText()
+
+
 
     def create_new_note_button(self, text, km_cfg, image):
 

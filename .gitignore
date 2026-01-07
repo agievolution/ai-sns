@@ -6,7 +6,7 @@ __pycache__/
 # C extensions
 *.so
 
-
+memo.txt
 data/
 .idea/
 alembic/versions/*.py
@@ -131,3 +131,215 @@ dmypy.json
 skilllearning/screenshot
 
 node_modules/
+
+
+########################################
+# Node / Electron
+########################################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+out/
+release/
+.rebuild/
+.electron/
+.electron-cache/
+.electron-builder/
+.cache/
+.eslintcache
+
+########################################
+# Electron 打包输出
+########################################
+/dist_electron/
+/dist-electron/
+/dist-app/
+/app-dist/
+/release-builds/
+/installer/
+/installers/
+
+########################################
+# Python
+########################################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.pytype/
+.pyre/
+.python-version
+
+########################################
+# Python 虚拟环境
+########################################
+venv/
+.venv/
+env/
+ENV/
+virtualenv/
+conda-env/
+.conda/
+.miniconda/
+.anaconda/
+
+########################################
+# Python 运行时 & 临时文件
+########################################
+*.log
+*.pid
+*.lock
+*.tmp
+*.temp
+*.trace
+*.stackdump
+*.out
+
+########################################
+# SQLite / 本地数据库 / 本地数据
+########################################
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+runtime_data/
+local_data/
+storage/
+cache/
+.session/
+.sessions/
+
+########################################
+# AI / 模型 / 下载文件（如果你有）
+########################################
+models/
+checkpoints/
+weights/
+*.bin
+*.pt
+*.pth
+*.gguf
+*.onnx
+
+########################################
+# Python 打包产物（PyInstaller / Nuitka）
+########################################
+build/
+dist/
+*.spec
+
+########################################
+# Logs
+########################################
+logs/
+*.log.*
+log/
+*.err
+
+########################################
+# 临时目录 / 运行态目录
+########################################
+tmp/
+temp/
+runtime/
+run/
+.pid/
+.sock/
+.swp
+
+########################################
+# 系统文件
+########################################
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+########################################
+# 编辑器 / IDE
+########################################
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+########################################
+# Git 自身
+########################################
+*.orig
+*.rej
+*.bak
+*.swp
+*.swo
+*.patch
+
+########################################
+# 测试 / 覆盖率
+########################################
+coverage/
+htmlcov/
+.nyc_output/
+.pytest_cache/
+
+########################################
+# 网络抓包 / 调试文件
+########################################
+*.har
+*.pcap
+*.pcapng
+
+########################################
+# 证书 / 密钥 / 本地配置（防止误提交）
+########################################
+*.pem
+*.key
+*.crt
+*.pfx
+.env
+.env.*
+config.local.*
+settings.local.*
+
+########################################
+# Electron + Python 运行通信中间文件
+########################################
+ipc/
+pipes/
+sockets/
+*.sock
+*.pipe
+
+########################################
+# 下载缓存
+########################################
+downloads/
+.cache/
+npm-cache/
+pip-cache/
+
+########################################
+# 其它杂项
+########################################
+*.dump
+*.core
+*.crash
+*.bak.*
+*.old
+*.save

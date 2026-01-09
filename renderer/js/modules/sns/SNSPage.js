@@ -1,0 +1,372 @@
+/**
+ * SNS Module - Main Page Content
+ * SNS主内容渲染
+ */
+
+export default {
+    /**
+     * 渲染SNS页面主内容
+     */
+    render() {
+        return `
+            <div class="sns-page-layout">
+                <!-- 地图主区域 -->
+                <div class="sns-map-area">
+                    <!-- 现代化顶部工具栏 -->
+                    <div class="sns-toolbar" id="snsToolbar">
+                        <div class="toolbar-left">
+                            <div class="toolbar-status">
+                                <span class="status-indicator online"></span>
+                                <span class="status-text">Online</span>
+                            </div>
+                            <div class="toolbar-divider"></div>
+                            <div class="toolbar-brand">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93z"/>
+                                </svg>
+                                <span>AI-SNS</span>
+                            </div>
+                        </div>
+                        <div class="toolbar-center">
+                            <div class="toolbar-title">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                                </svg>
+                                <span>Around the World in 80 Days</span>
+                            </div>
+                        </div>
+                        <div class="toolbar-right">
+                            <button class="toolbar-btn" title="刷新">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                </svg>
+                            </button>
+                            <button class="toolbar-btn" title="全屏">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                                </svg>
+                            </button>
+                            <button class="toolbar-btn" title="搜索">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/>
+                                    <path d="m21 21-4.35-4.35"/>
+                                </svg>
+                            </button>
+                            <div class="toolbar-divider"></div>
+                            <button class="toolbar-btn toolbar-collapse-btn" id="toolbarCollapseBtn" title="收起工具栏">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="18 15 12 9 6 15"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- 工具栏收起后的展开按钮 -->
+                    <button class="toolbar-expand-btn" id="toolbarExpandBtn" title="展开工具栏">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+
+                    <!-- 地图容器 -->
+                    <div class="map-container" id="mapContainer">
+                        <div class="map-placeholder">
+                            <div class="map-placeholder-icon">
+                                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                                </svg>
+                            </div>
+                            <p class="map-placeholder-text">正在加载地图...</p>
+                            <div class="map-placeholder-loader">
+                                <div class="loader-dot"></div>
+                                <div class="loader-dot"></div>
+                                <div class="loader-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 地图右侧设置面板 -->
+                    <div class="map-settings-panel" id="mapSettingsPanel">
+                        <div class="settings-panel-header">
+                            <span class="settings-panel-title">Settings</span>
+                            <button class="settings-collapse-btn" id="settingsCollapseBtn" title="收起面板">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="settings-panel-content">
+                            <div class="settings-group">
+                                <div class="settings-group-header">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                        <path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/>
+                                    </svg>
+                                    <span>地图</span>
+                                </div>
+                                <div class="settings-group-items">
+                                    <label class="settings-toggle-item">
+                                        <span>卫星视图</span>
+                                        <input type="checkbox" class="toggle-input">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <label class="settings-toggle-item">
+                                        <span>3D 倾斜</span>
+                                        <input type="checkbox" class="toggle-input">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <label class="settings-toggle-item">
+                                        <span>交通路况</span>
+                                        <input type="checkbox" class="toggle-input">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="settings-group">
+                                <div class="settings-group-header">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                        <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                                    </svg>
+                                    <span>系统</span>
+                                </div>
+                                <div class="settings-group-items">
+                                    <div class="settings-click-item" data-action="user-config">
+                                        <span>用户配置</span>
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                                    </div>
+                                    <div class="settings-click-item" data-action="role-setting">
+                                        <span>角色职业</span>
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                                    </div>
+                                    <div class="settings-click-item" data-action="advanced">
+                                        <span>高级控制</span>
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                                    </div>
+                                    <div class="settings-click-item" data-action="task-goal">
+                                        <span>任务目标</span>
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="settings-group">
+                                <div class="settings-group-header">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                                    </svg>
+                                    <span>移动模式</span>
+                                </div>
+                                <div class="settings-group-items">
+                                    <label class="settings-radio-item">
+                                        <input type="radio" name="moveMode" value="route">
+                                        <span class="radio-mark"></span>
+                                        <span>指定路线</span>
+                                    </label>
+                                    <label class="settings-radio-item">
+                                        <input type="radio" name="moveMode" value="free" checked>
+                                        <span class="radio-mark"></span>
+                                        <span>自由移动</span>
+                                    </label>
+                                    <label class="settings-radio-item">
+                                        <input type="radio" name="moveMode" value="follow">
+                                        <span class="radio-mark"></span>
+                                        <span>跟随模式</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 设置面板收起后的展开按钮 -->
+                    <button class="settings-expand-btn" id="settingsExpandBtn" title="展开设置">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                            <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58z"/>
+                        </svg>
+                    </button>
+
+                    <!-- 现代化底部功能栏 -->
+                    <div class="map-action-bar">
+                        <div class="action-bar-left">
+                            <button class="action-btn" data-action="plaza">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <path d="M3 9h18M9 21V9"/>
+                                </svg>
+                                <span>广场</span>
+                            </button>
+                            <button class="action-btn active" data-action="community">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="9" cy="7" r="4"/>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                                </svg>
+                                <span>社区</span>
+                            </button>
+                            <button class="action-btn" data-action="ai">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                                    <path d="M19 10H5a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2z"/>
+                                    <path d="M12 15v4M8 22h8"/>
+                                </svg>
+                                <span>AI</span>
+                            </button>
+                        </div>
+                        <div class="action-bar-center">
+                            <button class="action-btn-primary" id="snsStartBtn">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                <span>Start</span>
+                            </button>
+                        </div>
+                        <div class="action-bar-right">
+                            <button class="action-btn" data-action="navigate">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                                </svg>
+                                <span>导航</span>
+                            </button>
+                            <button class="action-btn" data-action="weather">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+                                </svg>
+                                <span>气象</span>
+                            </button>
+                            <button class="action-btn" data-action="layers">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                                    <polyline points="2 17 12 22 22 17"/>
+                                    <polyline points="2 12 12 17 22 12"/>
+                                </svg>
+                                <span>图层</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 地图控制按钮组 -->
+                    <div class="map-controls">
+                        <button class="map-control-btn" title="放大">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                        </button>
+                        <button class="map-control-btn" title="缩小">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                        </button>
+                        <div class="map-control-divider"></div>
+                        <button class="map-control-btn" title="我的位置">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+                            </svg>
+                        </button>
+                        <button class="map-control-btn" title="指南针">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 右侧状态面板收缩条 -->
+                <div class="sns-panel-resizer" id="snsPanelResizer">
+                    <div class="panel-resizer-handle">
+                        <div class="panel-resizer-line"></div>
+                    </div>
+                    <button class="panel-collapse-btn" id="snsPanelCollapseBtn" title="折叠状态面板">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="9,6 15,12 9,18"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- 右侧状态面板 -->
+                <div class="sns-status-panel" id="snsStatusPanel">
+                    <!-- 页签内容区域 - 整个面板内容随页签切换 -->
+                    <div class="status-tab-content" id="statusTabContent">
+                        <!-- Process 页签内容 -->
+                        <div class="tab-pane active" data-tab="process">
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Current Status</div>
+                                <div class="status-rows">
+                                    <div class="status-row"><span>💰 Money</span><span class="value">: 10,996.61</span></div>
+                                    <div class="status-row"><span>❤️ Life</span><span class="value">: 125</span></div>
+                                    <div class="status-row"><span>⚡ Energy</span><span class="value">: 150</span></div>
+                                    <div class="status-row"><span>👤 Profession</span><span class="value">: 医生 (*需要800元开办费)</span></div>
+                                    <div class="status-row"><span>📍 Location</span></div>
+                                    <div class="status-row sub"><span>lng</span><span class="value">: 116.36383031947238</span></div>
+                                    <div class="status-row sub"><span>lat</span><span class="value">: 39.76458567198844</span></div>
+                                </div>
+                            </div>
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg> On Going</div>
+                                <div class="status-rows"><span class="na">N/A</span></div>
+                            </div>
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg> Process History</div>
+                                <div class="status-rows"><span class="na">N/A</span></div>
+                            </div>
+                        </div>
+                        <!-- Resource 页签内容 -->
+                        <div class="tab-pane" data-tab="resource">
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4 14h-2v-4H7v-2h6V7h2v4h4v2h-4v4z"/></svg> Resource Overview</div>
+                                <div class="status-rows">
+                                    <div class="status-row"><span>🔋 CPU Usage</span><span class="value">: 45%</span></div>
+                                    <div class="status-row"><span>💾 Memory</span><span class="value">: 2.3 GB / 8 GB</span></div>
+                                    <div class="status-row"><span>💿 Disk</span><span class="value">: 120 GB / 500 GB</span></div>
+                                    <div class="status-row"><span>📶 Network</span><span class="value">: Connected</span></div>
+                                </div>
+                            </div>
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6z"/></svg> System Info</div>
+                                <div class="status-rows">
+                                    <div class="status-row"><span>🖥️ OS</span><span class="value">: Linux 5.15</span></div>
+                                    <div class="status-row"><span>⏱️ Uptime</span><span class="value">: 3d 12h 45m</span></div>
+                                    <div class="status-row"><span>🌡️ Temperature</span><span class="value">: 42°C</span></div>
+                                </div>
+                            </div>
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M15 21h-2v-2h2v2zm-2-7h-2v5h2v-5zm8-2h-2v7h2v-7zm-2-2h-2v2h2v-2zM7 21H3v-6h4v6zm-2-4H5v2h2v-2zm2-6H3v4h4v-4zm-2 2H5v2h2v-2zM3 3v6h4V3H3zm2 4H5V5h2v2z"/></svg> Network Stats</div>
+                                <div class="status-rows">
+                                    <div class="status-row"><span>⬆️ Upload</span><span class="value">: 1.2 MB/s</span></div>
+                                    <div class="status-row"><span>⬇️ Download</span><span class="value">: 5.8 MB/s</span></div>
+                                    <div class="status-row"><span>📡 Latency</span><span class="value">: 32ms</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Think 页签内容 -->
+                        <div class="tab-pane" data-tab="think">
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg> AI Model</div>
+                                <div class="status-rows">
+                                    <div class="status-row"><span>🧠 Model</span><span class="value">: GPT-4</span></div>
+                                    <div class="status-row"><span>💭 Status</span><span class="value">: Idle</span></div>
+                                    <div class="status-row"><span>🔧 Mode</span><span class="value">: Auto</span></div>
+                                </div>
+                            </div>
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg> Thinking Log</div>
+                                <div class="status-rows">
+                                    <div class="status-row"><span>📝 Last Action</span><span class="value">: N/A</span></div>
+                                    <div class="status-row"><span>🕐 Last Update</span><span class="value">: --:--:--</span></div>
+                                </div>
+                            </div>
+                            <div class="status-section">
+                                <div class="status-section-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l4.59-4.58L18 11l-6 6z"/></svg> Decision Queue</div>
+                                <div class="status-rows"><span class="na">No pending decisions</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 底部页签按钮 -->
+                    <div class="status-tabs" id="statusTabs">
+                        <button class="status-tab active" data-tab="process">Process</button>
+                        <button class="status-tab" data-tab="resource">Resource</button>
+                        <button class="status-tab" data-tab="think">Think</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+};

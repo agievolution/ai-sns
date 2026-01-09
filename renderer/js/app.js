@@ -363,36 +363,42 @@ const App = {
     },
 
     navigateTo(page) {
-        if (this.currentPage === page) return;
+        // 使用新的 router 系统
+        if (window.router) {
+            window.router.navigateTo(page);
+        } else {
+            // 回退到旧的方式（向后兼容）
+            if (this.currentPage === page) return;
 
-        console.log(`Navigating to: ${page}`);
+            console.log(`Navigating to: ${page}`);
 
-        // 保存当前页面状态（如果有）
-        if (this.currentPage) {
-            const currentPageElement = document.getElementById(`page-${this.currentPage}`);
-            if (currentPageElement) {
-                currentPageElement.classList.add('hidden');
+            // 保存当前页面状态（如果有）
+            if (this.currentPage) {
+                const currentPageElement = document.getElementById(`page-${this.currentPage}`);
+                if (currentPageElement) {
+                    currentPageElement.classList.add('hidden');
+                }
             }
-        }
 
-        this.currentPage = page;
+            this.currentPage = page;
 
-        // 更新导航栏状态
-        document.querySelectorAll('.nav-icon-item').forEach(item => {
-            item.classList.toggle('active', item.dataset.page === page);
-        });
+            // 更新导航栏状态
+            document.querySelectorAll('.nav-icon-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.page === page);
+            });
 
-        // 渲染侧边栏内容
-        this.renderSidebar(page);
+            // 渲染侧边栏内容
+            this.renderSidebar(page);
 
-        // 渲染或显示主内容区
-        this.renderOrShowMainContent(page);
+            // 渲染或显示主内容区
+            this.renderOrShowMainContent(page);
 
-        // 初始化页面控制器（只在首次渲染时调用）
-        const pageElement = document.getElementById(`page-${page}`);
-        if (!pageElement.dataset.initialized) {
-            this.initPageController(page);
-            pageElement.dataset.initialized = 'true';
+            // 初始化页面控制器（只在首次渲染时调用）
+            const pageElement = document.getElementById(`page-${page}`);
+            if (!pageElement.dataset.initialized) {
+                this.initPageController(page);
+                pageElement.dataset.initialized = 'true';
+            }
         }
     },
 

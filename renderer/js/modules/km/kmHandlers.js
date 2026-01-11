@@ -3,6 +3,9 @@
  */
 
 const kmHandlers = {
+    currentNoteId: null, // 当前正在编辑的笔记ID
+    notes: [], // 笔记列表缓存
+
     init() {
         this.bindEvents();
         this.loadNoteList();
@@ -43,6 +46,48 @@ const kmHandlers = {
                 });
             });
         }
+
+        // 颜色选择器
+        const colorPicker = document.getElementById('colorPicker');
+        const colorBtn = document.getElementById('colorBtn');
+        if (colorPicker && colorBtn) {
+            // 点击按钮触发颜色选择器
+            colorBtn.addEventListener('click', () => {
+                colorPicker.click();
+            });
+
+            // 颜色改变时应用到选中文本
+            colorPicker.addEventListener('input', (e) => {
+                const color = e.target.value;
+                document.execCommand('foreColor', false, color);
+
+                // 更新按钮中的颜色指示器
+                const colorIndicator = document.getElementById('colorIndicator');
+                if (colorIndicator) {
+                    colorIndicator.setAttribute('fill', color);
+                }
+            });
+        }
+
+        // Tab页签切换
+        document.querySelectorAll('.km-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const targetTab = e.target.dataset.tab;
+
+                // 切换active状态
+                document.querySelectorAll('.km-tab').forEach(t => t.classList.remove('active'));
+                e.target.classList.add('active');
+
+                // 根据tab显示不同内容
+                if (targetTab === 'all') {
+                    this.renderNoteList();
+                    this.bindNoteListEvents();
+                } else if (targetTab === 'tag') {
+                    this.renderTagView();
+                    this.bindTagViewEvents();
+                }
+            });
+        });
 
         // 工具栏按钮
         document.querySelectorAll('.km-tool-btn').forEach(btn => {
@@ -424,36 +469,109 @@ const kmHandlers = {
         }
     },
 
-    saveNote() {
+    async saveNote() {
         const noteContent = document.getElementById('noteContent');
         if (!noteContent) return;
 
-        const content = noteContent.innerHTML;
+        const content = noteContent.innerHTML.trim();
 
-        // 获取当前笔记ID（从选中的树节点获取）
-        const activeNode = document.querySelector('.km-tree-node .km-tree-item.active');
-        const noteId = activeNode ? activeNode.dataset.noteId : 'default';
-        const noteTitle = activeNode ? activeNode.querySelector('.tree-text')?.textContent : 'Untitled';
+        if (!content || content === '<p></p>' || content === '<p><br></p>') {
+            if (typeof Notification !== 'undefined') {
+                Notification.warning('笔记内容不能为空');
+            }
+            return;
+        }
 
-        // 保存到localStorage
-        const noteData = {
-            id: noteId,
-            title: noteTitle,
-            content: content,
-            lastModified: new Date().toISOString()
-        };
+        // 从内容中提取纯文本用于生成标题
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        const plainText = tempDiv.textContent || tempDiv.innerText || '';
 
-        localStorage.setItem(`km_note_${noteId}`, JSON.stringify(noteData));
+        // 自动生成标题：取前20个字符
+        let title = plainText.substring(0, 20).trim();
+        if (plainText.length > 20) {
+            title += '...';
+        }
+        if (!title) {
+            title = '无标题笔记';
+        }
 
-        // TODO: 如果需要，可以在这里调用后端API保存
-        // await window.api.post('/api/km/notes', noteData);
+        try {
+            let savedNote;
 
-        console.log('笔记已保存:', noteTitle);
+            if (this.currentNoteId) {
+                // 更新现有笔记
+                const response = await fetch(`http://localhost:8788/api/km/notes/${this.currentNoteId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: title,
+                        content: content
+                    })
+                });
 
-        if (typeof Notification !== 'undefined') {
-            Notification.success('笔记已保存');
-        } else {
-            alert('笔记已保存');
+                if (!response.ok) {
+                    throw new Error('保存失败');
+                }
+
+                savedNote = await response.json();
+            } else {
+                // 创建新笔记
+                const response = await fetch('http://localhost:8788/api/km/notes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: title,
+                        content: content,
+                        tags: []
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('保存失败');
+                }
+
+                savedNote = await response.json();
+                this.currentNoteId = savedNote.id;
+            }
+
+            // 重新加载笔记列表
+            await this.loadNoteList();
+
+            // 选中当前笔记
+            this.selectNoteInList(savedNote.id);
+
+            if (typeof Notification !== 'undefined') {
+                Notification.success('笔记已保存');
+            } else {
+                alert('笔记已保存');
+            }
+
+            console.log('笔记已保存:', savedNote);
+        } catch (error) {
+            console.error('保存笔记失败:', error);
+            if (typeof Notification !== 'undefined') {
+                Notification.error('保存失败: ' + error.message);
+            } else {
+                alert('保存失败: ' + error.message);
+            }
+        }
+    },
+
+    selectNoteInList(noteId) {
+        // 移除所有active类
+        document.querySelectorAll('.km-tree-item').forEach(item => {
+            item.classList.remove('active');
+        });
+
+        // 添加active类到当前笔记
+        const noteItem = document.querySelector(`.km-tree-item[data-note-id="${noteId}"]`);
+        if (noteItem) {
+            noteItem.classList.add('active');
         }
     },
 
@@ -824,32 +942,27 @@ const kmHandlers = {
     },
 
     showNewNoteModal() {
-        if (typeof Modal === 'undefined') {
-            console.error('Modal component not loaded');
-            return;
+        // 直接创建新笔记，不需要模态框
+        this.createNewNote();
+        if (typeof Notification !== 'undefined') {
+            Notification.success('已创建新笔记，开始编辑吧！');
+        }
+    },
+
+    createNewNote() {
+        // 清空编辑器
+        const noteContent = document.getElementById('noteContent');
+        if (noteContent) {
+            noteContent.innerHTML = '<p></p>';
+            noteContent.focus();
         }
 
-        Modal.show({
-            title: '新建笔记',
-            content: `
-                <div class="form-group">
-                    <label>标题</label>
-                    <input type="text" class="form-input" id="noteTitle" placeholder="输入笔记标题">
-                </div>
-            `,
-            confirmText: '创建',
-            onConfirm: () => {
-                const title = document.getElementById('noteTitle')?.value;
-                if (!title) {
-                    if (typeof Notification !== 'undefined') {
-                        Notification.error('请输入笔记标题');
-                    }
-                    return false;
-                }
-                if (typeof Notification !== 'undefined') {
-                    Notification.success('笔记已创建');
-                }
-            }
+        // 清除当前笔记ID
+        this.currentNoteId = null;
+
+        // 移除所有选中状态
+        document.querySelectorAll('.km-tree-item').forEach(item => {
+            item.classList.remove('active');
         });
     },
 
@@ -892,8 +1005,578 @@ const kmHandlers = {
         const noteTree = document.getElementById('noteTree');
         if (!noteTree) return;
 
-        // 这里可以从API加载笔记列表
-        // 示例代码已经在HTML中提供了静态列表
+        try {
+            const response = await fetch('http://localhost:8788/api/km/notes');
+            if (!response.ok) {
+                throw new Error('Failed to load notes');
+            }
+
+            this.notes = await response.json();
+            this.renderNoteList();
+            this.bindNoteListEvents();
+        } catch (error) {
+            console.error('Error loading notes:', error);
+            if (typeof Notification !== 'undefined') {
+                Notification.error('加载笔记列表失败: ' + error.message);
+            }
+        }
+    },
+
+    renderNoteList() {
+        const noteTree = document.getElementById('noteTree');
+        if (!noteTree) return;
+
+        if (this.notes.length === 0) {
+            noteTree.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #999;">
+                    暂无笔记<br>
+                    点击"新建笔记"开始创建
+                </div>
+            `;
+            return;
+        }
+
+        // 按置顶和更新时间排序
+        const sortedNotes = [...this.notes].sort((a, b) => {
+            if (a.is_pinned !== b.is_pinned) {
+                return a.is_pinned ? -1 : 1;
+            }
+            return new Date(b.updated_at) - new Date(a.updated_at);
+        });
+
+        const html = sortedNotes.map(note => {
+            const isPinned = note.is_pinned ? '<span style="color: #ff9800; margin-left: 5px;">📌</span>' : '';
+
+            return `
+                <div class="km-tree-item ${this.currentNoteId === note.id ? 'active' : ''}"
+                     data-note-id="${note.id}">
+                    <div class="note-title">${this.escapeHtml(note.title)}${isPinned}</div>
+                </div>
+            `;
+        }).join('');
+
+        noteTree.innerHTML = html;
+    },
+
+    bindNoteListEvents() {
+        const noteTree = document.getElementById('noteTree');
+        if (!noteTree) return;
+
+        // 双击打开笔记
+        noteTree.addEventListener('dblclick', (e) => {
+            const item = e.target.closest('.km-tree-item');
+            if (item) {
+                const noteId = parseInt(item.dataset.noteId);
+                this.openNote(noteId);
+            }
+        });
+
+        // 右键菜单
+        noteTree.addEventListener('contextmenu', (e) => {
+            const item = e.target.closest('.km-tree-item');
+            if (item) {
+                e.preventDefault();
+                const noteId = parseInt(item.dataset.noteId);
+                this.showNoteContextMenu(e, noteId);
+            }
+        });
+
+        // 单击选中
+        noteTree.addEventListener('click', (e) => {
+            const item = e.target.closest('.km-tree-item');
+            if (item) {
+                document.querySelectorAll('.km-tree-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+            }
+        });
+    },
+
+    openNote(noteId) {
+        const note = this.notes.find(n => n.id === noteId);
+        if (!note) return;
+
+        const noteContent = document.getElementById('noteContent');
+        if (noteContent) {
+            noteContent.innerHTML = note.content;
+            noteContent.focus();
+        }
+
+        this.currentNoteId = noteId;
+        this.selectNoteInList(noteId);
+
+        if (typeof Notification !== 'undefined') {
+            Notification.success(`已打开笔记: ${note.title}`);
+        }
+    },
+
+    showNoteContextMenu(event, noteId) {
+        const note = this.notes.find(n => n.id === noteId);
+        if (!note) return;
+
+        // 移除已存在的菜单
+        const existingMenu = document.querySelector('.note-context-menu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+
+        const menu = document.createElement('div');
+        menu.className = 'note-context-menu';
+        menu.style.cssText = `
+            position: fixed;
+            left: ${event.clientX}px;
+            top: ${event.clientY}px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10001;
+            min-width: 160px;
+            padding: 6px 0;
+        `;
+
+        const isPinned = note.is_pinned;
+        menu.innerHTML = `
+            <div class="context-menu-item" data-action="rename">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+                重命名
+            </div>
+            <div class="context-menu-item" data-action="pin">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
+                    <path d="M17 4v7l2 3v2h-6v5l-1 1-1-1v-5H5v-2l2-3V4c0-1.1.9-2 2-2h6c1.11 0 2 .89 2 2z"/>
+                </svg>
+                ${isPinned ? '取消置顶' : '置顶'}
+            </div>
+            <div class="context-menu-item" data-action="tags">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
+                    <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
+                </svg>
+                管理标签
+            </div>
+            <div class="context-menu-divider" style="height: 1px; background: #eee; margin: 4px 0;"></div>
+            <div class="context-menu-item" data-action="delete" style="color: #f44336;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                </svg>
+                删除
+            </div>
+        `;
+
+        document.body.appendChild(menu);
+
+        // 添加菜单项样式
+        const style = document.createElement('style');
+        style.textContent = `
+            .context-menu-item {
+                display: flex;
+                align-items: center;
+                padding: 10px 16px;
+                cursor: pointer;
+                font-size: 14px;
+                color: #333;
+                transition: background 0.2s;
+            }
+            .context-menu-item:hover {
+                background: #f5f5f5;
+            }
+            .context-menu-item svg {
+                flex-shrink: 0;
+            }
+        `;
+        if (!document.querySelector('style[data-note-context-menu]')) {
+            style.setAttribute('data-note-context-menu', 'true');
+            document.head.appendChild(style);
+        }
+
+        // 处理菜单项点击
+        menu.addEventListener('click', (e) => {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+
+            const action = item.dataset.action;
+            menu.remove();
+
+            switch (action) {
+                case 'rename':
+                    this.renameNote(noteId);
+                    break;
+                case 'pin':
+                    this.togglePinNote(noteId);
+                    break;
+                case 'tags':
+                    this.manageNoteTags(noteId);
+                    break;
+                case 'delete':
+                    this.deleteNote(noteId);
+                    break;
+            }
+        });
+
+        // 点击其他地方关闭菜单
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu() {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            });
+        }, 0);
+    },
+
+    renameNote(noteId) {
+        const note = this.notes.find(n => n.id === noteId);
+        if (!note) return;
+
+        if (typeof Modal === 'undefined') {
+            const newTitle = prompt('请输入新标题:', note.title);
+            if (newTitle && newTitle.trim()) {
+                this.updateNoteTitle(noteId, newTitle.trim());
+            }
+            return;
+        }
+
+        Modal.show({
+            title: '重命名笔记',
+            content: `
+                <div class="form-group">
+                    <label>笔记标题</label>
+                    <input type="text" class="form-input" id="renameNoteInput" value="${this.escapeHtml(note.title)}" autofocus>
+                </div>
+            `,
+            confirmText: '保存',
+            onConfirm: () => {
+                const newTitle = document.getElementById('renameNoteInput')?.value.trim();
+                if (newTitle) {
+                    this.updateNoteTitle(noteId, newTitle);
+                }
+            }
+        });
+
+        setTimeout(() => {
+            const input = document.getElementById('renameNoteInput');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }, 100);
+    },
+
+    async updateNoteTitle(noteId, newTitle) {
+        try {
+            const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: newTitle
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('更新失败');
+            }
+
+            const updatedNote = await response.json();
+
+            // 更新本地缓存
+            const index = this.notes.findIndex(n => n.id === noteId);
+            if (index !== -1) {
+                this.notes[index] = updatedNote;
+            }
+
+            // 重新渲染列表
+            this.renderNoteList();
+            this.bindNoteListEvents();
+
+            if (typeof Notification !== 'undefined') {
+                Notification.success('笔记标题已更新');
+            }
+        } catch (error) {
+            console.error('Error updating note title:', error);
+            if (typeof Notification !== 'undefined') {
+                Notification.error('更新失败: ' + error.message);
+            }
+        }
+    },
+
+    async togglePinNote(noteId) {
+        try {
+            const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}/toggle-pin`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('操作失败');
+            }
+
+            const updatedNote = await response.json();
+
+            // 更新本地缓存
+            const index = this.notes.findIndex(n => n.id === noteId);
+            if (index !== -1) {
+                this.notes[index] = updatedNote;
+            }
+
+            // 重新渲染列表
+            this.renderNoteList();
+            this.bindNoteListEvents();
+
+            if (typeof Notification !== 'undefined') {
+                Notification.success(updatedNote.is_pinned ? '已置顶' : '已取消置顶');
+            }
+        } catch (error) {
+            console.error('Error toggling pin:', error);
+            if (typeof Notification !== 'undefined') {
+                Notification.error('操作失败: ' + error.message);
+            }
+        }
+    },
+
+    manageNoteTags(noteId) {
+        const note = this.notes.find(n => n.id === noteId);
+        if (!note) return;
+
+        const currentTags = note.tags || [];
+
+        if (typeof Modal === 'undefined') {
+            const tagsStr = prompt('请输入标签（用逗号分隔）:', currentTags.join(', '));
+            if (tagsStr !== null) {
+                const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t);
+                this.updateNoteTags(noteId, tags);
+            }
+            return;
+        }
+
+        Modal.show({
+            title: '管理标签',
+            content: `
+                <div class="form-group">
+                    <label>标签（用逗号分隔）</label>
+                    <input type="text" class="form-input" id="noteTagsInput" value="${this.escapeHtml(currentTags.join(', '))}" placeholder="例如: 工作, 学习, 重要" autofocus>
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    提示：多个标签之间用逗号分隔
+                </div>
+            `,
+            confirmText: '保存',
+            onConfirm: () => {
+                const tagsStr = document.getElementById('noteTagsInput')?.value || '';
+                const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t);
+                this.updateNoteTags(noteId, tags);
+            }
+        });
+
+        setTimeout(() => {
+            const input = document.getElementById('noteTagsInput');
+            if (input) {
+                input.focus();
+            }
+        }, 100);
+    },
+
+    async updateNoteTags(noteId, tags) {
+        try {
+            const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tags: tags
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('更新失败');
+            }
+
+            const updatedNote = await response.json();
+
+            // 更新本地缓存
+            const index = this.notes.findIndex(n => n.id === noteId);
+            if (index !== -1) {
+                this.notes[index] = updatedNote;
+            }
+
+            // 重新渲染列表
+            this.renderNoteList();
+            this.bindNoteListEvents();
+
+            if (typeof Notification !== 'undefined') {
+                Notification.success('标签已更新');
+            }
+        } catch (error) {
+            console.error('Error updating tags:', error);
+            if (typeof Notification !== 'undefined') {
+                Notification.error('更新失败: ' + error.message);
+            }
+        }
+    },
+
+    async deleteNote(noteId) {
+        const note = this.notes.find(n => n.id === noteId);
+        if (!note) return;
+
+        const confirmDelete = confirm(`确定要删除笔记"${note.title}"吗？此操作无法撤销。`);
+        if (!confirmDelete) return;
+
+        try {
+            const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                throw new Error('删除失败');
+            }
+
+            // 从本地缓存中移除
+            this.notes = this.notes.filter(n => n.id !== noteId);
+
+            // 如果删除的是当前笔记，清空编辑器
+            if (this.currentNoteId === noteId) {
+                const noteContent = document.getElementById('noteContent');
+                if (noteContent) {
+                    noteContent.innerHTML = '<p></p>';
+                }
+                this.currentNoteId = null;
+            }
+
+            // 重新渲染列表
+            this.renderNoteList();
+            this.bindNoteListEvents();
+
+            if (typeof Notification !== 'undefined') {
+                Notification.success('笔记已删除');
+            }
+        } catch (error) {
+            console.error('Error deleting note:', error);
+            if (typeof Notification !== 'undefined') {
+                Notification.error('删除失败: ' + error.message);
+            }
+        }
+    },
+
+    escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    },
+
+    renderTagView() {
+        const noteTree = document.getElementById('noteTree');
+        if (!noteTree) return;
+
+        // 收集所有标签及对应的笔记
+        const tagMap = new Map();
+
+        this.notes.forEach(note => {
+            if (note.tags && note.tags.length > 0) {
+                note.tags.forEach(tag => {
+                    if (!tagMap.has(tag)) {
+                        tagMap.set(tag, []);
+                    }
+                    tagMap.get(tag).push(note);
+                });
+            }
+        });
+
+        if (tagMap.size === 0) {
+            noteTree.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #999;">
+                    暂无标签<br>
+                    给笔记添加标签后将在这里显示
+                </div>
+            `;
+            return;
+        }
+
+        // 按标签名称排序
+        const sortedTags = Array.from(tagMap.keys()).sort();
+
+        const html = sortedTags.map(tag => {
+            const notes = tagMap.get(tag);
+            const notesHtml = notes.map(note => `
+                <div class="km-tree-node">
+                    <div class="km-tree-item ${this.currentNoteId === note.id ? 'active' : ''}"
+                         data-note-id="${note.id}">
+                        <span class="tree-icon">📄</span>
+                        <span class="tree-text">${this.escapeHtml(note.title)}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="km-tree-node expandable expanded" data-tag="${this.escapeHtml(tag)}">
+                    <div class="km-tree-item tag-group-item">
+                        <span class="tree-expand">▼</span>
+                        <span class="tree-icon">🏷️</span>
+                        <span class="tree-text">${this.escapeHtml(tag)} (${notes.length})</span>
+                    </div>
+                    <div class="km-tree-children">
+                        ${notesHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        noteTree.innerHTML = html;
+    },
+
+    bindTagViewEvents() {
+        const noteTree = document.getElementById('noteTree');
+        if (!noteTree) return;
+
+        // 双击打开笔记
+        noteTree.addEventListener('dblclick', (e) => {
+            const item = e.target.closest('.km-tree-item[data-note-id]');
+            if (item) {
+                const noteId = parseInt(item.dataset.noteId);
+                this.openNote(noteId);
+            }
+        });
+
+        // 右键菜单
+        noteTree.addEventListener('contextmenu', (e) => {
+            const item = e.target.closest('.km-tree-item[data-note-id]');
+            if (item) {
+                e.preventDefault();
+                const noteId = parseInt(item.dataset.noteId);
+                this.showNoteContextMenu(e, noteId);
+            }
+        });
+
+        // 单击选中
+        noteTree.addEventListener('click', (e) => {
+            const item = e.target.closest('.km-tree-item[data-note-id]');
+            if (item) {
+                document.querySelectorAll('.km-tree-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+            }
+        });
+
+        // 标签组展开/折叠
+        noteTree.addEventListener('click', (e) => {
+            const expandIcon = e.target.closest('.tree-expand');
+            if (expandIcon) {
+                const treeNode = expandIcon.closest('.km-tree-node');
+                if (treeNode) {
+                    treeNode.classList.toggle('expanded');
+                    // 更新展开图标
+                    const icon = treeNode.querySelector('.tree-expand');
+                    if (icon) {
+                        icon.textContent = treeNode.classList.contains('expanded') ? '▼' : '▶';
+                    }
+                }
+            }
+        });
     },
 
     destroy() {

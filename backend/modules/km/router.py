@@ -8,10 +8,14 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from .schemas import KMConfig, KMResponse
 from .service import KMService
 from .dependencies import get_km_service
+from .note_router import router as note_router
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 包含笔记路由
+router.include_router(note_router, tags=["notes"])
 
 
 @router.get("", response_model=dict)

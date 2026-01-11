@@ -3806,6 +3806,50 @@
     border-color: var(--color-primary);
 }
 
+/* 颜色选择器 */
+.km-color-picker-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin: 0 4px;
+}
+
+.km-color-picker {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.km-color-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.km-color-btn:hover {
+    background: #f5f5f5;
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
+}
+
+.km-color-btn:active {
+    transform: translateY(0);
+}
+
+.km-color-btn svg {
+    display: block;
+}
+
 /* 格式行 */
 .km-format-row {
     background: #fff;

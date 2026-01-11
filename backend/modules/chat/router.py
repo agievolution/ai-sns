@@ -153,28 +153,72 @@ async def stream_chat(
     Stream chat interface using SSE
 
     Args:
-        request: Stream chat request with messages
+        request: Stream chat request with messages and optional model_config_id
 
     Returns:
         EventSourceResponse with streaming content
     """
-    ai_config = chat_service.get_ai_config()
+    # If model_config_id is provided, fetch config from agent module
+    if request.model_config_id:
+        try:
+            from backend.modules.agent.llm_service import LlmConfigService
+            llm_service = LlmConfigService()
+            model_config = llm_service.get_by_config_id(request.model_config_id)
 
-    # Check API key
-    if not ai_config['api_key']:
-        async def error_generator():
-            yield {
-                "event": "error",
-                "data": json.dumps({
-                    "error": "API key 未配置。请在 ai_config.yaml 中配置 api_key"
-                })
+            if not model_config:
+                async def error_generator():
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({
+                            "error": f"模型配置 ID {request.model_config_id} 不存在"
+                        })
+                    }
+                return EventSourceResponse(error_generator())
+
+            # Build ai_config from model_config
+            ai_config = {
+                'api_base': model_config.get('api_endpoint'),
+                'api_key': model_config.get('api_key'),
+                'model': model_config.get('model_name'),
+                'temperature': model_config.get('temperature', 0.7),
+                'max_tokens': model_config.get('max_tokens', 2048)
             }
-        return EventSourceResponse(error_generator())
 
-    # Use request parameters or default values from config
-    model = request.model or ai_config['model']
-    temperature = request.temperature if request.temperature is not None else ai_config['temperature']
-    max_tokens = request.max_tokens or ai_config['max_tokens']
+            # Override with request parameters if provided
+            model = request.model or ai_config['model']
+            temperature = request.temperature if request.temperature is not None else ai_config['temperature']
+            max_tokens = request.max_tokens or ai_config['max_tokens']
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Error loading model config: {error_msg}")
+            async def error_generator():
+                yield {
+                    "event": "error",
+                    "data": json.dumps({
+                        "error": f"加载模型配置失败: {error_msg}"
+                    })
+                }
+            return EventSourceResponse(error_generator())
+    else:
+        # Use default ai_config.yaml configuration
+        ai_config = chat_service.get_ai_config()
+
+        # Check API key
+        if not ai_config['api_key']:
+            async def error_generator():
+                yield {
+                    "event": "error",
+                    "data": json.dumps({
+                        "error": "API key 未配置。请在 ai_config.yaml 中配置 api_key"
+                    })
+                }
+            return EventSourceResponse(error_generator())
+
+        # Use request parameters or default values from config
+        model = request.model or ai_config['model']
+        temperature = request.temperature if request.temperature is not None else ai_config['temperature']
+        max_tokens = request.max_tokens or ai_config['max_tokens']
 
     return EventSourceResponse(
         streaming_service.stream_chat(

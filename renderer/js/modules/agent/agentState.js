@@ -19,6 +19,12 @@ const agentState = {
     // 当前选择的角色
     selectedRole: 'senior-dev',
 
+    // 当前模型的完整配置
+    currentModelConfig: null,
+
+    // 当前角色的完整配置
+    currentRoleConfig: null,
+
     // Agent列表
     agents: [],
 
@@ -135,6 +141,12 @@ const agentState = {
      * 获取系统提示词
      */
     getSystemPrompt() {
+        // 优先使用当前角色配置的 system_prompt
+        if (this.currentRoleConfig && this.currentRoleConfig.system_prompt) {
+            return this.currentRoleConfig.system_prompt;
+        }
+
+        // 回退到硬编码的提示词
         const prompts = {
             'senior-dev': '你是一位资深的软件工程师，有超过15年的开发经验。你精通多种编程语言和框架，善于编写高质量、可维护的代码。请用专业但易懂的方式回答问题，必要时提供代码示例。',
             'assistant': '你是一个通用的AI助手，能够帮助用户解答各种问题。请用友好、清晰的方式回答。',

@@ -57,16 +57,22 @@ const agentHandlers = {
         // 模型选择器
         const modelSelector = document.getElementById('modelSelector');
         if (modelSelector) {
-            modelSelector.addEventListener('change', (e) => {
-                agentState.setModel(e.target.value);
+            modelSelector.addEventListener('change', async (e) => {
+                const configId = e.target.value;
+                agentState.setModel(configId);
+                // 加载并保存完整的模型配置
+                await this.loadAndApplyModelConfig(configId);
             });
         }
 
         // 角色选择器
         const roleSelector = document.getElementById('roleSelector');
         if (roleSelector) {
-            roleSelector.addEventListener('change', (e) => {
-                agentState.setRole(e.target.value);
+            roleSelector.addEventListener('change', async (e) => {
+                const roleId = e.target.value;
+                agentState.setRole(roleId);
+                // 加载并保存完整的角色配置
+                await this.loadAndApplyRoleConfig(roleId);
             });
         }
 
@@ -166,17 +172,14 @@ const agentHandlers = {
      * 初始化 Prompt 相关事件
      */
     initPromptEvents() {
-        // 保存 System Prompt
+        // 保存 System Prompt - 更新到当前角色配置
         const saveBtns = document.querySelectorAll('.prompt-save-btn');
         saveBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const textarea = document.getElementById('systemPrompt');
                 if (textarea) {
                     const prompt = textarea.value.trim();
-                    agentState.setSystemPrompt(prompt);
-                    if (typeof Notification !== 'undefined') {
-                        Notification.success('System Prompt 已保存');
-                    }
+                    await this.saveRolePrompt(prompt);
                 }
             });
         });
@@ -203,6 +206,9 @@ const agentHandlers = {
                 }
             });
         });
+
+        // 绑定参数输入框变化事件 - 实时保存到模型配置
+        this.initParamInputListeners();
     },
 
     /**
@@ -635,36 +641,44 @@ const agentHandlers = {
      * 初始化流式聊天监听器
      */
     initChatStreamListeners() {
-        if (!window.electronAPI) return;
+        // 创建内部处理器对象，避免修改 window.electronAPI
+        this._streamHandlers = {
+            onData: (data) => {
+                if (data.requestId === agentState.getRequestId()) {
+                    agentState.appendStreamingContent(data.content);
+                    this.updateStreamingMessage(agentState.getStreamingContent());
+                }
+            },
+            onEnd: (data) => {
+                if (data.requestId === agentState.getRequestId()) {
+                    this.finalizeStreamingMessage();
+                    agentState.clearRequestId();
+                }
+            },
+            onError: (data) => {
+                if (data.requestId === agentState.getRequestId()) {
+                    this.showStreamError(data.error);
+                    agentState.clearRequestId();
+                }
+            }
+        };
 
-        // 清除旧的监听器
-        if (window.electronAPI.removeChatStreamListeners) {
-            window.electronAPI.removeChatStreamListeners();
+        // 如果存在旧的 electronAPI 监听器
+        if (window.electronAPI && window.electronAPI.onChatStreamData) {
+            // 清除旧的监听器
+            if (window.electronAPI.removeChatStreamListeners) {
+                window.electronAPI.removeChatStreamListeners();
+            }
+
+            // 监听流式数据
+            window.electronAPI.onChatStreamData(this._streamHandlers.onData);
+
+            // 监听流结束
+            window.electronAPI.onChatStreamEnd(this._streamHandlers.onEnd);
+
+            // 监听错误
+            window.electronAPI.onChatStreamError(this._streamHandlers.onError);
         }
-
-        // 监听流式数据
-        window.electronAPI.onChatStreamData((data) => {
-            if (data.requestId === agentState.getRequestId()) {
-                agentState.appendStreamingContent(data.content);
-                this.updateStreamingMessage(agentState.getStreamingContent());
-            }
-        });
-
-        // 监听流结束
-        window.electronAPI.onChatStreamEnd((data) => {
-            if (data.requestId === agentState.getRequestId()) {
-                this.finalizeStreamingMessage();
-                agentState.clearRequestId();
-            }
-        });
-
-        // 监听错误
-        window.electronAPI.onChatStreamError((data) => {
-            if (data.requestId === agentState.getRequestId()) {
-                this.showStreamError(data.error);
-                agentState.clearRequestId();
-            }
-        });
     },
 
     /**
@@ -694,6 +708,8 @@ const agentHandlers = {
                     // 设置当前选中的模型
                     if (defaultModel) {
                         agentState.setModel(defaultModel.config_id);
+                        // 加载默认模型的完整配置
+                        await this.loadAndApplyModelConfig(defaultModel.config_id);
                     }
                 } else {
                     modelSelector.innerHTML = '<option value="">暂无可用模型</option>';
@@ -732,6 +748,8 @@ const agentHandlers = {
                     // 设置当前选中的角色
                     if (defaultRole) {
                         agentState.setRole(defaultRole.role_id);
+                        // 加载默认角色的完整配置
+                        await this.loadAndApplyRoleConfig(defaultRole.role_id);
                     }
                 } else {
                     roleSelector.innerHTML = '<option value="">暂无可用角色</option>';
@@ -1057,29 +1075,41 @@ const agentHandlers = {
 
         // 发起流式请求
         try {
-            if (window.electronAPI && window.electronAPI.chatStreamStart) {
-                await agentApi.sendMessageStream(messages, requestId);
+            // 获取当前模型配置
+            const modelConfig = agentState.currentModelConfig;
+            const modelConfigId = modelConfig ? modelConfig.config_id : null;
 
-                // 设置超时处理
-                setTimeout(() => {
-                    if (agentState.getRequestId() === requestId) {
-                        this.showStreamError('请求超时，请重试');
-                        agentState.clearRequestId();
-                        enableSendBtn();
-                    }
-                }, 120000); // 2分钟超时
-
-                // 监听完成事件以启用按钮
-                const checkComplete = setInterval(() => {
-                    if (!agentState.getRequestId()) {
-                        enableSendBtn();
-                        clearInterval(checkComplete);
-                    }
-                }, 100);
-            } else {
-                // 如果没有 electronAPI，使用模拟响应
-                this.simulateStreamResponse(enableSendBtn);
+            // 确保 _streamHandlers 已初始化
+            if (!this._streamHandlers) {
+                this.initChatStreamListeners();
             }
+
+            // 准备回调函数
+            const callbacks = {
+                onData: this._streamHandlers.onData,
+                onEnd: this._streamHandlers.onEnd,
+                onError: this._streamHandlers.onError
+            };
+
+            // 调用新的 HTTP SSE 方式
+            await agentApi.sendMessageStream(messages, requestId, modelConfigId, modelConfig, callbacks);
+
+            // 设置超时处理
+            setTimeout(() => {
+                if (agentState.getRequestId() === requestId) {
+                    this.showStreamError('请求超时，请重试');
+                    agentState.clearRequestId();
+                    enableSendBtn();
+                }
+            }, 120000); // 2分钟超时
+
+            // 监听完成事件以启用按钮
+            const checkComplete = setInterval(() => {
+                if (!agentState.getRequestId()) {
+                    enableSendBtn();
+                    clearInterval(checkComplete);
+                }
+            }, 100);
         } catch (error) {
             console.error('发送消息失败:', error);
             this.showStreamError(error.message);
@@ -1363,6 +1393,228 @@ if __name__ == "__main__":
         } else if (page === 'role-management' && RoleManagementPage) {
             this.currentManagementPage = RoleManagementPage;
             await RoleManagementPage.init();
+        }
+    },
+
+    /**
+     * 加载并应用模型配置
+     */
+    async loadAndApplyModelConfig(configId) {
+        try {
+            const response = await fetch(`http://localhost:8788/api/agent/llm-configs/${configId}`);
+            const result = await response.json();
+
+            if (result.success && result.data) {
+                const modelConfig = result.data;
+                // 保存到 state
+                agentState.currentModelConfig = modelConfig;
+                // 更新右侧面板 param 页签
+                this.populateParamTab(modelConfig);
+                console.log('[AgentHandlers] 模型配置已加载:', modelConfig.name);
+            }
+        } catch (error) {
+            console.error('加载模型配置失败:', error);
+        }
+    },
+
+    /**
+     * 加载并应用角色配置
+     */
+    async loadAndApplyRoleConfig(roleId) {
+        try {
+            const response = await fetch(`http://localhost:8788/api/agent/role-configs/${roleId}`);
+            const result = await response.json();
+
+            if (result.success && result.data) {
+                const roleConfig = result.data;
+                // 保存到 state
+                agentState.currentRoleConfig = roleConfig;
+                // 更新右侧面板 prompt 页签
+                this.populatePromptTab(roleConfig);
+                console.log('[AgentHandlers] 角色配置已加载:', roleConfig.name);
+            }
+        } catch (error) {
+            console.error('加载角色配置失败:', error);
+        }
+    },
+
+    /**
+     * 填充 Param 页签 - 显示选中模型的参数
+     */
+    populateParamTab(modelConfig) {
+        if (!modelConfig) return;
+
+        // 查找 param tab 中的输入框
+        const paramTab = document.querySelector('[data-tab="param"]');
+        if (!paramTab) return;
+
+        const inputs = paramTab.querySelectorAll('.param-input');
+        inputs.forEach(input => {
+            const label = input.closest('.param-label');
+            if (!label) return;
+
+            const labelText = label.querySelector('span')?.textContent.trim();
+
+            if (labelText === 'Temperature' && modelConfig.temperature !== undefined) {
+                input.value = modelConfig.temperature;
+            } else if (labelText === 'Max Tokens' && modelConfig.max_tokens !== undefined) {
+                input.value = modelConfig.max_tokens;
+            } else if (labelText === 'Top P' && modelConfig.top_p !== undefined) {
+                input.value = modelConfig.top_p;
+            } else if (labelText === 'Frequency Penalty' && modelConfig.frequency_penalty !== undefined) {
+                input.value = modelConfig.frequency_penalty;
+            } else if (labelText === 'Presence Penalty' && modelConfig.presence_penalty !== undefined) {
+                input.value = modelConfig.presence_penalty;
+            }
+        });
+
+        // Stream 模式
+        const streamCheckbox = paramTab.querySelector('input[type="checkbox"]');
+        if (streamCheckbox && modelConfig.stream !== undefined) {
+            streamCheckbox.checked = modelConfig.stream;
+        }
+    },
+
+    /**
+     * 填充 Prompt 页签 - 显示选中角色的提示词
+     */
+    populatePromptTab(roleConfig) {
+        if (!roleConfig) return;
+
+        const promptTextarea = document.getElementById('systemPrompt');
+        if (promptTextarea && roleConfig.system_prompt) {
+            promptTextarea.value = roleConfig.system_prompt;
+        }
+    },
+
+    /**
+     * 初始化参数输入监听器 - 参数变化时保存到后端
+     */
+    initParamInputListeners() {
+        const paramTab = document.querySelector('[data-tab="param"]');
+        if (!paramTab) return;
+
+        // 使用防抖，避免频繁保存
+        let saveTimeout;
+        const debouncedSave = () => {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                this.saveModelParams();
+            }, 1000); // 1秒后保存
+        };
+
+        // 监听所有参数输入框
+        const inputs = paramTab.querySelectorAll('.param-input');
+        inputs.forEach(input => {
+            input.addEventListener('change', debouncedSave);
+        });
+
+        // 监听 checkbox
+        const checkboxes = paramTab.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', debouncedSave);
+        });
+    },
+
+    /**
+     * 保存模型参数到后端
+     */
+    async saveModelParams() {
+        const currentConfig = agentState.currentModelConfig;
+        if (!currentConfig || !currentConfig.config_id) {
+            console.warn('[AgentHandlers] 没有当前模型配置，无法保存');
+            return;
+        }
+
+        const paramTab = document.querySelector('[data-tab="param"]');
+        if (!paramTab) return;
+
+        // 收集参数
+        const params = {};
+        const inputs = paramTab.querySelectorAll('.param-input');
+        inputs.forEach(input => {
+            const label = input.closest('.param-label');
+            if (!label) return;
+
+            const labelText = label.querySelector('span')?.textContent.trim();
+            const value = parseFloat(input.value);
+
+            if (labelText === 'Temperature') {
+                params.temperature = value;
+            } else if (labelText === 'Max Tokens') {
+                params.max_tokens = parseInt(input.value);
+            } else if (labelText === 'Top P') {
+                params.top_p = value;
+            } else if (labelText === 'Frequency Penalty') {
+                params.frequency_penalty = value;
+            } else if (labelText === 'Presence Penalty') {
+                params.presence_penalty = value;
+            }
+        });
+
+        // Stream 模式
+        const streamCheckbox = paramTab.querySelector('input[type="checkbox"]');
+        if (streamCheckbox) {
+            params.stream = streamCheckbox.checked;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:8788/api/agent/llm-configs/${currentConfig.config_id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                // 更新 state 中的配置
+                Object.assign(agentState.currentModelConfig, params);
+                console.log('[AgentHandlers] 模型参数已保存');
+            } else {
+                console.error('[AgentHandlers] 保存模型参数失败:', result.error);
+            }
+        } catch (error) {
+            console.error('[AgentHandlers] 保存模型参数失败:', error);
+        }
+    },
+
+    /**
+     * 保存角色提示词到后端
+     */
+    async saveRolePrompt(prompt) {
+        const currentConfig = agentState.currentRoleConfig;
+        if (!currentConfig || !currentConfig.role_id) {
+            if (typeof Notification !== 'undefined') {
+                Notification.error('没有选择角色配置');
+            }
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:8788/api/agent/role-configs/${currentConfig.role_id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ system_prompt: prompt })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                // 更新 state 中的配置
+                agentState.currentRoleConfig.system_prompt = prompt;
+                if (typeof Notification !== 'undefined') {
+                    Notification.success('System Prompt 已保存');
+                }
+                console.log('[AgentHandlers] 角色提示词已保存');
+            } else {
+                if (typeof Notification !== 'undefined') {
+                    Notification.error('保存失败: ' + (result.error || '未知错误'));
+                }
+            }
+        } catch (error) {
+            console.error('[AgentHandlers] 保存角色提示词失败:', error);
+            if (typeof Notification !== 'undefined') {
+                Notification.error('保存失败: ' + error.message);
+            }
         }
     },
 

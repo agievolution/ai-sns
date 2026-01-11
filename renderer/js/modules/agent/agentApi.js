@@ -73,9 +73,131 @@ const agentApi = {
     },
 
     /**
-     * 发送消息 (流式)
+     * 发送消息 (流式) - 使用 HTTP SSE
      */
-    async sendMessageStream(messages, requestId) {
+    async sendMessageStream(messages, requestId, modelConfigId = null, modelConfig = null, callbacks = {}) {
+        try {
+            // 构建请求体
+            const requestBody = {
+                messages: messages,
+                model_config_id: modelConfigId
+            };
+
+            // 如果提供了模型配置，使用其参数
+            if (modelConfig) {
+                if (modelConfig.temperature !== undefined) {
+                    requestBody.temperature = modelConfig.temperature;
+                }
+                if (modelConfig.max_tokens !== undefined) {
+                    requestBody.max_tokens = modelConfig.max_tokens;
+                }
+            }
+
+            // 使用 fetch 进行 SSE 请求
+            const response = await fetch('http://localhost:8788/api/chat/stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            // 读取流式数据
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                    // 通知流结束
+                    if (callbacks.onEnd) {
+                        callbacks.onEnd({ requestId });
+                    }
+                    break;
+                }
+
+                // 解码数据
+                buffer += decoder.decode(value, { stream: true });
+
+                // 按行分割
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // 保留不完整的行
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6);
+
+                        if (data === '[DONE]') {
+                            // 流结束
+                            if (callbacks.onEnd) {
+                                callbacks.onEnd({ requestId });
+                            }
+                            return { success: true };
+                        }
+
+                        try {
+                            const parsed = JSON.parse(data);
+
+                            // 处理错误
+                            if (parsed.error) {
+                                if (callbacks.onError) {
+                                    callbacks.onError({
+                                        requestId,
+                                        error: parsed.error
+                                    });
+                                }
+                                return { success: false, error: parsed.error };
+                            }
+
+                            // 处理内容
+                            if (parsed.content) {
+                                if (callbacks.onData) {
+                                    callbacks.onData({
+                                        requestId,
+                                        content: parsed.content
+                                    });
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse SSE data:', data);
+                        }
+                    } else if (line.startsWith('event: ')) {
+                        const event = line.slice(7);
+                        if (event === 'error') {
+                            // 错误事件将在下一行的 data 中
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            return { success: true };
+        } catch (error) {
+            console.error('发送消息失败:', error);
+
+            // 通知错误
+            if (callbacks.onError) {
+                callbacks.onError({
+                    requestId,
+                    error: error.message
+                });
+            }
+
+            throw error;
+        }
+    },
+
+    /**
+     * 发送消息 (流式) - 兼容旧的 electronAPI 方式
+     */
+    async sendMessageStreamLegacy(messages, requestId) {
         try {
             if (window.electronAPI && window.electronAPI.chatStreamStart) {
                 window.electronAPI.chatStreamStart(messages, requestId);

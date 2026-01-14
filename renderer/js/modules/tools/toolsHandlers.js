@@ -37,10 +37,6 @@ const toolsHandlers = {
 
         // 根据不同的分类显示不同的内容
         switch(category) {
-            case 'llm-plugin':
-                console.log('显示 LLM Plugin 列表');
-                // TODO: 显示LLM插件列表
-                break;
             case 'tools-plugin':
                 console.log('显示 Tools Plugin 列表');
                 // TODO: 显示工具插件列表

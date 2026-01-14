@@ -4499,29 +4499,121 @@
     text-align: center;
 }
 
-/* 底部分类列表 */
+/* 工具分类列表 - 现代化设计 */
 .tools-category-section {
-    margin-top: auto;
-    border-top: 1px solid var(--border-light);
-    padding: 8px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px 12px;
+    height: 100%;
 }
 
 .tools-category-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
+    gap: 12px;
+    padding: 14px 12px;
+    border-radius: var(--radius-lg);
     cursor: pointer;
-    transition: background 0.15s;
+    transition: all var(--transition-normal);
+    position: relative;
+    background: transparent;
+}
+
+.tools-category-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 0;
+    background: var(--color-primary);
+    border-radius: 0 3px 3px 0;
+    transition: height var(--transition-normal);
 }
 
 .tools-category-item:hover {
     background: var(--bg-hover);
 }
 
-.tools-category-item span {
-    font-size: 13px;
-    color: var(--text-secondary);
+.tools-category-item:hover::before {
+    height: 60%;
+}
+
+.tools-category-item:active {
+    transform: scale(0.98);
+}
+
+.category-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    transition: all var(--transition-normal);
+    flex-shrink: 0;
+}
+
+.tools-category-item:hover .category-icon {
+    background: var(--color-primary-bg);
+    color: var(--color-primary);
+    transform: scale(1.05);
+}
+
+.category-title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: color var(--transition-normal);
+}
+
+.tools-category-item:hover .category-title {
+    color: var(--color-primary);
+}
+
+.category-arrow {
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: all var(--transition-normal);
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.tools-category-item:hover .category-arrow {
+    opacity: 1;
+    transform: translateX(0);
+    color: var(--color-primary);
+}
+
+/* 分类项选中状态 */
+.tools-category-item.active {
+    background: var(--color-primary-bg);
+}
+
+.tools-category-item.active::before {
+    height: 70%;
+}
+
+.tools-category-item.active .category-icon {
+    background: var(--color-primary);
+    color: white;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.tools-category-item.active .category-title {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.tools-category-item.active .category-arrow {
+    opacity: 1;
+    transform: translateX(0);
+    color: var(--color-primary);
 }
 
 /* ==================== Web Page Styles ==================== */

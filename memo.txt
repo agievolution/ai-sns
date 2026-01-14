@@ -1726,3 +1726,7 @@ agent详情后端接口：/api/agent/{agent_id} 例如http://localhost:8788/api/
 3.聊天界面上模型选择框的下拉选项及角色选择框的下拉选项都没有从配置中更新，
 http://localhost:8788/api/agent/llm-configs，http://localhost:8788/api/agent/role-configs
 4.模型选择框及角色选择框，它们的变化应该同步更新相应模型的配置。
+
+请你给我完善Electron前端Tools这个栏目，代码结构:前端在Electron及Renderer，后端在api_server.py及backend目录下
+请你对Tools这个栏目里面的4个模块进行完善。请你根据模块名称对4个模块进行合理设计，这4个模块的功能都将被ai大模型作为工具进行调用。它们的数据，配置都必须进行持久化保存，请保存到db/db.sqlite
+

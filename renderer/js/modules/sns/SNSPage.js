@@ -12,62 +12,6 @@ export default {
             <div class="sns-page-layout">
                 <!-- 地图主区域 -->
                 <div class="sns-map-area">
-                    <!-- 现代化顶部工具栏 -->
-                    <div class="sns-toolbar" id="snsToolbar">
-                        <div class="toolbar-left">
-                            <div class="toolbar-status">
-                                <span class="status-indicator online"></span>
-                                <span class="status-text">Online</span>
-                            </div>
-                            <div class="toolbar-divider"></div>
-                            <div class="toolbar-brand">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93z"/>
-                                </svg>
-                                <span>AI-SNS</span>
-                            </div>
-                        </div>
-                        <div class="toolbar-center">
-                            <div class="toolbar-title">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                                </svg>
-                                <span>Around the World in 80 Days</span>
-                            </div>
-                        </div>
-                        <div class="toolbar-right">
-                            <button class="toolbar-btn" title="刷新">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M23 4v6h-6M1 20v-6h6"/>
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                                </svg>
-                            </button>
-                            <button class="toolbar-btn" title="全屏">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-                                </svg>
-                            </button>
-                            <button class="toolbar-btn" title="搜索">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"/>
-                                    <path d="m21 21-4.35-4.35"/>
-                                </svg>
-                            </button>
-                            <div class="toolbar-divider"></div>
-                            <button class="toolbar-btn toolbar-collapse-btn" id="toolbarCollapseBtn" title="收起工具栏">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="18 15 12 9 6 15"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <!-- 工具栏收起后的展开按钮 -->
-                    <button class="toolbar-expand-btn" id="toolbarExpandBtn" title="展开工具栏">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                    </button>
-
                     <!-- 地图容器 -->
                     <div class="map-container" id="mapContainer">
                         <div class="map-placeholder">
@@ -84,102 +28,6 @@ export default {
                             </div>
                         </div>
                     </div>
-
-                    <!-- 地图右侧设置面板 -->
-                    <div class="map-settings-panel" id="mapSettingsPanel">
-                        <div class="settings-panel-header">
-                            <span class="settings-panel-title">Settings</span>
-                            <button class="settings-collapse-btn" id="settingsCollapseBtn" title="收起面板">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="9 18 15 12 9 6"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="settings-panel-content">
-                            <div class="settings-group">
-                                <div class="settings-group-header">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                        <path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/>
-                                    </svg>
-                                    <span>地图</span>
-                                </div>
-                                <div class="settings-group-items">
-                                    <label class="settings-toggle-item">
-                                        <span>卫星视图</span>
-                                        <input type="checkbox" class="toggle-input">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                    <label class="settings-toggle-item">
-                                        <span>3D 倾斜</span>
-                                        <input type="checkbox" class="toggle-input">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                    <label class="settings-toggle-item">
-                                        <span>交通路况</span>
-                                        <input type="checkbox" class="toggle-input">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="settings-group">
-                                <div class="settings-group-header">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                        <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-                                    </svg>
-                                    <span>系统</span>
-                                </div>
-                                <div class="settings-group-items">
-                                    <div class="settings-click-item" data-action="user-config">
-                                        <span>用户配置</span>
-                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                                    </div>
-                                    <div class="settings-click-item" data-action="role-setting">
-                                        <span>角色职业</span>
-                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                                    </div>
-                                    <div class="settings-click-item" data-action="advanced">
-                                        <span>高级控制</span>
-                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                                    </div>
-                                    <div class="settings-click-item" data-action="task-goal">
-                                        <span>任务目标</span>
-                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="settings-group">
-                                <div class="settings-group-header">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
-                                    </svg>
-                                    <span>移动模式</span>
-                                </div>
-                                <div class="settings-group-items">
-                                    <label class="settings-radio-item">
-                                        <input type="radio" name="moveMode" value="route">
-                                        <span class="radio-mark"></span>
-                                        <span>指定路线</span>
-                                    </label>
-                                    <label class="settings-radio-item">
-                                        <input type="radio" name="moveMode" value="free" checked>
-                                        <span class="radio-mark"></span>
-                                        <span>自由移动</span>
-                                    </label>
-                                    <label class="settings-radio-item">
-                                        <input type="radio" name="moveMode" value="follow">
-                                        <span class="radio-mark"></span>
-                                        <span>跟随模式</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- 设置面板收起后的展开按钮 -->
-                    <button class="settings-expand-btn" id="settingsExpandBtn" title="展开设置">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                            <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58z"/>
-                        </svg>
-                    </button>
 
                     <!-- 现代化底部功能栏 -->
                     <div class="map-action-bar">
@@ -338,33 +186,7 @@ export default {
                         </div>
                     </div>
 
-                    <!-- 地图控制按钮组 -->
-                    <div class="map-controls">
-                        <button class="map-control-btn" title="放大">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="5" x2="12" y2="19"/>
-                                <line x1="5" y1="12" x2="19" y2="12"/>
-                            </svg>
-                        </button>
-                        <button class="map-control-btn" title="缩小">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"/>
-                            </svg>
-                        </button>
-                        <div class="map-control-divider"></div>
-                        <button class="map-control-btn" title="我的位置">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="3"/>
-                                <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
-                            </svg>
-                        </button>
-                        <button class="map-control-btn" title="指南针">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-                            </svg>
-                        </button>
-                    </div>
+                    <!-- 地图控制按钮组已移除 -->
                 </div>
 
                 <!-- 右侧状态面板收缩条 -->

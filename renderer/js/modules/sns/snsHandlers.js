@@ -5,6 +5,10 @@
 
 import snsState from './snsState.js';
 import snsApi from './snsApi.js';
+import { SNSAvatarDialog } from './SNSAvatarDialog.js';
+import { SNSProfessionDialog } from './SNSProfessionDialog.js';
+import { SNSSocialRoleDialog } from './SNSSocialRoleDialog.js';
+import { SNSMapConfigDialog } from './SNSMapConfigDialog.js';
 
 export default {
     /**
@@ -18,7 +22,9 @@ export default {
         this.initSNSStatusTabs();
         this.initSNSToolbar();
         this.initSNSSettingsPanel();
+        this.initConfigButtons();
         this.initSNSActionBar();
+        this.initMapReloadListener();
     },
 
     /**
@@ -92,6 +98,60 @@ export default {
             panel.classList.remove('collapsed');
             mapArea.classList.remove('settings-hidden');
             localStorage.setItem('snsSettingsPanelCollapsed', 'false');
+        });
+
+        // Add configuration buttons
+        this.initConfigButtons();
+    },
+
+    /**
+     * Initialize configuration buttons
+     */
+    initConfigButtons() {
+        // Avatar configuration button
+        const avatarBtn = document.getElementById('snsAvatarConfigBtn');
+        if (avatarBtn) {
+            avatarBtn.addEventListener('click', async () => {
+                const dialog = new SNSAvatarDialog();
+                await dialog.show();
+            });
+        }
+
+        // Profession configuration button
+        const professionBtn = document.getElementById('snsProfessionConfigBtn');
+        if (professionBtn) {
+            professionBtn.addEventListener('click', async () => {
+                const dialog = new SNSProfessionDialog();
+                await dialog.show();
+            });
+        }
+
+        // Social role configuration button
+        const socialRoleBtn = document.getElementById('snsSocialRoleConfigBtn');
+        if (socialRoleBtn) {
+            socialRoleBtn.addEventListener('click', async () => {
+                const dialog = new SNSSocialRoleDialog();
+                await dialog.show();
+            });
+        }
+
+        // Map configuration button
+        const mapConfigBtn = document.getElementById('snsMapConfigBtn');
+        if (mapConfigBtn) {
+            mapConfigBtn.addEventListener('click', async () => {
+                const dialog = new SNSMapConfigDialog();
+                await dialog.show();
+            });
+        }
+    },
+
+    /**
+     * 初始化地图重新加载监听器
+     */
+    initMapReloadListener() {
+        window.addEventListener('reloadMap', () => {
+            console.log('Received reloadMap event - reloading map');
+            this.loadBaiduMap();
         });
     },
 
@@ -201,12 +261,95 @@ export default {
         // Start 按钮
         const startBtn = document.getElementById('snsStartBtn');
         if (startBtn) {
-            startBtn.addEventListener('click', () => {
-                startBtn.classList.toggle('running');
+            startBtn.addEventListener('click', async () => {
                 const isRunning = startBtn.classList.contains('running');
-                startBtn.innerHTML = isRunning
-                    ? `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>`
-                    : `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span>Start</span>`;
+
+                if (!isRunning) {
+                    // 启动引擎
+                    startBtn.disabled = true;
+                    startBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="12" r="10" opacity="0.3"/></svg><span>Starting...</span>`;
+
+                    try {
+                        const result = await snsApi.startEngine();
+
+                        if (result.success) {
+                            startBtn.classList.add('running');
+                            startBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>`;
+                            this.showToast('AI社交引擎已启动', 'success');
+                        } else {
+                            startBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span>Start</span>`;
+                            this.showToast(`启动失败: ${result.message}`, 'error');
+                        }
+                    } catch (error) {
+                        console.error('启动引擎失败:', error);
+                        startBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span>Start</span>`;
+                        this.showToast(`启动失败: ${error.message}`, 'error');
+                    } finally {
+                        startBtn.disabled = false;
+                    }
+                } else {
+                    // 停止引擎
+                    startBtn.disabled = true;
+                    startBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="12" r="10" opacity="0.3"/></svg><span>Stopping...</span>`;
+
+                    try {
+                        const result = await snsApi.stopEngine();
+
+                        if (result.success) {
+                            startBtn.classList.remove('running');
+                            startBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span>Start</span>`;
+                            this.showToast('AI社交引擎已停止', 'success');
+                        } else {
+                            startBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>`;
+                            this.showToast(`停止失败: ${result.message}`, 'error');
+                        }
+                    } catch (error) {
+                        console.error('停止引擎失败:', error);
+                        startBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>`;
+                        this.showToast(`停止失败: ${error.message}`, 'error');
+                    } finally {
+                        startBtn.disabled = false;
+                    }
+                }
+            });
+        }
+
+        // Control Send 按钮
+        const sendBtn = actionBar.querySelector('.control-send-btn');
+        const inputField = actionBar.querySelector('.control-input');
+        if (sendBtn && inputField) {
+            const handleSend = async () => {
+                const message = inputField.value.trim();
+                if (!message) return;
+
+                // 获取当前模式
+                const activeToggle = actionBar.querySelector('.toggle-btn.active');
+                const mode = activeToggle ? activeToggle.dataset.mode : 'ai';
+
+                // 清空输入框
+                inputField.value = '';
+
+                try {
+                    // 调用AI服务 - 使用第一个可用的agent
+                    const result = await snsApi.chatWithAI('1', message, mode);
+
+                    if (result.success) {
+                        // 显示回复
+                        this.showToast(result.reply);
+                    } else {
+                        this.showToast(`错误: ${result.error || '未知错误'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('发送消息失败:', error);
+                    this.showToast(`发送失败: ${error.message}`, 'error');
+                }
+            };
+
+            sendBtn.addEventListener('click', handleSend);
+            inputField.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleSend();
+                }
             });
         }
     },
@@ -304,7 +447,7 @@ export default {
     /**
      * 加载百度地图
      */
-    loadBaiduMap() {
+    async loadBaiduMap() {
         const mapContainer = document.getElementById('mapContainer');
         if (!mapContainer) {
             console.error('地图容器未找到');
@@ -326,9 +469,34 @@ export default {
             return;
         }
 
+        // 获取地图配置
+        let mapUrl = 'http://localhost:8788/scripts/map.html'; // 默认百度地图
+        try {
+            const response = await fetch('http://localhost:8788/api/sns/map-config');
+            const result = await response.json();
+
+            console.log('Map config API response:', result);
+
+            if (result.success && result.data) {
+                const mapType = String(result.data.map_type).trim();
+                console.log('Map type:', mapType);
+
+                if (mapType === '0') {
+                    mapUrl = 'http://localhost:8788/scripts/googlemap3d.html';
+                    console.log('Loading Google Map');
+                } else {
+                    console.log('Loading Baidu Map');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch map config:', error);
+        }
+
+        console.log('Final map URL:', mapUrl);
+
         // 创建 iframe 加载地图页面
         const iframe = document.createElement('iframe');
-        iframe.src = 'http://localhost:8788/scripts/map.html';
+        iframe.src = mapUrl;
         iframe.style.width = '100%';
         iframe.style.height = '100%';
         iframe.style.border = 'none';
@@ -532,5 +700,41 @@ export default {
         if (iframe && iframe._messageListener) {
             window.removeEventListener('message', iframe._messageListener);
         }
+    },
+
+    /**
+     * 显示Toast消息
+     */
+    showToast(message, type = 'success') {
+        // 创建toast元素
+        const toast = document.createElement('div');
+        toast.className = `sns-toast sns-toast-${type}`;
+        toast.textContent = message;
+
+        // 添加样式
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'error' ? '#f44336' : '#4caf50'};
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            max-width: 400px;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease-out;
+        `;
+
+        document.body.appendChild(toast);
+
+        // 3秒后自动移除
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
     }
 };

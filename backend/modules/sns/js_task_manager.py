@@ -1,7 +1,7 @@
 from util import generate_random_id
 from db.DBFactory import add_map_activity,query_map_activity_previous,query_AiChatCfg_map_setting,query_AIChatMessages_All_previous
 import json
-# from MessageBoxEarth import MessageBox
+
 class JsTaskManager:
     def __init__(self,parent):
         # 初始化一个字典和几个列表

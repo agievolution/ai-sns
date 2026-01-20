@@ -4,9 +4,6 @@ from i18n import lt
 from typing import  Dict, Any, Optional
 from util import generate_random_id
 
-from PyQt6.QtCore import QEventLoop, Qt
-from PyQt6.QtWidgets import QCheckBox
-
 
 class MapTaskManager:
     def __init__(self,parent):
@@ -432,37 +429,9 @@ class MapTaskManager:
         self.current_task_record = record
         return record
 
-    def wait_for_checkbox(self,checkbox: QCheckBox):
-        """
-        等待复选框被选中而不阻塞UI
-        参数:
-            checkbox: 要监听的QCheckBox实例
-        """
-        # 创建局部事件循环
-        loop = QEventLoop()
-
-        # 定义退出事件循环的槽函数
-        def exit_loop_if_checked(state):
-            if state == Qt.CheckState.Unchecked.value:
-                loop.quit()
-
-        # 连接信号：当复选框状态变化时触发检查
-        checkbox.stateChanged.connect(exit_loop_if_checked)
-
-        # 立即检查当前状态（避免已经选中的情况）
-
-        if not checkbox.isChecked():
-            return
-
-        # 启动局部事件循环（非阻塞式等待）
-        loop.exec()
-
-        # 等待完成后断开信号连接
-        checkbox.stateChanged.disconnect(exit_loop_if_checked)
-
 
     def process_task(self,**kwargs):
-        self.wait_for_checkbox(self.parent.pauseCheckBox)
+        self.pause_and_wait_for_resume()
 
 
         self.kwargs = kwargs
@@ -927,7 +896,8 @@ class MapTaskManager:
 
 
 
-
+    def pause_and_wait_for_resume(self):
+        return True
 
 
 

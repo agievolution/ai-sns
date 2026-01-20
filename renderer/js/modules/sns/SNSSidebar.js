@@ -109,8 +109,16 @@ export default {
                     <div class="chat-messages" id="chatMessages"></div>
                     <div class="chat-input-area">
                         <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." />
-                        <button class="chat-send-btn" id="sendMessageBtn">Send</button>
-                        <button class="chat-file-btn" id="sendFileBtn">📎</button>
+                        <button class="chat-file-btn" id="sendFileBtn" title="Attach file">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
+                            </svg>
+                        </button>
+                        <button class="chat-send-btn" id="sendMessageBtn" title="Send message">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>

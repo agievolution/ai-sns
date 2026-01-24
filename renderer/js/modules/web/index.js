@@ -28,14 +28,40 @@ export default {
     /**
      * 初始化模块
      */
-    init() {
-        webHandlers.init();
+    async init() {
+        console.log('[Web Module] Initializing...');
+        await WebSidebar.init();
+
+        // Re-render sidebar after data is loaded
+        const sidebarContainer = document.getElementById('sidebar-web');
+        console.log('[Web Module] Sidebar container:', sidebarContainer);
+        if (sidebarContainer) {
+            console.log('[Web Module] Re-rendering sidebar with data...');
+            sidebarContainer.innerHTML = WebSidebar.render();
+        } else {
+            console.warn('[Web Module] Sidebar container not found!');
+        }
+
+        webHandlers.init(WebPage, WebSidebar);
+
+        // Listen for page changes to close BrowserView when leaving web page
+        if (window.eventBus) {
+            window.eventBus.on('page:changed', (data) => {
+                if (data.from === 'web' && data.to !== 'web') {
+                    console.log('[Web Module] Leaving web page, closing BrowserView');
+                    WebPage.closeBrowserView();
+                }
+            });
+        }
+
+        console.log('[Web Module] Initialization complete');
     },
 
     /**
      * 销毁模块
      */
     destroy() {
+        WebPage.closeBrowserView();
         webHandlers.destroy();
     }
 };

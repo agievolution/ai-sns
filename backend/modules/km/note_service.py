@@ -92,7 +92,7 @@ class NoteService:
             'updated_at': updated_at.isoformat() if updated_at else datetime.now().isoformat()
         }
 
-    def create_note(self, title: str, content: str, tags: List[str] = None) -> Dict:
+    def create_note(self, title: str, content: str, tags: List[str] = None, km_id: str = None) -> Dict:
         """创建新笔记"""
         session = self._get_session()
         try:
@@ -103,6 +103,10 @@ class NoteService:
                 'is_delete': False,
                 'create_time': now,
             }
+
+            # Add km_id if provided
+            if km_id:
+                note_data['km_id'] = km_id
 
             # 只在列存在时才设置
             try:
@@ -261,6 +265,56 @@ class NoteService:
             return self._note_to_dict(note)
         except Exception as e:
             session.rollback()
+            raise e
+        finally:
+            session.close()
+
+
+    def search_notes(self, query: str = "", km_id: str = None) -> List[Dict]:
+        """
+        搜索笔记
+
+        Args:
+            query: 搜索关键词（搜索标题、内容、标签）
+            km_id: 知识库ID（字符串，如"note_store"，可选，用于过滤特定知识库的笔记）
+
+        Returns:
+            符合条件的笔记列表
+        """
+        session = SessionLocal()
+        try:
+            # 构建查询
+            filters = [NoteMng.is_delete == False]
+
+            # 添加知识库过滤
+            if km_id is not None:
+                filters.append(NoteMng.km_id == km_id)
+
+            # 添加搜索条件
+            if query and query.strip():
+                search_term = f"%{query}%"
+                filters.append(
+                    or_(
+                        NoteMng.title.like(search_term),
+                        NoteMng.content.like(search_term),
+                        NoteMng.tags.like(search_term)
+                    )
+                )
+
+            # 执行查询
+            notes = session.query(NoteMng).filter(and_(*filters)).all()
+
+            # 转换为字典列表
+            result = [self._note_to_dict(note) for note in notes]
+
+            # 按置顶和更新时间排序
+            result.sort(key=lambda x: (
+                not x.get('is_pinned', False),  # 置顶的在前
+                -(datetime.fromisoformat(x.get('updated_at') or x.get('create_time') or datetime.now().isoformat()).timestamp())  # 新的在前
+            ))
+
+            return result
+        except Exception as e:
             raise e
         finally:
             session.close()

@@ -48,6 +48,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeAllListeners(channel);
     },
 
+    // BrowserView 控制
+    loadUrlInBrowserView: (url) => ipcRenderer.invoke('load-url-in-browserview', url),
+    closeBrowserView: () => ipcRenderer.send('close-browserview'),
+    getBrowserViewBounds: () => ipcRenderer.invoke('get-browserview-bounds'),
+    updateBrowserViewBounds: (collapsed) => ipcRenderer.send('update-browserview-bounds', collapsed),
+
     // AI 聊天流式输出
     chatStreamStart: (messages, requestId) => {
         ipcRenderer.send('chat-stream-start', { messages, requestId });

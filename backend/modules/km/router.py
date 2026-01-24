@@ -134,3 +134,125 @@ async def upload_to_knowledge_base(
     except Exception as e:
         logger.error(f"Error uploading file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# File management endpoints
+@router.get("/{kb_id}/files", response_model=dict)
+async def get_files(kb_id: int, service: KMService = Depends(get_km_service)):
+    """Get all files for a knowledge base"""
+    try:
+        files = service.get_files(kb_id)
+        return {"success": True, "data": files}
+    except Exception as e:
+        logger.error(f"Error getting files: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{kb_id}/files", response_model=dict)
+async def upload_file(
+    kb_id: int,
+    file: UploadFile = File(...),
+    service: KMService = Depends(get_km_service)
+):
+    """Upload a file to knowledge base"""
+    try:
+        content = await file.read()
+        file_id = service.add_file(kb_id, file.filename, content)
+        return {"success": True, "data": {"id": file_id, "filename": file.filename}}
+    except Exception as e:
+        logger.error(f"Error uploading file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{kb_id}/files/{file_id}", response_model=dict)
+async def delete_file(
+    kb_id: int,
+    file_id: int,
+    service: KMService = Depends(get_km_service)
+):
+    """Delete a file from knowledge base"""
+    try:
+        service.delete_file(kb_id, file_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error deleting file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{kb_id}/search", response_model=dict)
+async def vector_search(
+    kb_id: int,
+    request: dict,
+    service: KMService = Depends(get_km_service)
+):
+    """Perform vector search in knowledge base"""
+    try:
+        query = request.get("query", "")
+        top_k = request.get("top_k", 5)
+        results = service.vector_search(kb_id, query, top_k)
+        return {"success": True, "data": results}
+    except Exception as e:
+        logger.error(f"Error performing search: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Key-value management endpoints
+@router.get("/{kb_id}/keyvalues", response_model=dict)
+async def get_key_values(kb_id: int, service: KMService = Depends(get_km_service)):
+    """Get all key-value pairs for a knowledge base"""
+    try:
+        kvs = service.get_key_values(kb_id)
+        return {"success": True, "data": kvs}
+    except Exception as e:
+        logger.error(f"Error getting key-values: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{kb_id}/keyvalues", response_model=dict)
+async def create_key_value(
+    kb_id: int,
+    request: dict,
+    service: KMService = Depends(get_km_service)
+):
+    """Create a new key-value pair"""
+    try:
+        key = request.get("key")
+        value = request.get("value")
+        kv_id = service.add_key_value(kb_id, key, value)
+        return {"success": True, "data": {"id": kv_id, "key": key, "value": value}}
+    except Exception as e:
+        logger.error(f"Error creating key-value: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{kb_id}/keyvalues/{kv_id}", response_model=dict)
+async def update_key_value(
+    kb_id: int,
+    kv_id: int,
+    request: dict,
+    service: KMService = Depends(get_km_service)
+):
+    """Update a key-value pair"""
+    try:
+        key = request.get("key")
+        value = request.get("value")
+        service.update_key_value(kb_id, kv_id, key, value)
+        return {"success": True, "data": {"id": kv_id, "key": key, "value": value}}
+    except Exception as e:
+        logger.error(f"Error updating key-value: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{kb_id}/keyvalues/{kv_id}", response_model=dict)
+async def delete_key_value(
+    kb_id: int,
+    kv_id: int,
+    service: KMService = Depends(get_km_service)
+):
+    """Delete a key-value pair"""
+    try:
+        service.delete_key_value(kb_id, kv_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error deleting key-value: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -6,6 +6,7 @@
 import KMPage from './KMPage.js';
 import KMSidebar from './KMSidebar.js';
 import kmHandlers from './kmHandlers.js';
+import KMManagementDialog from './KMManagementDialog.js';
 
 export default {
     name: 'km',
@@ -15,7 +16,16 @@ export default {
      * 渲染主内容区
      */
     renderPage() {
-        return KMPage.render();
+        // Return initial container, content will be rendered dynamically based on KB type
+        return `
+            <div id="km-main-content" class="km-main-content-wrapper">
+                <div class="km-empty-state">
+                    <p style="text-align: center; color: #999; padding: 40px;">
+                        Please select a knowledge base from the sidebar
+                    </p>
+                </div>
+            </div>
+        `;
     },
 
     /**
@@ -28,8 +38,17 @@ export default {
     /**
      * 初始化模块
      */
-    init() {
+    async init() {
+        // Initialize sidebar first to load KB list
+        await KMSidebar.init();
+
+        // Initialize handlers
         kmHandlers.init();
+
+        // Ensure KMManagementDialog is available globally
+        if (!window.KMManagementDialog) {
+            window.KMManagementDialog = KMManagementDialog;
+        }
     },
 
     /**

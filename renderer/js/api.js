@@ -245,6 +245,9 @@ class APIClient {
 // 创建全局API客户端实例
 const api = new APIClient();
 
+// 暴露到window对象供其他模块使用
+window.api = api;
+
 // 初始化API客户端
 document.addEventListener('DOMContentLoaded', async () => {
     await api.init();

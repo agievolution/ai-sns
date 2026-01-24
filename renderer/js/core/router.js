@@ -41,6 +41,9 @@ class Router {
 
         console.log(`Navigating to: ${page}`);
 
+        // 保存旧页面用于事件触发
+        const oldPage = this.currentPage;
+
         // 隐藏Agent管理页面（如果打开的话）
         const modelMgmtPage = document.querySelector('.model-management-page-container');
         const roleMgmtPage = document.querySelector('.role-management-page-container');
@@ -77,7 +80,7 @@ class Router {
 
         // 触发导航事件
         if (window.eventBus) {
-            window.eventBus.emit('page:changed', { from: this.currentPage, to: page });
+            window.eventBus.emit('page:changed', { from: oldPage, to: page });
         }
     }
 

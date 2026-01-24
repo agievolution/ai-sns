@@ -300,6 +300,11 @@ const App = {
             mainContent.classList.remove('sidebar-collapsed');
         }
 
+        // 更新 BrowserView 位置
+        if (window.electronAPI && window.electronAPI.updateBrowserViewBounds) {
+            window.electronAPI.updateBrowserViewBounds(this.sidebarCollapsed);
+        }
+
         // 保存状态
         if (this.saveSidebarState) {
             this.saveSidebarState();

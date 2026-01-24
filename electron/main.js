@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, Tray, dialog, shell } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, Menu, Tray, dialog, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 
 let mainWindow = null;
 let mapWindow = null;
+let browserView = null;
 
 // Azure OpenAI 配置已移至后端 API Server（api_server.py）
 // 配置从数据库或环境变量读取
@@ -39,6 +40,7 @@ function createWindow() {
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js'),
             webSecurity: false,  // 禁用跨域安全策略，允许加载本地服务器地图
+            webviewTag: true,  // 启用 webview 标签
             // 确保输入框可用
             enableBlinkFeatures: 'KeyboardFocusableScrollers'
         },
@@ -55,6 +57,29 @@ function createWindow() {
         // Windows 焦点修复
         skipTaskbar: false,
         focusable: true
+    });
+
+    // 拦截响应头，移除阻止iframe嵌入的安全头
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+        const responseHeaders = { ...details.responseHeaders };
+
+        // 移除 X-Frame-Options 头
+        delete responseHeaders['x-frame-options'];
+        delete responseHeaders['X-Frame-Options'];
+
+        // 修改 Content-Security-Policy 头，移除 frame-ancestors 限制
+        if (responseHeaders['content-security-policy']) {
+            responseHeaders['content-security-policy'] = responseHeaders['content-security-policy'].map(
+                value => value.replace(/frame-ancestors[^;]*(;|$)/gi, '')
+            );
+        }
+        if (responseHeaders['Content-Security-Policy']) {
+            responseHeaders['Content-Security-Policy'] = responseHeaders['Content-Security-Policy'].map(
+                value => value.replace(/frame-ancestors[^;]*(;|$)/gi, '')
+            );
+        }
+
+        callback({ responseHeaders });
     });
 
     // 移除应用菜单
@@ -474,6 +499,104 @@ app.on('browser-window-focus', () => {
         win.webContents.focus();
     }
 });
+
+// BrowserView 管理
+ipcMain.handle('load-url-in-browserview', async (event, url) => {
+    if (!mainWindow) return;
+
+    try {
+        // 如果已存在 BrowserView，先移除
+        if (browserView) {
+            mainWindow.removeBrowserView(browserView);
+            browserView.webContents.destroy();
+            browserView = null;
+        }
+
+        // 创建新的 BrowserView
+        browserView = new BrowserView({
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                webSecurity: true
+            }
+        });
+
+        mainWindow.addBrowserView(browserView);
+
+        // 获取主窗口尺寸并计算 BrowserView 位置
+        const bounds = mainWindow.getContentBounds();
+        const sidebarWidth = 360; // 左侧导航(68px) + 二级侧边栏(280px) + 分隔条(8px) + 按钮空间(4px)
+        const titlebarHeight = 38; // 标题栏高度
+
+        browserView.setBounds({
+            x: sidebarWidth,
+            y: titlebarHeight,
+            width: bounds.width - sidebarWidth,
+            height: bounds.height - titlebarHeight
+        });
+
+        browserView.setAutoResize({
+            width: true,
+            height: true
+        });
+
+        // 加载 URL
+        await browserView.webContents.loadURL(url);
+
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to load URL in BrowserView:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.on('close-browserview', () => {
+    if (browserView && mainWindow) {
+        mainWindow.removeBrowserView(browserView);
+        browserView.webContents.destroy();
+        browserView = null;
+    }
+});
+
+ipcMain.on('update-browserview-bounds', (event, collapsed) => {
+    if (browserView && mainWindow) {
+        const bounds = mainWindow.getContentBounds();
+        const sidebarWidth = collapsed ? 92 : 360; // 折叠: 68+20+4, 展开: 68+280+8+4
+        const titlebarHeight = 38;
+
+        browserView.setBounds({
+            x: sidebarWidth,
+            y: titlebarHeight,
+            width: bounds.width - sidebarWidth,
+            height: bounds.height - titlebarHeight
+        });
+    }
+});
+
+ipcMain.handle('get-browserview-bounds', () => {
+    if (browserView) {
+        return browserView.getBounds();
+    }
+    return null;
+});
+
+// 窗口大小改变时调整 BrowserView
+if (mainWindow) {
+    mainWindow.on('resize', () => {
+        if (browserView) {
+            const bounds = mainWindow.getContentBounds();
+            const sidebarWidth = 360; // 左侧导航(68px) + 二级侧边栏(280px) + 分隔条(8px) + 按钮空间(4px)
+            const titlebarHeight = 38; // 标题栏高度
+
+            browserView.setBounds({
+                x: sidebarWidth,
+                y: titlebarHeight,
+                width: bounds.width - sidebarWidth,
+                height: bounds.height - titlebarHeight
+            });
+        }
+    });
+}
 
 // 应用生命周期
 app.whenReady().then(() => {

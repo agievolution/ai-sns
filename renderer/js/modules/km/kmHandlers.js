@@ -1,1056 +1,203 @@
 /**
- * KM Handlers - 事件处理
+ * KM Handlers - Multi-KB event handling for all KB types
  */
 
+import Toast from '../../utils/toast.js';
+import KMNotePage from './KMNotePage.js';
+import KMFilePage from './KMFilePage.js';
+import KMKeyValuePage from './KMKeyValuePage.js';
+
 const kmHandlers = {
-    currentNoteId: null, // 当前正在编辑的笔记ID
-    notes: [], // 笔记列表缓存
+    currentKbId: null,
+    currentKmId: null,  // String km_id like "note_store"
+    currentKbType: null,
+    currentNoteId: null,
+    currentFileId: null,
+    currentKvId: null,
+    notes: {},
+    files: {},
+    keyValues: {},
 
     init() {
-        this.bindEvents();
-        this.loadNoteList();
+        this.bindGlobalEvents();
     },
 
-    bindEvents() {
-        // 新建笔记按钮
-        const newNoteBtn = document.getElementById('newNoteBtn');
-        if (newNoteBtn) {
-            newNoteBtn.addEventListener('click', () => this.showNewNoteModal());
-        }
+    bindGlobalEvents() {
+        // Listen for KB switch events
+        window.addEventListener('km-switched', async (e) => {
+            const { kbId, kmId, kbType } = e.detail;
+            this.currentKbId = kbId;
+            this.currentKmId = kmId;  // Store string km_id
+            this.currentKbType = kbType;
+            console.log('[kmHandlers] KB switched to:', kbId, 'kmId:', kmId, 'type:', kbType);
 
-        // 设置按钮
-        const kmSettingBtn = document.getElementById('kmSettingBtn');
-        if (kmSettingBtn) {
-            kmSettingBtn.addEventListener('click', () => this.showSettingModal());
-        }
-
-        // 字体选择器
-        const fontSelect = document.getElementById('fontSelect');
-        if (fontSelect) {
-            fontSelect.addEventListener('change', (e) => {
-                document.execCommand('fontName', false, e.target.value);
-            });
-        }
-
-        // 字号选择器
-        const sizeSelect = document.getElementById('sizeSelect');
-        if (sizeSelect) {
-            sizeSelect.addEventListener('change', (e) => {
-                const size = e.target.value;
-                // 使用fontSize命令设置字号
-                document.execCommand('fontSize', false, '7'); // 先设置为最大值
-                const fontElements = document.querySelectorAll('font[size="7"]');
-                fontElements.forEach(font => {
-                    font.removeAttribute('size');
-                    font.style.fontSize = size + 'pt';
-                });
-            });
-        }
-
-        // 颜色选择器
-        const colorPicker = document.getElementById('colorPicker');
-        const colorBtn = document.getElementById('colorBtn');
-        if (colorPicker && colorBtn) {
-            // 点击按钮触发颜色选择器
-            colorBtn.addEventListener('click', () => {
-                colorPicker.click();
-            });
-
-            // 颜色改变时应用到选中文本
-            colorPicker.addEventListener('input', (e) => {
-                const color = e.target.value;
-                document.execCommand('foreColor', false, color);
-
-                // 更新按钮中的颜色指示器
-                const colorIndicator = document.getElementById('colorIndicator');
-                if (colorIndicator) {
-                    colorIndicator.setAttribute('fill', color);
-                }
-            });
-        }
-
-        // Tab页签切换
-        document.querySelectorAll('.km-tab').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                const targetTab = e.target.dataset.tab;
-
-                // 切换active状态
-                document.querySelectorAll('.km-tab').forEach(t => t.classList.remove('active'));
-                e.target.classList.add('active');
-
-                // 根据tab显示不同内容
-                if (targetTab === 'all') {
-                    this.renderNoteList();
-                    this.bindNoteListEvents();
-                } else if (targetTab === 'tag') {
-                    this.renderTagView();
-                    this.bindTagViewEvents();
-                }
-            });
+            // Initialize the appropriate page based on KB type
+            await this.initializePage(kbId, kmId, kbType);
         });
 
-        // 工具栏按钮
-        document.querySelectorAll('.km-tool-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                // 先聚焦编辑器
-                const noteContent = document.getElementById('noteContent');
-                if (noteContent) {
-                    noteContent.focus();
-                }
-
-                let action = btn.dataset.action;
-                if (!action) {
-                    // 根据按钮属性推测action
-                    if (btn.classList.contains('format-btn')) {
-                        action = btn.dataset.format;
-                    } else {
-                        // 根据title属性判断
-                        const title = btn.getAttribute('title');
-                        action = this.getTitleAction(title);
-                    }
-                }
-                console.log('KM Editor Action:', action);
-                this.executeEditorAction(action);
-            });
+        // Listen for new note events
+        window.addEventListener('km-new-note', (e) => {
+            const { kbId } = e.detail;
+            this.createNewNote(kbId);
         });
 
-        // 编辑器链接点击处理
-        this.setupLinkClickHandler();
+        // Listen for add file events
+        window.addEventListener('km-add-file', (e) => {
+            const { kbId } = e.detail;
+            this.showAddFileDialog(kbId);
+        });
 
-        // 树节点展开/折叠
-        document.addEventListener('click', (e) => {
-            const expandIcon = e.target.closest('.tree-expand');
-            if (expandIcon) {
-                const treeNode = expandIcon.closest('.km-tree-node');
-                if (treeNode) {
-                    treeNode.classList.toggle('expanded');
-                }
-            }
+        // Listen for add key-value events
+        window.addEventListener('km-add-kv', (e) => {
+            const { kbId } = e.detail;
+            this.showAddKVDialog(kbId);
         });
     },
 
-    setupLinkClickHandler() {
-        const noteContent = document.getElementById('noteContent');
-        if (!noteContent) return;
+    /**
+     * Initialize the appropriate page based on KB type
+     */
+    async initializePage(kbId, kmId, kbType) {
+        console.log(`[kmHandlers] Initializing page for KB ${kbId} (kmId: ${kmId}, type: ${kbType})`);
 
-        // 鼠标悬停在链接上时显示提示
-        noteContent.addEventListener('mouseover', (e) => {
-            const link = e.target.closest('a');
-            if (link && link.href) {
-                // 添加悬停样式
-                link.style.textDecoration = 'underline';
-                link.style.cursor = 'pointer';
-
-                // 显示提示
-                link.title = `按住 Ctrl 键点击打开: ${link.href}`;
-            }
-        });
-
-        // 鼠标离开链接时移除提示
-        noteContent.addEventListener('mouseout', (e) => {
-            const link = e.target.closest('a');
-            if (link && link.href) {
-                link.style.textDecoration = link.dataset.originalDecoration || 'underline';
-            }
-        });
-
-        // 处理链接点击
-        noteContent.addEventListener('click', (e) => {
-            const link = e.target.closest('a');
-            if (link && link.href) {
-                // 如果按住 Ctrl 键（Windows/Linux）或 Cmd 键（Mac），则打开链接
-                if (e.ctrlKey || e.metaKey) {
-                    e.preventDefault();
-                    window.open(link.href, '_blank');
-                    if (typeof Notification !== 'undefined') {
-                        Notification.success('已在新标签页打开链接');
-                    }
-                }
-            }
-        });
-
-        // 右键菜单
-        noteContent.addEventListener('contextmenu', (e) => {
-            const link = e.target.closest('a');
-            if (link && link.href) {
-                e.preventDefault();
-                this.showLinkContextMenu(e, link);
-            }
-        });
-    },
-
-    showLinkContextMenu(event, link) {
-        // 创建右键菜单
-        const existingMenu = document.querySelector('.link-context-menu');
-        if (existingMenu) {
-            existingMenu.remove();
-        }
-
-        const menu = document.createElement('div');
-        menu.className = 'link-context-menu';
-        menu.style.cssText = `
-            position: fixed;
-            left: ${event.clientX}px;
-            top: ${event.clientY}px;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10001;
-            min-width: 180px;
-            padding: 6px 0;
-        `;
-
-        menu.innerHTML = `
-            <div class="context-menu-item" data-action="open">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
-                    <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
-                </svg>
-                在新标签页打开
-            </div>
-            <div class="context-menu-item" data-action="copy">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
-                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-                </svg>
-                复制链接地址
-            </div>
-            <div class="context-menu-item" data-action="edit">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
-                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                </svg>
-                编辑链接
-            </div>
-            <div class="context-menu-item" data-action="remove">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-                删除链接
-            </div>
-        `;
-
-        document.body.appendChild(menu);
-
-        // 添加菜单项样式
-        const style = document.createElement('style');
-        style.textContent = `
-            .context-menu-item {
-                display: flex;
-                align-items: center;
-                padding: 10px 16px;
-                cursor: pointer;
-                font-size: 14px;
-                color: #333;
-                transition: background 0.2s;
-            }
-            .context-menu-item:hover {
-                background: #f5f5f5;
-            }
-            .context-menu-item svg {
-                flex-shrink: 0;
-            }
-        `;
-        document.head.appendChild(style);
-
-        // 点击菜单项
-        menu.addEventListener('click', (e) => {
-            const item = e.target.closest('.context-menu-item');
-            if (!item) return;
-
-            const action = item.dataset.action;
-
-            switch (action) {
-                case 'open':
-                    window.open(link.href, '_blank');
-                    if (typeof Notification !== 'undefined') {
-                        Notification.success('已在新标签页打开链接');
-                    }
-                    break;
-                case 'copy':
-                    navigator.clipboard.writeText(link.href).then(() => {
-                        if (typeof Notification !== 'undefined') {
-                            Notification.success('链接地址已复制');
-                        }
-                    });
-                    break;
-                case 'edit':
-                    this.editLink(link);
-                    break;
-                case 'remove':
-                    const text = document.createTextNode(link.textContent);
-                    link.parentNode.replaceChild(text, link);
-                    if (typeof Notification !== 'undefined') {
-                        Notification.success('链接已删除');
-                    }
-                    break;
-            }
-
-            menu.remove();
-        });
-
-        // 点击其他地方关闭菜单
-        setTimeout(() => {
-            document.addEventListener('click', function closeMenu() {
-                menu.remove();
-                document.removeEventListener('click', closeMenu);
-            });
-        }, 0);
-    },
-
-    editLink(link) {
-        const currentUrl = link.href;
-        const currentText = link.textContent;
-
-        if (typeof Modal === 'undefined') {
-            const url = prompt('输入新的链接地址:', currentUrl);
-            if (url) {
-                link.href = url;
-            }
+        // Get main content container
+        const mainContent = document.getElementById('km-main-content');
+        if (!mainContent) {
+            console.error('[kmHandlers] Main content container not found');
             return;
         }
 
-        Modal.show({
-            title: '编辑链接',
-            content: `
-                <div class="form-group">
-                    <label>链接文本</label>
-                    <input type="text" class="form-input" id="editLinkText" value="${currentText}" placeholder="链接显示文本">
-                </div>
-                <div class="form-group">
-                    <label>链接地址</label>
-                    <input type="url" class="form-input" id="editLinkUrl" value="${currentUrl}" placeholder="https://example.com">
-                </div>
-            `,
-            confirmText: '保存',
-            onConfirm: () => {
-                const newUrl = document.getElementById('editLinkUrl')?.value;
-                const newText = document.getElementById('editLinkText')?.value;
-
-                if (newUrl) {
-                    link.href = newUrl;
-                    if (newText) {
-                        link.textContent = newText;
-                    }
-                    if (typeof Notification !== 'undefined') {
-                        Notification.success('链接已更新');
-                    }
-                }
-            }
-        });
-    },
-
-    getTitleAction(title) {
-        const actionMap = {
-            '粗体': 'bold',
-            '斜体': 'italic',
-            '下划线': 'underline',
-            '删除线': 'strikethrough',
-            '上标': 'superscript',
-            '下标': 'subscript',
-            '左对齐': 'justifyLeft',
-            '居中': 'justifyCenter',
-            '右对齐': 'justifyRight',
-            '两端对齐': 'justifyFull',
-            '无序列表': 'insertUnorderedList',
-            '有序列表': 'insertOrderedList',
-            '增加缩进': 'indent',
-            '减少缩进': 'outdent',
-            '保存': 'save',
-            '打印': 'print',
-            '复制': 'copy',
-            '剪切': 'cut',
-            '粘贴': 'paste',
-            '撤销': 'undo',
-            '重做': 'redo',
-            '搜索': 'search',
-            '日期': 'insertDate',
-            '表格': 'insertTable',
-            '图片': 'insertImage',
-            '链接': 'createLink',
-            '表情': 'insertEmoticon',
-            '符号': 'insertSpecialChar'
-        };
-        return actionMap[title] || '';
-    },
-
-    executeEditorAction(action) {
-        const noteContent = document.getElementById('noteContent');
-        if (!noteContent) return;
-
-        switch (action) {
-            case 'bold':
-                document.execCommand('bold', false, null);
-                break;
-            case 'italic':
-                document.execCommand('italic', false, null);
-                break;
-            case 'underline':
-                document.execCommand('underline', false, null);
-                break;
-            case 'strikethrough':
-                document.execCommand('strikeThrough', false, null);
-                break;
-            case 'superscript':
-                document.execCommand('superscript', false, null);
-                break;
-            case 'subscript':
-                document.execCommand('subscript', false, null);
-                break;
-            case 'justifyLeft':
-                document.execCommand('justifyLeft', false, null);
-                break;
-            case 'justifyCenter':
-                document.execCommand('justifyCenter', false, null);
-                break;
-            case 'justifyRight':
-                document.execCommand('justifyRight', false, null);
-                break;
-            case 'justifyFull':
-                document.execCommand('justifyFull', false, null);
-                break;
-            case 'insertUnorderedList':
-                document.execCommand('insertUnorderedList', false, null);
-                break;
-            case 'insertOrderedList':
-                document.execCommand('insertOrderedList', false, null);
-                break;
-            case 'indent':
-                document.execCommand('indent', false, null);
-                break;
-            case 'outdent':
-                document.execCommand('outdent', false, null);
-                break;
-            case 'save':
-                this.saveNote();
-                break;
-            case 'print':
-                window.print();
-                break;
-            case 'copy':
-                document.execCommand('copy', false, null);
-                break;
-            case 'cut':
-                document.execCommand('cut', false, null);
-                break;
-            case 'paste':
-                document.execCommand('paste', false, null);
-                break;
-            case 'undo':
-                document.execCommand('undo', false, null);
-                break;
-            case 'redo':
-                document.execCommand('redo', false, null);
-                break;
-            case 'search':
-                this.showSearchDialog();
-                break;
-            case 'insertDate':
-                const now = new Date();
-                const dateStr = now.toLocaleString('zh-CN');
-                document.execCommand('insertText', false, dateStr);
-                break;
-            case 'insertTable':
-                this.insertTable();
-                break;
-            case 'insertEmoticon':
-                this.insertEmoticon();
-                break;
-            case 'insertSpecialChar':
-                this.insertSpecialChar();
-                break;
-            case 'createLink':
-                this.insertLink();
-                break;
-            case 'insertImage':
-                this.insertImage();
-                break;
-            default:
-                console.log('未知操作:', action);
-        }
-    },
-
-    async saveNote() {
-        const noteContent = document.getElementById('noteContent');
-        if (!noteContent) return;
-
-        const content = noteContent.innerHTML.trim();
-
-        if (!content || content === '<p></p>' || content === '<p><br></p>') {
-            if (typeof Notification !== 'undefined') {
-                Notification.warning('笔记内容不能为空');
-            }
-            return;
-        }
-
-        // 从内容中提取纯文本用于生成标题
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = content;
-        const plainText = tempDiv.textContent || tempDiv.innerText || '';
-
-        // 自动生成标题：取前20个字符
-        let title = plainText.substring(0, 20).trim();
-        if (plainText.length > 20) {
-            title += '...';
-        }
-        if (!title) {
-            title = '无标题笔记';
-        }
-
-        try {
-            let savedNote;
-
-            if (this.currentNoteId) {
-                // 更新现有笔记
-                const response = await fetch(`http://localhost:8788/api/km/notes/${this.currentNoteId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        title: title,
-                        content: content
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error('保存失败');
-                }
-
-                savedNote = await response.json();
-            } else {
-                // 创建新笔记
-                const response = await fetch('http://localhost:8788/api/km/notes', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        title: title,
-                        content: content,
-                        tags: []
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error('保存失败');
-                }
-
-                savedNote = await response.json();
-                this.currentNoteId = savedNote.id;
-            }
-
-            // 重新加载笔记列表
-            await this.loadNoteList();
-
-            // 选中当前笔记
-            this.selectNoteInList(savedNote.id);
-
-            if (typeof Notification !== 'undefined') {
-                Notification.success('笔记已保存');
-            } else {
-                alert('笔记已保存');
-            }
-
-            console.log('笔记已保存:', savedNote);
-        } catch (error) {
-            console.error('保存笔记失败:', error);
-            if (typeof Notification !== 'undefined') {
-                Notification.error('保存失败: ' + error.message);
-            } else {
-                alert('保存失败: ' + error.message);
-            }
-        }
-    },
-
-    selectNoteInList(noteId) {
-        // 移除所有active类
-        document.querySelectorAll('.km-tree-item').forEach(item => {
-            item.classList.remove('active');
-        });
-
-        // 添加active类到当前笔记
-        const noteItem = document.querySelector(`.km-tree-item[data-note-id="${noteId}"]`);
-        if (noteItem) {
-            noteItem.classList.add('active');
-        }
-    },
-
-    showSearchDialog() {
-        if (typeof Modal === 'undefined') {
-            const searchTerm = prompt('请输入搜索内容:');
-            if (searchTerm) {
-                this.searchAndHighlight(searchTerm);
-            }
-            return;
-        }
-
-        Modal.show({
-            title: '搜索内容',
-            content: `
-                <div class="form-group">
-                    <label>搜索关键词</label>
-                    <input type="text" class="form-input" id="searchInput" placeholder="输入搜索内容" autofocus>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="searchCaseSensitive"> 区分大小写
-                    </label>
-                </div>
-            `,
-            confirmText: '搜索',
-            cancelText: '取消',
-            onConfirm: () => {
-                const searchTerm = document.getElementById('searchInput')?.value;
-                const caseSensitive = document.getElementById('searchCaseSensitive')?.checked;
-                if (searchTerm) {
-                    this.searchAndHighlight(searchTerm, caseSensitive);
-                }
-            }
-        });
-    },
-
-    searchAndHighlight(searchTerm, caseSensitive = false) {
-        const noteContent = document.getElementById('noteContent');
-        if (!noteContent) return;
-
-        // 清除之前的高亮
-        const html = noteContent.innerHTML.replace(/<mark class="search-highlight">(.*?)<\/mark>/g, '$1');
-        noteContent.innerHTML = html;
-
-        if (!searchTerm) return;
-
-        // 搜索并高亮
-        const regex = new RegExp(searchTerm, caseSensitive ? 'g' : 'gi');
-        const newHtml = noteContent.innerHTML.replace(regex, '<mark class="search-highlight">$&</mark>');
-        noteContent.innerHTML = newHtml;
-
-        const matches = noteContent.querySelectorAll('.search-highlight');
-        if (matches.length > 0) {
-            matches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            if (typeof Notification !== 'undefined') {
-                Notification.success(`找到 ${matches.length} 个匹配项`);
-            } else {
-                alert(`找到 ${matches.length} 个匹配项`);
-            }
+        // Render appropriate page HTML based on KB type
+        let pageHTML = '';
+        if (kbType === 1) {
+            // Note type
+            pageHTML = KMNotePage.render();
+        } else if (kbType === 0) {
+            // File type
+            pageHTML = KMFilePage.render();
+        } else if (kbType === 2) {
+            // Key-value type
+            pageHTML = KMKeyValuePage.render();
         } else {
-            if (typeof Notification !== 'undefined') {
-                Notification.warning('未找到匹配内容');
-            } else {
-                alert('未找到匹配内容');
-            }
-        }
-    },
-
-    insertTable() {
-        if (typeof Modal === 'undefined') {
-            const rows = prompt('请输入行数:');
-            const cols = prompt('请输入列数:');
-            if (rows && cols) {
-                this.createTable(parseInt(rows), parseInt(cols));
-            }
-            return;
+            pageHTML = '<div class="km-empty-state"><p style="text-align: center; color: #999; padding: 40px;">Unknown KB type</p></div>';
         }
 
-        Modal.show({
-            title: '插入表格',
-            content: `
-                <div class="form-group">
-                    <label>行数</label>
-                    <input type="number" class="form-input" id="tableRows" value="3" min="1" max="20">
-                </div>
-                <div class="form-group">
-                    <label>列数</label>
-                    <input type="number" class="form-input" id="tableCols" value="3" min="1" max="10">
-                </div>
-            `,
-            confirmText: '插入',
-            onConfirm: () => {
-                const rows = parseInt(document.getElementById('tableRows')?.value);
-                const cols = parseInt(document.getElementById('tableCols')?.value);
-                if (rows > 0 && cols > 0) {
-                    this.createTable(rows, cols);
-                }
-            }
-        });
-    },
+        // Replace main content with new page
+        mainContent.innerHTML = pageHTML;
+        console.log('[kmHandlers] Rendered page HTML for type:', kbType);
 
-    createTable(rows, cols) {
-        let tableHtml = '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; margin: 10px 0;">';
-        for (let i = 0; i < rows; i++) {
-            tableHtml += '<tr>';
-            for (let j = 0; j < cols; j++) {
-                tableHtml += '<td style="border: 1px solid #ddd; padding: 8px;">&nbsp;</td>';
-            }
-            tableHtml += '</tr>';
-        }
-        tableHtml += '</table>';
-        document.execCommand('insertHTML', false, tableHtml);
-    },
-
-    insertEmoticon() {
-        const emoticons = ['😀', '😂', '😍', '🤔', '👍', '👎', '❤️', '🎉', '⭐', '✅', '❌', '📝', '💡', '🔥', '👏', '🙏'];
-
-        if (typeof Modal === 'undefined') {
-            const emoticon = prompt('请输入表情符号:');
-            if (emoticon) {
-                document.execCommand('insertText', false, emoticon);
-            }
-            return;
-        }
-
-        Modal.show({
-            title: '选择表情',
-            content: `
-                <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; padding: 10px;">
-                    ${emoticons.map(emoji => `
-                        <button class="emoji-btn" data-emoji="${emoji}" style="font-size: 24px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: white;">
-                            ${emoji}
-                        </button>
-                    `).join('')}
-                </div>
-            `,
-            confirmText: '关闭',
-            onConfirm: () => {}
-        });
-
-        // 为表情按钮添加点击事件
+        // Initialize the editor/page based on KB type
         setTimeout(() => {
-            document.querySelectorAll('.emoji-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const emoji = e.target.dataset.emoji || e.target.textContent.trim();
-                    document.execCommand('insertText', false, emoji);
-                    if (typeof Modal !== 'undefined') {
-                        Modal.hide();
+            try {
+                if (kbType === 1) {
+                    // Note type - initialize note editor
+                    if (KMNotePage && typeof KMNotePage.init === 'function') {
+                        KMNotePage.init();
+                        console.log('[kmHandlers] KMNotePage initialized');
                     }
-                });
-            });
-        }, 100);
+                } else if (kbType === 0) {
+                    // File type - initialize file page
+                    if (KMFilePage && typeof KMFilePage.init === 'function') {
+                        KMFilePage.init();
+                        console.log('[kmHandlers] KMFilePage initialized');
+                    }
+                } else if (kbType === 2) {
+                    // Key-value type - initialize KV page
+                    if (KMKeyValuePage && typeof KMKeyValuePage.init === 'function') {
+                        KMKeyValuePage.init();
+                        console.log('[kmHandlers] KMKeyValuePage initialized');
+                    }
+                }
+            } catch (error) {
+                console.error('[kmHandlers] Error initializing page:', error);
+            }
+        }, 100); // Small delay to ensure DOM is ready
+
+        // Load data based on KB type (use kmId for filtering)
+        try {
+            if (kbType === 1) {
+                // Load notes - use kmId for filtering
+                await this.loadNotesForKb(kbId, kmId);
+            } else if (kbType === 0) {
+                // Load files
+                await this.loadFilesForKb(kbId);
+            } else if (kbType === 2) {
+                // Load key-values
+                await this.loadKeyValuesForKb(kbId);
+            }
+        } catch (error) {
+            console.error('[kmHandlers] Error loading KB data:', error);
+            Toast.error('Failed to load knowledge base data');
+        }
     },
 
-    insertSpecialChar() {
-        const specialChars = ['©', '®', '™', '€', '£', '¥', '¢', '§', '¶', '†', '‡', '•', '…', '′', '″', '‹', '›', '«', '»', '‰', '°', '±', '×', '÷', '≈', '≠', '≤', '≥', '∞'];
-
-        if (typeof Modal === 'undefined') {
-            const char = prompt('请输入特殊字符:');
-            if (char) {
-                document.execCommand('insertText', false, char);
-            }
+    /**
+     * Load notes for a specific KB (kmtype=1)
+     */
+    async loadNotesForKb(kbId, kmId) {
+        const noteTree = document.getElementById(`noteTree-${kbId}`);
+        if (!noteTree) {
+            console.warn(`[kmHandlers] noteTree-${kbId} not found`);
             return;
         }
 
-        Modal.show({
-            title: '选择特殊字符',
-            content: `
-                <div style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; padding: 10px;">
-                    ${specialChars.map(char => `
-                        <button class="char-btn" data-char="${char}" style="font-size: 18px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: white;">
-                            ${char}
-                        </button>
-                    `).join('')}
-                </div>
-            `,
-            confirmText: '关闭',
-            onConfirm: () => {}
-        });
-
-        // 为特殊字符按钮添加点击事件
-        setTimeout(() => {
-            document.querySelectorAll('.char-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const char = e.target.dataset.char || e.target.textContent.trim();
-                    document.execCommand('insertText', false, char);
-                    if (typeof Modal !== 'undefined') {
-                        Modal.hide();
-                    }
-                });
-            });
-        }, 100);
-    },
-
-    insertLink() {
-        const noteContent = document.getElementById('noteContent');
-        if (!noteContent) return;
-
-        // 保存当前选区
-        const selection = window.getSelection();
-        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-        const selectedText = selection.toString();
-
-        if (typeof Modal === 'undefined') {
-            const url = prompt('输入链接地址:');
-            if (url) {
-                if (range) {
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.target = '_blank';
-                    link.textContent = selectedText || url;
-                    range.deleteContents();
-                    range.insertNode(link);
-                }
-            }
-            return;
-        }
-
-        Modal.show({
-            title: '插入链接',
-            content: `
-                <div class="form-group">
-                    <label>链接文本</label>
-                    <input type="text" class="form-input" id="linkText" value="${selectedText}" placeholder="链接显示文本">
-                </div>
-                <div class="form-group">
-                    <label>链接地址</label>
-                    <input type="url" class="form-input" id="linkUrl" placeholder="https://example.com" autofocus>
-                </div>
-            `,
-            confirmText: '插入',
-            onConfirm: () => {
-                const url = document.getElementById('linkUrl')?.value;
-                let text = document.getElementById('linkText')?.value;
-
-                if (!url) {
-                    if (typeof Notification !== 'undefined') {
-                        Notification.warning('请输入链接地址');
-                    }
-                    return false;
-                }
-
-                // 如果没有文本，使用URL作为文本
-                if (!text) {
-                    text = url;
-                }
-
-                // 创建链接
-                noteContent.focus();
-                const link = document.createElement('a');
-                link.href = url;
-                link.target = '_blank';
-                link.textContent = text;
-                link.style.color = '#1a73e8';
-                link.style.textDecoration = 'underline';
-
-                if (range) {
-                    try {
-                        range.deleteContents();
-                        range.insertNode(link);
-                        // 将光标移到链接后面
-                        range.setStartAfter(link);
-                        range.setEndAfter(link);
-                        selection.removeAllRanges();
-                        selection.addRange(range);
-                    } catch (e) {
-                        // 如果出错，使用insertHTML作为后备
-                        document.execCommand('insertHTML', false, link.outerHTML + '&nbsp;');
-                    }
-                } else {
-                    document.execCommand('insertHTML', false, link.outerHTML + '&nbsp;');
-                }
-
-                if (typeof Notification !== 'undefined') {
-                    Notification.success('链接已插入');
-                }
-            }
-        });
-
-        // 自动聚焦URL输入框
-        setTimeout(() => {
-            const urlInput = document.getElementById('linkUrl');
-            if (urlInput) {
-                urlInput.focus();
-            }
-        }, 100);
-    },
-
-    insertImage() {
-        if (typeof Modal === 'undefined') {
-            const imgUrl = prompt('输入图片地址:');
-            if (imgUrl) document.execCommand('insertImage', false, imgUrl);
-            return;
-        }
-
-        Modal.show({
-            title: '插入图片',
-            content: `
-                <div class="form-group">
-                    <label>选择插入方式</label>
-                    <div style="margin-bottom: 15px;">
-                        <input type="radio" id="imageUrl" name="imageType" value="url" checked>
-                        <label for="imageUrl" style="margin-right: 20px;">图片链接</label>
-                        <input type="radio" id="imageFile" name="imageType" value="file">
-                        <label for="imageFile">本地文件</label>
-                    </div>
-                </div>
-                <div class="form-group" id="urlInput">
-                    <label>图片地址</label>
-                    <input type="url" class="form-input" id="imgUrl" placeholder="https://example.com/image.jpg">
-                </div>
-                <div class="form-group" id="fileInput" style="display: none;">
-                    <label>选择图片文件</label>
-                    <input type="file" class="form-input" id="imgFile" accept="image/*">
-                </div>
-            `,
-            confirmText: '插入',
-            onConfirm: () => {
-                const imageType = document.querySelector('input[name="imageType"]:checked')?.value;
-                if (imageType === 'url') {
-                    const url = document.getElementById('imgUrl')?.value;
-                    if (url) {
-                        document.execCommand('insertImage', false, url);
-                    }
-                } else {
-                    const file = document.getElementById('imgFile')?.files[0];
-                    if (file) {
-                        this.handleImageFile(file);
-                    }
-                }
-            }
-        });
-
-        // 切换输入方式
-        setTimeout(() => {
-            document.querySelectorAll('input[name="imageType"]').forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    if (e.target.value === 'url') {
-                        document.getElementById('urlInput').style.display = 'block';
-                        document.getElementById('fileInput').style.display = 'none';
-                    } else {
-                        document.getElementById('urlInput').style.display = 'none';
-                        document.getElementById('fileInput').style.display = 'block';
-                    }
-                });
-            });
-        }, 100);
-    },
-
-    handleImageFile(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const base64 = e.target.result;
-            document.execCommand('insertImage', false, base64);
-            if (typeof Notification !== 'undefined') {
-                Notification.success('图片已插入');
-            }
-        };
-        reader.onerror = () => {
-            if (typeof Notification !== 'undefined') {
-                Notification.error('图片读取失败');
-            } else {
-                alert('图片读取失败');
-            }
-        };
-        reader.readAsDataURL(file);
-    },
-
-    showNewNoteModal() {
-        // 直接创建新笔记，不需要模态框
-        this.createNewNote();
-        if (typeof Notification !== 'undefined') {
-            Notification.success('已创建新笔记，开始编辑吧！');
-        }
-    },
-
-    createNewNote() {
-        // 清空编辑器
-        const noteContent = document.getElementById('noteContent');
-        if (noteContent) {
-            noteContent.innerHTML = '<p></p>';
-            noteContent.focus();
-        }
-
-        // 清除当前笔记ID
-        this.currentNoteId = null;
-
-        // 移除所有选中状态
-        document.querySelectorAll('.km-tree-item').forEach(item => {
-            item.classList.remove('active');
-        });
-    },
-
-    showSettingModal() {
-        if (typeof Modal === 'undefined') {
-            console.error('Modal component not loaded');
-            return;
-        }
-
-        Modal.show({
-            title: 'KM 设置',
-            content: `
-                <div class="form-group">
-                    <label>默认字体</label>
-                    <select class="form-select">
-                        <option>Microsoft YaHei UI</option>
-                        <option>宋体</option>
-                        <option>黑体</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>默认字号</label>
-                    <select class="form-select">
-                        <option>12pt</option>
-                        <option>14pt</option>
-                        <option>16pt</option>
-                    </select>
-                </div>
-            `,
-            confirmText: '保存',
-            onConfirm: () => {
-                if (typeof Notification !== 'undefined') {
-                    Notification.success('设置已保存');
-                }
-            }
-        });
-    },
-
-    async loadNoteList() {
-        const noteTree = document.getElementById('noteTree');
-        if (!noteTree) return;
+        const loading = Toast.loading('Loading notes...');
 
         try {
-            const response = await fetch('http://localhost:8788/api/km/notes');
+            // Use the search endpoint with kmId parameter (no query means get all notes for this KB)
+            const url = `http://localhost:8788/api/km/notes/search?km_id=${encodeURIComponent(kmId)}`;
+            console.log('[kmHandlers] Loading notes from:', url);
+
+            const response = await fetch(url);
             if (!response.ok) {
-                throw new Error('Failed to load notes');
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            this.notes = await response.json();
-            this.renderNoteList();
-            this.bindNoteListEvents();
+            const notes = await response.json();  // API returns array directly
+            console.log(`[kmHandlers] Loaded ${notes.length} notes for kmId:`, kmId);
+
+            this.notes[kbId] = Array.isArray(notes) ? notes : [];
+            this.renderNoteList(kbId);
+            this.bindNoteListEvents(kbId);
+            loading.close();
         } catch (error) {
-            console.error('Error loading notes:', error);
-            if (typeof Notification !== 'undefined') {
-                Notification.error('加载笔记列表失败: ' + error.message);
-            }
+            console.error('[kmHandlers] Error loading notes:', error);
+            loading.close();
+            Toast.error('Failed to load notes');
+            noteTree.innerHTML = '<div style="padding: 20px; color: #999;">Failed to load notes</div>';
         }
     },
 
-    renderNoteList() {
-        const noteTree = document.getElementById('noteTree');
+    renderNoteList(kbId) {
+        const noteTree = document.getElementById(`noteTree-${kbId}`);
         if (!noteTree) return;
 
-        if (this.notes.length === 0) {
+        const notes = this.notes[kbId] || [];
+
+        if (notes.length === 0) {
             noteTree.innerHTML = `
                 <div style="padding: 20px; text-align: center; color: #999;">
-                    暂无笔记<br>
-                    点击"新建笔记"开始创建
+                    No notes<br>
+                    Click "New Note" to create
                 </div>
             `;
             return;
         }
 
-        // 按置顶和更新时间排序
-        const sortedNotes = [...this.notes].sort((a, b) => {
+        const sortedNotes = [...notes].sort((a, b) => {
             if (a.is_pinned !== b.is_pinned) {
                 return a.is_pinned ? -1 : 1;
             }
-            return new Date(b.updated_at) - new Date(a.updated_at);
+            return new Date(b.updated_at || b.create_time) - new Date(a.updated_at || a.create_time);
         });
 
         const html = sortedNotes.map(note => {
             const isPinned = note.is_pinned ? '<span style="color: #ff9800; margin-left: 5px;">📌</span>' : '';
-
             return `
                 <div class="km-tree-item ${this.currentNoteId === note.id ? 'active' : ''}"
-                     data-note-id="${note.id}">
-                    <div class="note-title">${this.escapeHtml(note.title)}${isPinned}</div>
+                     data-note-id="${note.id}" data-kb-id="${kbId}">
+                    <span class="tree-icon">📄</span>
+                    <span class="tree-text">${this.escapeHtml(note.title)}${isPinned}</span>
                 </div>
             `;
         }).join('');
@@ -1058,162 +205,252 @@ const kmHandlers = {
         noteTree.innerHTML = html;
     },
 
-    bindNoteListEvents() {
-        const noteTree = document.getElementById('noteTree');
+    bindNoteListEvents(kbId) {
+        const noteTree = document.getElementById(`noteTree-${kbId}`);
         if (!noteTree) return;
 
-        // 单击打开笔记
         noteTree.addEventListener('click', (e) => {
-            const item = e.target.closest('.km-tree-item');
+            const item = e.target.closest('.km-tree-item[data-note-id]');
             if (item) {
                 const noteId = parseInt(item.dataset.noteId);
-                this.openNote(noteId);
+                this.openNote(kbId, noteId);
             }
         });
 
-        // 右键菜单
         noteTree.addEventListener('contextmenu', (e) => {
-            const item = e.target.closest('.km-tree-item');
+            const item = e.target.closest('.km-tree-item[data-note-id]');
             if (item) {
                 e.preventDefault();
                 const noteId = parseInt(item.dataset.noteId);
-                this.showNoteContextMenu(e, noteId);
+                this.showNoteContextMenu(e, kbId, noteId);
             }
         });
 
-        // 单击选中
-        noteTree.addEventListener('click', (e) => {
-            const item = e.target.closest('.km-tree-item');
-            if (item) {
-                document.querySelectorAll('.km-tree-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-            }
-        });
+        // Bind search input
+        const searchInput = document.querySelector(`.km-user-section[data-kb-id="${kbId}"] .search-input`);
+        if (searchInput) {
+            searchInput.addEventListener('keypress', async (e) => {
+                if (e.key === 'Enter') {
+                    const query = searchInput.value.trim();
+                    await this.searchNotesInKb(kbId, query);
+                }
+            });
+        }
     },
 
-    openNote(noteId) {
-        const note = this.notes.find(n => n.id === noteId);
+    /**
+     * Search notes in a KB
+     */
+    async searchNotesInKb(kbId, query) {
+        const noteTree = document.getElementById(`noteTree-${kbId}`);
+        if (!noteTree) return;
+
+        // Get string km_id from data attribute
+        const kmId = noteTree.dataset.kmId;
+        if (!kmId) {
+            console.error('No kmId found for noteTree');
+            return;
+        }
+
+        const loading = Toast.loading(query ? 'Searching notes...' : 'Loading all notes...');
+
+        try {
+            let url = `http://localhost:8788/api/km/notes/search?km_id=${encodeURIComponent(kmId)}`;
+            if (query) {
+                url += `&query=${encodeURIComponent(query)}`;
+            }
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('Failed to search notes');
+            }
+
+            const notes = await response.json();
+            this.notes[kbId] = Array.isArray(notes) ? notes : [];
+            this.renderNoteList(kbId);
+            this.bindNoteListEvents(kbId);
+            loading.close();
+
+            if (query) {
+                Toast.success(`Found ${this.notes[kbId].length} notes`);
+            }
+        } catch (error) {
+            console.error('Error searching notes:', error);
+            loading.close();
+            Toast.error('Failed to search notes');
+            noteTree.innerHTML = '<div style="padding: 20px; color: #999;">Failed to search notes</div>';
+        }
+    },
+
+    async openNote(kbId, noteId) {
+        const notes = this.notes[kbId] || [];
+        const note = notes.find(n => n.id === noteId);
         if (!note) return;
 
         const noteContent = document.getElementById('noteContent');
         if (noteContent) {
-            noteContent.innerHTML = note.content;
+            let content = note.content || '<p></p>';
+
+            // Normalize content: if it's plain text without HTML tags, wrap it in <p>
+            if (content && !content.trim().startsWith('<')) {
+                content = `<p>${content}</p>`;
+            }
+
+            noteContent.innerHTML = content;
             noteContent.focus();
         }
 
         this.currentNoteId = noteId;
-        this.selectNoteInList(noteId);
+        this.currentKbId = kbId;
 
-        if (typeof Notification !== 'undefined') {
-            Notification.success(`已打开笔记: ${note.title}`);
+        document.querySelectorAll(`#noteTree-${kbId} .km-tree-item`).forEach(i => i.classList.remove('active'));
+        const activeItem = document.querySelector(`#noteTree-${kbId} .km-tree-item[data-note-id="${noteId}"]`);
+        if (activeItem) {
+            activeItem.classList.add('active');
         }
     },
 
-    showNoteContextMenu(event, noteId) {
-        const note = this.notes.find(n => n.id === noteId);
+    createNewNote(kbId) {
+        const noteContent = document.getElementById('noteContent');
+        if (noteContent) {
+            noteContent.innerHTML = '<p></p>';
+            noteContent.focus();
+        }
+
+        this.currentNoteId = null;
+        this.currentKbId = kbId;
+
+        document.querySelectorAll(`#noteTree-${kbId} .km-tree-item`).forEach(item => {
+            item.classList.remove('active');
+        });
+    },
+
+    async saveNote() {
+        if (!this.currentKbId || !this.currentKmId) {
+            console.error('No KB selected');
+            Toast.error('Please select a knowledge base first');
+            return;
+        }
+
+        const noteContent = document.getElementById('noteContent');
+        if (!noteContent) return;
+
+        const content = noteContent.innerHTML.trim();
+        if (!content || content === '<p></p>' || content === '<p><br></p>') {
+            Toast.warning('Note content cannot be empty');
+            return;
+        }
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        const plainText = tempDiv.textContent || tempDiv.innerText || '';
+        let title = plainText.substring(0, 20).trim();
+        if (plainText.length > 20) title += '...';
+        if (!title) title = 'Untitled Note';
+
+        const loading = Toast.loading('Saving note...');
+
+        try {
+            let savedNote;
+            if (this.currentNoteId) {
+                // Update existing note
+                const response = await fetch(`http://localhost:8788/api/km/notes/${this.currentNoteId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content })
+                });
+                if (!response.ok) throw new Error('Save failed');
+                savedNote = await response.json();
+            } else {
+                // Create new note - use string km_id
+                const response = await fetch('http://localhost:8788/api/km/notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title,
+                        content,
+                        km_id: this.currentKmId,  // Use string km_id
+                        tags: []
+                    })
+                });
+                if (!response.ok) throw new Error('Save failed');
+                savedNote = await response.json();
+                this.currentNoteId = savedNote.id;
+            }
+
+            // Reload notes list with both kbId and kmId
+            await this.loadNotesForKb(this.currentKbId, this.currentKmId);
+            loading.close();
+            Toast.success('Note saved successfully');
+        } catch (error) {
+            console.error('Save note failed:', error);
+            loading.close();
+            Toast.error('Save failed: ' + error.message);
+        }
+    },
+
+    showNoteContextMenu(event, kbId, noteId) {
+        const notes = this.notes[kbId] || [];
+        const note = notes.find(n => n.id === noteId);
         if (!note) return;
 
-        // 移除已存在的菜单
         const existingMenu = document.querySelector('.note-context-menu');
-        if (existingMenu) {
-            existingMenu.remove();
-        }
+        if (existingMenu) existingMenu.remove();
 
         const menu = document.createElement('div');
         menu.className = 'note-context-menu';
         menu.style.cssText = `
-            position: fixed;
-            left: ${event.clientX}px;
-            top: ${event.clientY}px;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10001;
-            min-width: 160px;
-            padding: 6px 0;
+            position: fixed; left: ${event.clientX}px; top: ${event.clientY}px;
+            background: white; border: 1px solid #ddd; border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10001;
+            min-width: 160px; padding: 6px 0;
         `;
 
-        const isPinned = note.is_pinned;
         menu.innerHTML = `
-            <div class="context-menu-item" data-action="rename">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
-                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                </svg>
-                重命名
-            </div>
-            <div class="context-menu-item" data-action="pin">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
-                    <path d="M17 4v7l2 3v2h-6v5l-1 1-1-1v-5H5v-2l2-3V4c0-1.1.9-2 2-2h6c1.11 0 2 .89 2 2z"/>
-                </svg>
-                ${isPinned ? '取消置顶' : '置顶'}
-            </div>
-            <div class="context-menu-item" data-action="tags">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
-                    <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
-                </svg>
-                管理标签
-            </div>
-            <div class="context-menu-divider" style="height: 1px; background: #eee; margin: 4px 0;"></div>
-            <div class="context-menu-item" data-action="delete" style="color: #f44336;">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 8px;">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                </svg>
-                删除
+            <div class="context-menu-item" data-action="delete" style="color: #f44336; padding: 10px 16px; cursor: pointer;">
+                Delete
             </div>
         `;
 
         document.body.appendChild(menu);
 
-        // 添加菜单项样式
-        const style = document.createElement('style');
-        style.textContent = `
-            .context-menu-item {
-                display: flex;
-                align-items: center;
-                padding: 10px 16px;
-                cursor: pointer;
-                font-size: 14px;
-                color: #333;
-                transition: background 0.2s;
-            }
-            .context-menu-item:hover {
-                background: #f5f5f5;
-            }
-            .context-menu-item svg {
-                flex-shrink: 0;
-            }
-        `;
-        if (!document.querySelector('style[data-note-context-menu]')) {
-            style.setAttribute('data-note-context-menu', 'true');
-            document.head.appendChild(style);
-        }
-
-        // 处理菜单项点击
-        menu.addEventListener('click', (e) => {
+        menu.addEventListener('click', async (e) => {
             const item = e.target.closest('.context-menu-item');
             if (!item) return;
 
-            const action = item.dataset.action;
-            menu.remove();
+            if (item.dataset.action === 'delete') {
+                const confirmed = await Toast.confirm(`Delete note "${note.title}"?`, {
+                    title: 'Delete Note',
+                    confirmText: 'Delete',
+                    cancelText: 'Cancel',
+                    type: 'warning'
+                });
 
-            switch (action) {
-                case 'rename':
-                    this.renameNote(noteId);
-                    break;
-                case 'pin':
-                    this.togglePinNote(noteId);
-                    break;
-                case 'tags':
-                    this.manageNoteTags(noteId);
-                    break;
-                case 'delete':
-                    this.deleteNote(noteId);
-                    break;
+                if (confirmed) {
+                    try {
+                        const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}`, {
+                            method: 'DELETE'
+                        });
+                        if (!response.ok) throw new Error('Delete failed');
+
+                        this.notes[kbId] = this.notes[kbId].filter(n => n.id !== noteId);
+                        if (this.currentNoteId === noteId) {
+                            const noteContent = document.getElementById('noteContent');
+                            if (noteContent) noteContent.innerHTML = '<p></p>';
+                            this.currentNoteId = null;
+                        }
+                        this.renderNoteList(kbId);
+                        this.bindNoteListEvents(kbId);
+                        Toast.success('Note deleted successfully');
+                    } catch (error) {
+                        console.error('Delete failed:', error);
+                        Toast.error('Delete failed: ' + error.message);
+                    }
+                }
             }
+            menu.remove();
         });
 
-        // 点击其他地方关闭菜单
         setTimeout(() => {
             document.addEventListener('click', function closeMenu() {
                 menu.remove();
@@ -1222,241 +459,389 @@ const kmHandlers = {
         }, 0);
     },
 
-    renameNote(noteId) {
-        const note = this.notes.find(n => n.id === noteId);
-        if (!note) return;
+    /**
+     * Load files for a specific KB (kmtype=0)
+     */
+    async loadFilesForKb(kbId) {
+        const fileTree = document.getElementById(`fileTree-${kbId}`);
+        if (!fileTree) return;
 
-        if (typeof Modal === 'undefined') {
-            const newTitle = prompt('请输入新标题:', note.title);
-            if (newTitle && newTitle.trim()) {
-                this.updateNoteTitle(noteId, newTitle.trim());
-            }
+        const loading = Toast.loading('Loading files...');
+
+        try {
+            const response = await fetch(`http://localhost:8788/api/km/${kbId}/files`);
+            if (!response.ok) throw new Error('Failed to load files');
+
+            const result = await response.json();
+            this.files[kbId] = result.data || [];
+            this.renderFileList(kbId);
+            this.bindFileListEvents(kbId);
+            loading.close();
+        } catch (error) {
+            console.error('Error loading files:', error);
+            loading.close();
+            Toast.error('Failed to load files');
+            fileTree.innerHTML = '<div style="padding: 20px; color: #999;">Failed to load files</div>';
+        }
+    },
+
+    renderFileList(kbId) {
+        const fileTree = document.getElementById(`fileTree-${kbId}`);
+        if (!fileTree) return;
+
+        const files = this.files[kbId] || [];
+
+        if (files.length === 0) {
+            fileTree.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #999;">
+                    No files<br>
+                    Click "Add File" to upload
+                </div>
+            `;
             return;
         }
 
-        Modal.show({
-            title: '重命名笔记',
-            content: `
-                <div class="form-group">
-                    <label>笔记标题</label>
-                    <input type="text" class="form-input" id="renameNoteInput" value="${this.escapeHtml(note.title)}" autofocus>
-                </div>
-            `,
-            confirmText: '保存',
-            onConfirm: () => {
-                const newTitle = document.getElementById('renameNoteInput')?.value.trim();
-                if (newTitle) {
-                    this.updateNoteTitle(noteId, newTitle);
+        const html = files.map(file => `
+            <div class="km-tree-item" data-file-id="${file.id}" data-kb-id="${kbId}">
+                <span class="tree-icon">📄</span>
+                <span class="tree-text">${this.escapeHtml(file.filename)}</span>
+            </div>
+        `).join('');
+
+        fileTree.innerHTML = html;
+    },
+
+    bindFileListEvents(kbId) {
+        const fileTree = document.getElementById(`fileTree-${kbId}`);
+        if (!fileTree) return;
+
+        fileTree.addEventListener('contextmenu', (e) => {
+            const item = e.target.closest('.km-tree-item[data-file-id]');
+            if (item) {
+                e.preventDefault();
+                const fileId = parseInt(item.dataset.fileId);
+                this.showFileContextMenu(e, kbId, fileId);
+            }
+        });
+    },
+
+    showFileContextMenu(event, kbId, fileId) {
+        const files = this.files[kbId] || [];
+        const file = files.find(f => f.id === fileId);
+        if (!file) return;
+
+        const existingMenu = document.querySelector('.file-context-menu');
+        if (existingMenu) existingMenu.remove();
+
+        const menu = document.createElement('div');
+        menu.className = 'file-context-menu';
+        menu.style.cssText = `
+            position: fixed; left: ${event.clientX}px; top: ${event.clientY}px;
+            background: white; border: 1px solid #ddd; border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10001;
+            min-width: 160px; padding: 6px 0;
+        `;
+
+        menu.innerHTML = `
+            <div class="context-menu-item" data-action="delete" style="color: #f44336; padding: 10px 16px; cursor: pointer;">
+                Delete
+            </div>
+        `;
+
+        document.body.appendChild(menu);
+
+        menu.addEventListener('click', async (e) => {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+
+            if (item.dataset.action === 'delete') {
+                const confirmed = await Toast.confirm(`Delete file "${file.filename}"?`, {
+                    title: 'Delete File',
+                    confirmText: 'Delete',
+                    cancelText: 'Cancel',
+                    type: 'warning'
+                });
+
+                if (confirmed) {
+                    try {
+                        const response = await fetch(`http://localhost:8788/api/km/${kbId}/files/${fileId}`, {
+                            method: 'DELETE'
+                        });
+                        if (!response.ok) throw new Error('Delete failed');
+
+                        this.files[kbId] = this.files[kbId].filter(f => f.id !== fileId);
+                        this.renderFileList(kbId);
+                        this.bindFileListEvents(kbId);
+                        Toast.success('File deleted successfully');
+                    } catch (error) {
+                        console.error('Delete failed:', error);
+                        Toast.error('Delete failed: ' + error.message);
+                    }
                 }
             }
+            menu.remove();
         });
 
         setTimeout(() => {
-            const input = document.getElementById('renameNoteInput');
-            if (input) {
-                input.focus();
-                input.select();
-            }
-        }, 100);
-    },
-
-    async updateNoteTitle(noteId, newTitle) {
-        try {
-            const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    title: newTitle
-                })
+            document.addEventListener('click', function closeMenu() {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
             });
-
-            if (!response.ok) {
-                throw new Error('更新失败');
-            }
-
-            const updatedNote = await response.json();
-
-            // 更新本地缓存
-            const index = this.notes.findIndex(n => n.id === noteId);
-            if (index !== -1) {
-                this.notes[index] = updatedNote;
-            }
-
-            // 重新渲染列表
-            this.renderNoteList();
-            this.bindNoteListEvents();
-
-            if (typeof Notification !== 'undefined') {
-                Notification.success('笔记标题已更新');
-            }
-        } catch (error) {
-            console.error('Error updating note title:', error);
-            if (typeof Notification !== 'undefined') {
-                Notification.error('更新失败: ' + error.message);
-            }
-        }
+        }, 0);
     },
 
-    async togglePinNote(noteId) {
+    showAddFileDialog(kbId) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.doc,.docx,.pdf,.ppt,.pptx,.txt,.xls,.xlsx';
+        input.multiple = true;
+
+        input.addEventListener('change', async (e) => {
+            const files = e.target.files;
+            if (files.length === 0) return;
+
+            for (const file of files) {
+                await this.uploadFile(kbId, file);
+            }
+
+            await this.loadFilesForKb(kbId);
+        });
+
+        input.click();
+    },
+
+    async uploadFile(kbId, file) {
+        const loading = Toast.loading(`Uploading ${file.name}...`);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('km_id', kbId);
+
         try {
-            const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}/toggle-pin`, {
+            const response = await fetch(`http://localhost:8788/api/km/${kbId}/files`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+                body: formData
             });
 
-            if (!response.ok) {
-                throw new Error('操作失败');
-            }
-
-            const updatedNote = await response.json();
-
-            // 更新本地缓存
-            const index = this.notes.findIndex(n => n.id === noteId);
-            if (index !== -1) {
-                this.notes[index] = updatedNote;
-            }
-
-            // 重新渲染列表
-            this.renderNoteList();
-            this.bindNoteListEvents();
-
-            if (typeof Notification !== 'undefined') {
-                Notification.success(updatedNote.is_pinned ? '已置顶' : '已取消置顶');
-            }
+            if (!response.ok) throw new Error('Upload failed');
+            loading.close();
+            Toast.success(`${file.name} uploaded successfully`);
+            console.log('File uploaded:', file.name);
         } catch (error) {
-            console.error('Error toggling pin:', error);
-            if (typeof Notification !== 'undefined') {
-                Notification.error('操作失败: ' + error.message);
-            }
+            console.error('Upload failed:', error);
+            loading.close();
+            Toast.error(`Upload failed for ${file.name}: ${error.message}`);
         }
     },
 
-    manageNoteTags(noteId) {
-        const note = this.notes.find(n => n.id === noteId);
-        if (!note) return;
+    /**
+     * Load key-values for a specific KB (kmtype=2)
+     */
+    async loadKeyValuesForKb(kbId) {
+        const kvTree = document.getElementById(`kvTree-${kbId}`);
+        if (!kvTree) return;
 
-        const currentTags = note.tags || [];
+        const loading = Toast.loading('Loading key-values...');
 
-        if (typeof Modal === 'undefined') {
-            const tagsStr = prompt('请输入标签（用逗号分隔）:', currentTags.join(', '));
-            if (tagsStr !== null) {
-                const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t);
-                this.updateNoteTags(noteId, tags);
-            }
+        try {
+            const response = await fetch(`http://localhost:8788/api/km/${kbId}/keyvalues`);
+            if (!response.ok) throw new Error('Failed to load key-values');
+
+            const result = await response.json();
+            this.keyValues[kbId] = result.data || [];
+            this.renderKeyValueList(kbId);
+            this.bindKeyValueListEvents(kbId);
+            loading.close();
+        } catch (error) {
+            console.error('Error loading key-values:', error);
+            loading.close();
+            Toast.error('Failed to load key-values');
+            kvTree.innerHTML = '<div style="padding: 20px; color: #999;">Failed to load key-values</div>';
+        }
+    },
+
+    renderKeyValueList(kbId) {
+        const kvTree = document.getElementById(`kvTree-${kbId}`);
+        if (!kvTree) return;
+
+        const kvs = this.keyValues[kbId] || [];
+
+        if (kvs.length === 0) {
+            kvTree.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #999;">
+                    No key-value pairs<br>
+                    Click "Add" to create
+                </div>
+            `;
             return;
         }
 
-        Modal.show({
-            title: '管理标签',
-            content: `
-                <div class="form-group">
-                    <label>标签（用逗号分隔）</label>
-                    <input type="text" class="form-input" id="noteTagsInput" value="${this.escapeHtml(currentTags.join(', '))}" placeholder="例如: 工作, 学习, 重要" autofocus>
-                </div>
-                <div style="margin-top: 10px; font-size: 12px; color: #666;">
-                    提示：多个标签之间用逗号分隔
-                </div>
-            `,
-            confirmText: '保存',
-            onConfirm: () => {
-                const tagsStr = document.getElementById('noteTagsInput')?.value || '';
-                const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t);
-                this.updateNoteTags(noteId, tags);
+        const html = kvs.map(kv => `
+            <div class="km-tree-item ${this.currentKvId === kv.id ? 'active' : ''}"
+                 data-kv-id="${kv.id}" data-kb-id="${kbId}">
+                <span class="tree-icon">🔑</span>
+                <span class="tree-text">${this.escapeHtml(kv.key)}</span>
+            </div>
+        `).join('');
+
+        kvTree.innerHTML = html;
+    },
+
+    bindKeyValueListEvents(kbId) {
+        const kvTree = document.getElementById(`kvTree-${kbId}`);
+        if (!kvTree) return;
+
+        kvTree.addEventListener('click', (e) => {
+            const item = e.target.closest('.km-tree-item[data-kv-id]');
+            if (item) {
+                const kvId = parseInt(item.dataset.kvId);
+                this.openKeyValue(kbId, kvId);
             }
         });
 
-        setTimeout(() => {
-            const input = document.getElementById('noteTagsInput');
-            if (input) {
-                input.focus();
+        kvTree.addEventListener('contextmenu', (e) => {
+            const item = e.target.closest('.km-tree-item[data-kv-id]');
+            if (item) {
+                e.preventDefault();
+                const kvId = parseInt(item.dataset.kvId);
+                this.showKVContextMenu(e, kbId, kvId);
             }
-        }, 100);
+        });
     },
 
-    async updateNoteTags(noteId, tags) {
+    openKeyValue(kbId, kvId) {
+        const kvs = this.keyValues[kbId] || [];
+        const kv = kvs.find(k => k.id === kvId);
+        if (!kv) return;
+
+        const kvKeyInput = document.getElementById('kvKeyInput');
+        const kvValueInput = document.getElementById('kvValueInput');
+
+        if (kvKeyInput) kvKeyInput.value = kv.key;
+        if (kvValueInput) kvValueInput.value = kv.value;
+
+        this.currentKvId = kvId;
+        this.currentKbId = kbId;
+
+        document.querySelectorAll(`#kvTree-${kbId} .km-tree-item`).forEach(i => i.classList.remove('active'));
+        const activeItem = document.querySelector(`#kvTree-${kbId} .km-tree-item[data-kv-id="${kvId}"]`);
+        if (activeItem) activeItem.classList.add('active');
+    },
+
+    showAddKVDialog(kbId) {
+        const key = prompt('Enter key:');
+        if (!key) return;
+
+        const value = prompt('Enter value:');
+        if (value === null) return;
+
+        this.saveKeyValue(kbId, null, key, value);
+    },
+
+    async saveKeyValue(kbId, kvId, key, value) {
+        const loading = Toast.loading('Saving key-value...');
+
         try {
-            const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    tags: tags
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('更新失败');
+            let savedKv;
+            if (kvId) {
+                const response = await fetch(`http://localhost:8788/api/km/${kbId}/keyvalues/${kvId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, value })
+                });
+                if (!response.ok) throw new Error('Save failed');
+                const result = await response.json();
+                savedKv = result.data;
+            } else {
+                const response = await fetch(`http://localhost:8788/api/km/${kbId}/keyvalues`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, value, km_id: kbId })
+                });
+                if (!response.ok) throw new Error('Save failed');
+                const result = await response.json();
+                savedKv = result.data;
             }
 
-            const updatedNote = await response.json();
-
-            // 更新本地缓存
-            const index = this.notes.findIndex(n => n.id === noteId);
-            if (index !== -1) {
-                this.notes[index] = updatedNote;
-            }
-
-            // 重新渲染列表
-            this.renderNoteList();
-            this.bindNoteListEvents();
-
-            if (typeof Notification !== 'undefined') {
-                Notification.success('标签已更新');
-            }
+            await this.loadKeyValuesForKb(kbId);
+            loading.close();
+            Toast.success('Key-value saved successfully');
         } catch (error) {
-            console.error('Error updating tags:', error);
-            if (typeof Notification !== 'undefined') {
-                Notification.error('更新失败: ' + error.message);
-            }
+            console.error('Save key-value failed:', error);
+            loading.close();
+            Toast.error('Save failed: ' + error.message);
         }
     },
 
-    async deleteNote(noteId) {
-        const note = this.notes.find(n => n.id === noteId);
-        if (!note) return;
+    showKVContextMenu(event, kbId, kvId) {
+        const kvs = this.keyValues[kbId] || [];
+        const kv = kvs.find(k => k.id === kvId);
+        if (!kv) return;
 
-        const confirmDelete = confirm(`确定要删除笔记"${note.title}"吗？此操作无法撤销。`);
-        if (!confirmDelete) return;
+        const existingMenu = document.querySelector('.kv-context-menu');
+        if (existingMenu) existingMenu.remove();
 
-        try {
-            const response = await fetch(`http://localhost:8788/api/km/notes/${noteId}`, {
-                method: 'DELETE'
-            });
+        const menu = document.createElement('div');
+        menu.className = 'kv-context-menu';
+        menu.style.cssText = `
+            position: fixed; left: ${event.clientX}px; top: ${event.clientY}px;
+            background: white; border: 1px solid #ddd; border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10001;
+            min-width: 160px; padding: 6px 0;
+        `;
 
-            if (!response.ok) {
-                throw new Error('删除失败');
-            }
+        menu.innerHTML = `
+            <div class="context-menu-item" data-action="delete" style="color: #f44336; padding: 10px 16px; cursor: pointer;">
+                Delete
+            </div>
+        `;
 
-            // 从本地缓存中移除
-            this.notes = this.notes.filter(n => n.id !== noteId);
+        document.body.appendChild(menu);
 
-            // 如果删除的是当前笔记，清空编辑器
-            if (this.currentNoteId === noteId) {
-                const noteContent = document.getElementById('noteContent');
-                if (noteContent) {
-                    noteContent.innerHTML = '<p></p>';
+        menu.addEventListener('click', async (e) => {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+
+            if (item.dataset.action === 'delete') {
+                const confirmed = await Toast.confirm(`Delete key-value "${kv.key}"?`, {
+                    title: 'Delete Key-Value',
+                    confirmText: 'Delete',
+                    cancelText: 'Cancel',
+                    type: 'warning'
+                });
+
+                if (confirmed) {
+                    try {
+                        const response = await fetch(`http://localhost:8788/api/km/${kbId}/keyvalues/${kvId}`, {
+                            method: 'DELETE'
+                        });
+                        if (!response.ok) throw new Error('Delete failed');
+
+                        this.keyValues[kbId] = this.keyValues[kbId].filter(k => k.id !== kvId);
+                        if (this.currentKvId === kvId) {
+                            const kvKeyInput = document.getElementById('kvKeyInput');
+                            const kvValueInput = document.getElementById('kvValueInput');
+                            if (kvKeyInput) kvKeyInput.value = '';
+                            if (kvValueInput) kvValueInput.value = '';
+                            this.currentKvId = null;
+                        }
+                        this.renderKeyValueList(kbId);
+                        this.bindKeyValueListEvents(kbId);
+                        Toast.success('Key-value deleted successfully');
+                    } catch (error) {
+                        console.error('Delete failed:', error);
+                        Toast.error('Delete failed: ' + error.message);
+                    }
                 }
-                this.currentNoteId = null;
             }
+            menu.remove();
+        });
 
-            // 重新渲染列表
-            this.renderNoteList();
-            this.bindNoteListEvents();
-
-            if (typeof Notification !== 'undefined') {
-                Notification.success('笔记已删除');
-            }
-        } catch (error) {
-            console.error('Error deleting note:', error);
-            if (typeof Notification !== 'undefined') {
-                Notification.error('删除失败: ' + error.message);
-            }
-        }
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu() {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            });
+        }, 0);
     },
 
     escapeHtml(text) {
@@ -1467,121 +852,99 @@ const kmHandlers = {
             '"': '&quot;',
             "'": '&#039;'
         };
-        return text.replace(/[&<>"']/g, m => map[m]);
+        return String(text).replace(/[&<>"']/g, m => map[m]);
     },
 
-    renderTagView() {
-        const noteTree = document.getElementById('noteTree');
-        if (!noteTree) return;
+    async performVectorSearch(kbId) {
+        const searchInput = document.getElementById(`vectorSearchInput-${kbId}`);
+        const searchResults = document.getElementById(`searchResults-${kbId}`);
 
-        // 收集所有标签及对应的笔记
-        const tagMap = new Map();
+        if (!searchInput || !searchResults) return;
 
-        this.notes.forEach(note => {
-            if (note.tags && note.tags.length > 0) {
-                note.tags.forEach(tag => {
-                    if (!tagMap.has(tag)) {
-                        tagMap.set(tag, []);
-                    }
-                    tagMap.get(tag).push(note);
-                });
-            }
-        });
-
-        if (tagMap.size === 0) {
-            noteTree.innerHTML = `
-                <div style="padding: 20px; text-align: center; color: #999;">
-                    暂无标签<br>
-                    给笔记添加标签后将在这里显示
-                </div>
-            `;
+        const query = searchInput.value.trim();
+        if (!query) {
+            Toast.warning('Please enter a search query');
             return;
         }
 
-        // 按标签名称排序
-        const sortedTags = Array.from(tagMap.keys()).sort();
+        const loading = Toast.loading('Searching...');
+        searchResults.innerHTML = '<div class="loading">Searching...</div>';
 
-        const html = sortedTags.map(tag => {
-            const notes = tagMap.get(tag);
-            const notesHtml = notes.map(note => `
-                <div class="km-tree-node">
-                    <div class="km-tree-item ${this.currentNoteId === note.id ? 'active' : ''}"
-                         data-note-id="${note.id}">
-                        <span class="tree-icon">📄</span>
-                        <span class="tree-text">${this.escapeHtml(note.title)}</span>
+        try {
+            const response = await fetch(`http://localhost:8788/api/km/${kbId}/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, top_k: 5 })
+            });
+
+            if (!response.ok) throw new Error('Search failed');
+
+            const result = await response.json();
+            const results = result.data || [];
+
+            loading.close();
+
+            if (results.length === 0) {
+                searchResults.innerHTML = '<div class="empty-state">No results found</div>';
+                return;
+            }
+
+            const html = results.map((r, idx) => `
+                <div class="search-result-item">
+                    <div class="result-header">
+                        <span class="result-number">${idx + 1}</span>
+                        <span class="result-score">Score: ${(r.score || 0).toFixed(3)}</span>
                     </div>
+                    <div class="result-content">${this.escapeHtml(r.content || r.text || '')}</div>
+                    ${r.metadata ? `<div class="result-metadata">Source: ${this.escapeHtml(r.metadata.source || 'Unknown')}</div>` : ''}
                 </div>
             `).join('');
 
-            return `
-                <div class="km-tree-node expandable expanded" data-tag="${this.escapeHtml(tag)}">
-                    <div class="km-tree-item tag-group-item">
-                        <span class="tree-expand">▼</span>
-                        <span class="tree-icon">🏷️</span>
-                        <span class="tree-text">${this.escapeHtml(tag)} (${notes.length})</span>
-                    </div>
-                    <div class="km-tree-children">
-                        ${notesHtml}
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        noteTree.innerHTML = html;
+            searchResults.innerHTML = html;
+            Toast.success(`Found ${results.length} results`);
+        } catch (error) {
+            console.error('Search failed:', error);
+            loading.close();
+            Toast.error('Search failed: ' + error.message);
+            searchResults.innerHTML = `<div class="error-state">Search failed: ${error.message}</div>`;
+        }
     },
 
-    bindTagViewEvents() {
-        const noteTree = document.getElementById('noteTree');
-        if (!noteTree) return;
+    saveCurrentKV(kbId) {
+        const kvKeyInput = document.getElementById('kvKeyInput');
+        const kvValueInput = document.getElementById('kvValueInput');
 
-        // 单击打开笔记
-        noteTree.addEventListener('click', (e) => {
-            const item = e.target.closest('.km-tree-item[data-note-id]');
-            if (item) {
-                const noteId = parseInt(item.dataset.noteId);
-                this.openNote(noteId);
-            }
-        });
+        if (!kvKeyInput || !kvValueInput) return;
 
-        // 右键菜单
-        noteTree.addEventListener('contextmenu', (e) => {
-            const item = e.target.closest('.km-tree-item[data-note-id]');
-            if (item) {
-                e.preventDefault();
-                const noteId = parseInt(item.dataset.noteId);
-                this.showNoteContextMenu(e, noteId);
-            }
-        });
+        const key = kvKeyInput.value.trim();
+        const value = kvValueInput.value.trim();
 
-        // 单击选中
-        noteTree.addEventListener('click', (e) => {
-            const item = e.target.closest('.km-tree-item[data-note-id]');
-            if (item) {
-                document.querySelectorAll('.km-tree-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-            }
-        });
+        if (!key) {
+            Toast.warning('Key cannot be empty');
+            return;
+        }
 
-        // 标签组展开/折叠
-        noteTree.addEventListener('click', (e) => {
-            const expandIcon = e.target.closest('.tree-expand');
-            if (expandIcon) {
-                const treeNode = expandIcon.closest('.km-tree-node');
-                if (treeNode) {
-                    treeNode.classList.toggle('expanded');
-                    // 更新展开图标
-                    const icon = treeNode.querySelector('.tree-expand');
-                    if (icon) {
-                        icon.textContent = treeNode.classList.contains('expanded') ? '▼' : '▶';
-                    }
-                }
-            }
-        });
+        this.saveKeyValue(kbId, this.currentKvId, key, value);
     },
 
-    destroy() {
-        // 清理事件监听器
+    clearKVForm() {
+        const kvKeyInput = document.getElementById('kvKeyInput');
+        const kvValueInput = document.getElementById('kvValueInput');
+
+        if (kvKeyInput) kvKeyInput.value = '';
+        if (kvValueInput) kvValueInput.value = '';
+
+        this.currentKvId = null;
+
+        if (this.currentKbId) {
+            document.querySelectorAll(`#kvTree-${this.currentKbId} .km-tree-item`).forEach(i => i.classList.remove('active'));
+        }
     }
 };
+
+// Export to global
+if (typeof window !== 'undefined') {
+    window.kmHandlers = kmHandlers;
+}
 
 export default kmHandlers;

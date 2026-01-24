@@ -12,6 +12,7 @@ class NoteCreate(BaseModel):
     title: str
     content: str
     tags: Optional[List[str]] = []
+    km_id: Optional[str] = None  # Knowledge base ID
 
 
 class NoteUpdate(BaseModel):

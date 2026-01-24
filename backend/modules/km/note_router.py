@@ -26,6 +26,17 @@ async def get_all_notes():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/notes/search", response_model=List[NoteResponse])
+async def search_notes(query: str = "", km_id: str = None):
+    """搜索笔记 - 支持标题、内容、标签搜索"""
+    try:
+        notes = note_service.search_notes(query=query, km_id=km_id)
+        return notes
+    except Exception as e:
+        logger.error(f"Error searching notes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/notes/{note_id}", response_model=NoteResponse)
 async def get_note(note_id: int):
     """获取单个笔记"""
@@ -48,7 +59,8 @@ async def create_note(note_data: NoteCreate):
         note = note_service.create_note(
             title=note_data.title,
             content=note_data.content,
-            tags=note_data.tags
+            tags=note_data.tags,
+            km_id=note_data.km_id  # Pass km_id to service
         )
         return note
     except Exception as e:
@@ -104,4 +116,15 @@ async def toggle_pin_note(note_id: int):
         raise
     except Exception as e:
         logger.error(f"Error toggling pin: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/notes/search", response_model=List[NoteResponse])
+async def search_notes(query: str = "", km_id: str = None):
+    """搜索笔记 - 支持标题、内容、标签搜索"""
+    try:
+        notes = note_service.search_notes(query=query, km_id=km_id)
+        return notes
+    except Exception as e:
+        logger.error(f"Error searching notes: {e}")
         raise HTTPException(status_code=500, detail=str(e))

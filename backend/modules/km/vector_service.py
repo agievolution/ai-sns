@@ -1,0 +1,207 @@
+# -*- coding: utf-8 -*-
+"""
+Vector Service - ChromaDB integration for knowledge base vectorization
+"""
+import logging
+import os
+from pathlib import Path
+from typing import List, Dict, Any
+import chromadb
+from chromadb.config import Settings
+from openai import OpenAI
+
+logger = logging.getLogger(__name__)
+
+
+class VectorService:
+    """Service for vectorizing and searching documents using ChromaDB and OpenAI"""
+
+    def __init__(self, persist_directory: str = "km/chroma_db"):
+        """Initialize ChromaDB client"""
+        self.persist_directory = persist_directory
+        os.makedirs(persist_directory, exist_ok=True)
+
+        self.client = chromadb.PersistentClient(
+            path=persist_directory,
+            settings=Settings(anonymized_telemetry=False)
+        )
+
+        # Initialize OpenAI client (will use OPENAI_API_KEY from environment)
+        self.openai_client = OpenAI()
+
+    def get_or_create_collection(self, km_id: str):
+        """Get or create a collection for a knowledge base"""
+        collection_name = f"kb_{km_id}"
+        return self.client.get_or_create_collection(
+            name=collection_name,
+            metadata={"km_id": km_id}
+        )
+
+    def get_embedding(self, text: str, model: str = "text-embedding-3-small") -> List[float]:
+        """Get embedding from OpenAI"""
+        try:
+            response = self.openai_client.embeddings.create(
+                input=text,
+                model=model
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            logger.error(f"Error getting embedding: {e}")
+            raise
+
+    def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 100) -> List[str]:
+        """Split text into chunks with overlap"""
+        if not text:
+            return []
+
+        chunks = []
+        start = 0
+        text_len = len(text)
+
+        while start < text_len:
+            end = start + chunk_size
+            chunk = text[start:end]
+
+            # Try to break at sentence boundary
+            if end < text_len:
+                last_period = chunk.rfind('.')
+                last_newline = chunk.rfind('\n')
+                break_point = max(last_period, last_newline)
+
+                if break_point > chunk_size * 0.5:  # Only break if we're past halfway
+                    chunk = chunk[:break_point + 1]
+                    end = start + break_point + 1
+
+            chunks.append(chunk.strip())
+            start = end - overlap
+
+        return [c for c in chunks if c]  # Filter empty chunks
+
+    def add_document(
+        self,
+        km_id: str,
+        file_id: int,
+        filename: str,
+        text: str,
+        chunk_size: int = 1000,
+        overlap: int = 100
+    ) -> int:
+        """Add a document to the vector database"""
+        try:
+            collection = self.get_or_create_collection(km_id)
+
+            # Chunk the text
+            chunks = self.chunk_text(text, chunk_size, overlap)
+
+            if not chunks:
+                logger.warning(f"No chunks generated for file {filename}")
+                return 0
+
+            # Generate embeddings and add to collection
+            ids = []
+            embeddings = []
+            documents = []
+            metadatas = []
+
+            for i, chunk in enumerate(chunks):
+                chunk_id = f"file_{file_id}_chunk_{i}"
+                embedding = self.get_embedding(chunk)
+
+                ids.append(chunk_id)
+                embeddings.append(embedding)
+                documents.append(chunk)
+                metadatas.append({
+                    "file_id": str(file_id),
+                    "filename": filename,
+                    "chunk_index": i,
+                    "total_chunks": len(chunks)
+                })
+
+            collection.add(
+                ids=ids,
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas
+            )
+
+            logger.info(f"Added {len(chunks)} chunks for file {filename} to collection {km_id}")
+            return len(chunks)
+
+        except Exception as e:
+            logger.error(f"Error adding document to vector DB: {e}")
+            raise
+
+    def search(
+        self,
+        km_id: str,
+        query: str,
+        top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """Search for similar documents"""
+        try:
+            collection = self.get_or_create_collection(km_id)
+
+            # Get query embedding
+            query_embedding = self.get_embedding(query)
+
+            # Search
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=top_k
+            )
+
+            # Format results
+            formatted_results = []
+            if results['documents'] and results['documents'][0]:
+                for i in range(len(results['documents'][0])):
+                    formatted_results.append({
+                        "content": results['documents'][0][i],
+                        "score": 1 - results['distances'][0][i],  # Convert distance to similarity
+                        "metadata": results['metadatas'][0][i]
+                    })
+
+            return formatted_results
+
+        except Exception as e:
+            logger.error(f"Error searching vector DB: {e}")
+            raise
+
+    def delete_document(self, km_id: str, file_id: int):
+        """Delete all chunks of a document from the vector database"""
+        try:
+            collection = self.get_or_create_collection(km_id)
+
+            # Get all IDs for this file
+            results = collection.get(
+                where={"file_id": str(file_id)}
+            )
+
+            if results['ids']:
+                collection.delete(ids=results['ids'])
+                logger.info(f"Deleted {len(results['ids'])} chunks for file_id {file_id}")
+
+        except Exception as e:
+            logger.error(f"Error deleting document from vector DB: {e}")
+            raise
+
+    def delete_collection(self, km_id: str):
+        """Delete an entire collection"""
+        try:
+            collection_name = f"kb_{km_id}"
+            self.client.delete_collection(name=collection_name)
+            logger.info(f"Deleted collection {collection_name}")
+        except Exception as e:
+            logger.error(f"Error deleting collection: {e}")
+            raise
+
+
+# Global instance
+_vector_service = None
+
+
+def get_vector_service() -> VectorService:
+    """Get or create global vector service instance"""
+    global _vector_service
+    if _vector_service is None:
+        _vector_service = VectorService()
+    return _vector_service

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from backend.database.models.chat import AiChatCfg
 from backend.modules.sns.map_task_manager import MapTaskManager
 from backend.modules.sns.js_task_manager import JsTaskManager
-from backend.modules.sns.ui_adapter import UIAdapter
 from backend.modules.sns.xmpp_client import XMPPClientManager
 from backend.modules.agent.agent_manager import agent_manager
 from backend.shared.websocket_manager import manager as websocket_manager
@@ -47,12 +46,12 @@ class AiChatCfgManager:
     def __init__(self, user_id=None):
         """
         初始化AiChatCfgManager
-        
+
         Args:
             user_id (str, optional): 用户ID，默认为None，使用第一条记录
         """
         from db.DBFactory import query_AiChatCfg_map_setting, query_AiChatCfg_map
-        
+
         self._user_id = user_id
         self._record = None
         self._callbacks = []  # 存储回调函数列表
@@ -79,7 +78,7 @@ class AiChatCfgManager:
     def _load_record(self):
         """加载数据库记录"""
         from db.DBFactory import query_AiChatCfg_map_setting, query_AiChatCfg_map
-        
+
         if self._user_id:
             self._record = query_AiChatCfg_map_setting(user_id=self._user_id)
         else:
@@ -127,7 +126,7 @@ class AiChatCfgManager:
         """当设置属性时调用此方法"""
         from db.DBFactory import update_AiChatCfg_by_user_id, update_AiChatCfg_map
         import json
-        
+
         # 处理内部属性
         if name.startswith('_') or name in ['user_id']:
             super().__setattr__(name, value)
@@ -209,7 +208,7 @@ class AISocialEngine(
         self.process_list = []
         self.ability_list = []
         self.task_runner = None
-        
+
         # 初始化任务管理器
         self.taskmng_js = JsTaskManager(self)
         self.taskmng = MapTaskManager(self)
@@ -235,7 +234,7 @@ class AISocialEngine(
         self.stopping_ai_process_flag = False
         self.pause_flag = False
         self.agent_replying_flag = False
-        
+
         self.conversation_id = ""
         self.messages = []
         self.messages_command = []
@@ -267,7 +266,7 @@ class AISocialEngine(
         self.target_place = ""
         self.move_by_route_flag = False
         self.route_position_list = []
-        
+
         # 能力列表
         self.ability_list = [
             {
@@ -286,14 +285,14 @@ class AISocialEngine(
                 "status": "enabled"
             }
         ]
-        
+
         self.skill_list = []
         logger.info("AISocialEngine initialized successfully")
 
     async def async_init(self):
         """异步初始化方法"""
         logger.info("Async initializing AISocialEngine...")
-        
+
         self.command_status = ""
         self.required_skills = []
         self.available_skills = []
@@ -313,7 +312,7 @@ class AISocialEngine(
         self.thinking_step_index = 0
         self.process_step_index = 0
         self.place_selected = None
-        
+
         # 配置参数
         self.max_tool_usage = 4
         self.max_people_comm = 4
@@ -321,7 +320,7 @@ class AISocialEngine(
         self.max_place_arrived = 3
         self.min_place_move_score = 80
         self.search_radius = 10000
-        
+
         self.place_arrived_count = {}
         self.wait_for_trade_download_flag = False
         self.wait_for_trade_download_trade_id = ""
@@ -353,16 +352,16 @@ class AISocialEngine(
         self.map_task_status = ""
         self.current_trade_price = -1
         self.wait_for_send_good = False
-        
+
         # 加载用户数据
         self.load_all_user_data()
-        
+
         logger.info("AISocialEngine async initialization complete")
 
     async def _send_to_frontend(self, tab_type, content, section=None):
         """
         发送内容到前端指定的页签
-        
+
         Args:
             tab_type: 页签类型 ('think', 'process', 'resource', 'map', 'trade', 'chat')
             content: 要发送的内容
@@ -371,22 +370,22 @@ class AISocialEngine(
         try:
             from backend.shared.websocket_manager import manager as websocket_manager
             import json
-            
+
             # 构建消息
             message = {
                 "type": "tab_update",
                 "tab": tab_type,
                 "content": content
             }
-            
+
             # 如果有section参数，添加到消息中
             if section:
                 message["section"] = section
-            
+
             # 通过WebSocket发送到前端
             await websocket_manager.broadcast(message)
             logger.debug(f"Sent content to frontend tab '{tab_type}': {content[:50]}...")
-            
+
         except Exception as e:
             logger.error(f"Failed to send content to frontend tab '{tab_type}': {e}")
 

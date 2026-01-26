@@ -46,12 +46,12 @@ function connectWebSocket() {
     console.log("Attempting to connect to WebSocket with clientId:", clientId);
     websocket = new WebSocket(`ws://localhost:8788/ws/${clientId}`);
 
-    websocket.onopen = function() {
+    websocket.onopen = function () {
         console.log("WebSocket connected successfully with clientId:", clientId);
-        websocket.send(JSON.stringify({"NAME":"CJROK"}));
+        websocket.send(JSON.stringify({"NAME": "CJROK"}));
     };
 
-    websocket.onmessage = function(event) {
+    websocket.onmessage = function (event) {
         console.log("Received WebSocket message from backend:", event.data);
         try {
             const data = JSON.parse(event.data);
@@ -63,11 +63,11 @@ function connectWebSocket() {
         }
     };
 
-    websocket.onerror = function(error) {
+    websocket.onerror = function (error) {
         console.error("WebSocket error:", error);
     };
 
-    websocket.onclose = function() {
+    websocket.onclose = function () {
         console.log("WebSocket disconnected");
         // 尝试重连
         setTimeout(connectWebSocket, 5000);
@@ -198,10 +198,10 @@ var handle_command = function (command, param_1, param_2) {
         let lat = parseFloat(param_2.split('_')[1]);
         check_place(param_1, lng, lat)
     } else if (command == "python_setting_changed") {
-        if(param_1=="nick_name"){
+        if (param_1 == "nick_name") {
             alert(param_2);
             person_data_me.nick_name = param_2;
-        }else if(param_1=="profile"){
+        } else if (param_1 == "profile") {
             alert(param_2);
             person_data_me.profile = param_2;
         }
@@ -482,7 +482,7 @@ function handle_map_setting_loaded(setting_json) {
 }
 
 async function update_map_setting(field_name, field_value) {
-    await jsonrpcRequest("update_map_settings", { [field_name]: field_value });
+    await jsonrpcRequest("update_map_settings", {[field_name]: field_value});
 }
 
 async function loadMoreItems(init_flag) {

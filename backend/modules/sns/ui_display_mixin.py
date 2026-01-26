@@ -1,245 +1,484 @@
-"""
-UI 和显示相关的 Mixin
-包含状态显示、资源显示、地图更新等 UI 相关功能
-"""
+from sqlalchemy.orm import Session
+from backend.database.models.chat import AiChatCfg
+from backend.modules.sns.map_task_manager import MapTaskManager
+from backend.modules.sns.js_task_manager import JsTaskManager
+from backend.modules.sns.ui_adapter import UIAdapter
+from backend.modules.sns.xmpp_client import XMPPClientManager
+from backend.modules.agent.agent_manager import agent_manager
+from backend.shared.websocket_manager import manager as websocket_manager
+
+# *********
+import os
+import math
+# 主要用于发送附件
+import asyncio
+import zipfile
+import shutil
+import time
+
 import logging
-import json
+
+import re
+
+log = logging.getLogger(__name__)
+from db.DBFactory import (query_AgentCfg, add_AIChatMessages, get_prompt_by_title, query_function_mng,
+                          add_function_mng, update_map_task, add_map_visit, get_key_value,
+                          update_map_trade, add_map_trade, add_map_tool, query_single_map_trade, update_AiChatCfg_by_user_id, update_AiChatCfg_map, query_AiChatCfg_map, add_mcp_mng, query_mcp_mng,
+                          delete_map_preset_msg, query_map_preset_msg_all, add_map_preset_msg, query_tool_list, query_single_tool, query_AiChatCfg_map_setting)
+from util import (generate_random_id, add_memory_list)
+from i18n import lt
+from enum import Enum
 from typing import List, Dict, Optional
+import json
+import logging
+import requests
+import geopy.distance
+from geopy.distance import distance
+from geopy.point import Point
+from geographiclib.geodesic import Geodesic
+import random
 
 logger = logging.getLogger(__name__)
 
-
 class UIDisplayMixin:
-    """UI 和显示相关功能"""
+
+
+    def write_on_going_process_to_pane(self, new_ongoing_content: str):
+        # 定义标记
+        self.current_ongoing_content = new_ongoing_content
+        # 获取ongoing process和task process history的内容
+        ongoing_process = self.get_on_going_process()
+        task_process_history = self.get_task_process_history()
+
+        # 合并内容并更新plan_edit
+        combined_content = f"{ongoing_process}\n{task_process_history}"
+
+        # 发送到前端 Process 页签的 On Going 部分
+        asyncio.create_task(self._send_to_frontend('process', ongoing_process, section='ongoing'))
+
+        # self.plan_edit.setPlainText(combined_content)
+        print("write_on_going_process_to_pane")
+
+    def get_on_going_process(self):
+        """
+        返回美化后的 ongoing process 文本（纯文本版）
+        """
+        # 获取基础信息
+        profession = self.aichatcfg_record.profession
+        lng = f"{self.aichatcfg_record.current_position[0]}" if self.aichatcfg_record.current_position and len(self.aichatcfg_record.current_position) >= 2 else "0"
+        lat = f"{self.aichatcfg_record.current_position[1]}" if self.aichatcfg_record.current_position and len(self.aichatcfg_record.current_position) >= 2 else "0"
+
+        # 构建美化文本
+        result = "📊 Current Status\n"
+        result += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        result += f"💰 Money      : {self.aichatcfg_record.money:,.2f}\n"
+        result += f"❤️ Life           : {self.aichatcfg_record.life_point}\n"
+        result += f"⚡ Energy      : {self.aichatcfg_record.energy_point}\n"
+        result += f"🧑‍️ Profession: {profession}\n"
+        result += "📍 Location\n"
+        result += f"   ├─ lng : {lng}\n"
+        result += f"   └─ lat : {lat}\n\n"
+
+        result += "⏳ On Going\n"
+        result += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+
+        result += f"{self.current_ongoing_content or 'N/A'}\n"
+
+        return result
+
+    def show_information(self, info, type_str="1"):
+        self.taskmng.js_task_manager.show_information(info, type_str)
+
+
+    def write_task_plan_to_pane(self, content):
+        # self.plan_edit.append(f"{content}")
+
+        print("write_task_plan_to_pane")
+
+    async def _send_to_frontend(self, tab_type, content, section=None):
+        """
+        发送内容到前端指定的页签
+
+        Args:
+            tab_type: 页签类型 ('think' 或 'process')
+            content: 要发送的内容
+            section: 可选的部分标识 ('ongoing' 或 'history')
+        """
+        try:
+            message = {
+                "type": "sns_update",
+                "tab": tab_type,
+                "content": content
+            }
+            if section:
+                message["section"] = section
+            # 广播到所有连接的客户端
+            await websocket_manager.broadcast(message)
+            logger.info(f"Sent {tab_type} update to frontend (section: {section})")
+        except Exception as e:
+            logger.error(f"Failed to send to frontend: {e}")
+
+    def write_thinking_process_to_pane(self, title, content):
+        # 假设 self.thinking_edit 是 QTextEdit 的实例
+        self.thinking_step_index += 1
+
+        # 组合新内容
+        new_content = f"\n🔶【{self.thinking_step_index}】{title}\n"
+        new_content += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        new_content += f"{content}\n"
+
+        # 发送到前端 Think 页签
+        asyncio.create_task(self._send_to_frontend('think', new_content))
+
+        # self.thinking_edit.append(new_content)
+
+    def write_task_process_to_pane(self, content):
+        # 获取ongoing process和task process history的内容
+        ongoing_process = self.get_on_going_process()
+        task_process_history = self.get_task_process_history()
+
+        # 合并内容并更新plan_edit
+        combined_content = f"{ongoing_process}\n{task_process_history}"
+
+        # 发送到前端 Process 页签
+        asyncio.create_task(self._send_to_frontend('process', combined_content))
+
+        # self.plan_edit.setPlainText(combined_content)
+        print("write_task_process_to_pane")
+
+
+    def get_ai_model_display_name(self):
+        """
+        获取AI模型显示名称，格式为"🧠 {provider} {model_name}"
+        """
+        try:
+            from db.DBFactory import query_AgentCfg
+
+            # 获取账户信息
+            snsaccount = self.aichatcfg_record.account
+            agent_cfg = query_AgentCfg(snsaccount=snsaccount)
+
+            # 获取默认模型
+            if agent_cfg and agent_cfg.defaultmodel:
+                defaultmodel = agent_cfg.defaultmodel
+                return f"🧠 {defaultmodel}"
+            else:
+                return "🧠 OpenAI gpt-4o-mini"  # 默认值
+        except Exception as e:
+            print(f"获取AI模型名称时出错: {e}")
+            return "🧠 OpenAI gpt-4o-mini"  # 出错时的默认值
+
+    def update_resource_display(self):
+        """
+        更新资源显示内容，包括工具列表、人员名单和地址列表
+        """
+        # 获取各类资源数据
+        tool_list = self.get_tool_list()
+        people_list = self.get_people_list()
+        place_list = self.get_place_list()
+
+        # 格式化内容
+        formatted_content = self._format_resource_content(tool_list, people_list, place_list)+"\n"
+
+        # 发送到前端 Resource 页签
+        import asyncio
+        asyncio.create_task(self._send_to_frontend('resource', formatted_content))
+
+    def _format_resource_content(self, tool_list, people_list, place_list):
+        """
+        格式化资源内容显示
+        """
+        content = ""
+
+        # 格式化工具列表
+        if tool_list:
+            content += f"🌐 服务列表（共 {len(tool_list)} 项）\n"
+            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+
+            for i, tool in enumerate(tool_list):
+                # 工具ID和名称
+                content += f"#{tool.get('id', '')} {tool.get('name', '')}\n"
+
+
+                # 地理坐标信息（如果lng,lat有值且不为0）
+                lng = tool.get('lng', 0)
+                lat = tool.get('lat', 0)
+                if lng and lat and lng != 0 and lat != 0:
+                    # 格式化坐标，最多8位小数，去除尾随零
+                    formatted_lng = f"{lng:.8g}"
+                    formatted_lat = f"{lat:.8g}"
+                    content += f"📍 坐标：{formatted_lng}, {formatted_lat}\n"
+                elif 'place' in tool and tool['place']:
+                    content += f"🌍 位置：{tool['place']}\n"
+
+                # 描述信息
+                if 'description' in tool and tool['description']:
+                    content += f"💬 描述：{tool['description']}\n"
+
+                # 地址信息
+                if 'address' in tool and tool['address'] and tool['address'] != "Not needed":
+                    content += f"🔗 地址：{tool['address']}\n"
+
+                # 类型和方法信息
+                type_info = tool.get('type', '')
+                method_info = tool.get('method', '')
+
+                # 参数信息
+                param_info = ""
+                if 'parameter' in tool and tool['parameter']:
+                    if isinstance(tool['parameter'], dict):
+                        param_strs = [f"{k}={v}" for k, v in tool['parameter'].items()]
+                        param_info = f"({', '.join(param_strs)})" if param_strs else ""
+                    else:
+                        param_info = f"({tool['parameter']})" if tool['parameter'] != "None" else ""
+
+                content += f"⚙️ 类型：{type_info} ｜ 方法：{method_info}{param_info}\n"
+
+                # 分隔线（除了最后一个工具）
+                if i < len(tool_list) - 1:
+                    content += "\n──────────────────────────\n\n"
+
+            content += "\n\n"
+
+        # 格式化人员名单
+        if people_list:
+            content += f"🧑‍🤝‍🧑 人员名单（共 {len(people_list)} 位）\n"
+            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+
+            for i, person in enumerate(people_list):
+                # 姓名和职业
+                nick_name = person.get('nick_name', '')
+                profession = person.get('profession', '')
+                content += f"🧑‍ {nick_name} ｜ 👩‍💻 {profession}\n"
+
+                # 位置信息
+                location = person.get('location', [])
+                if location and len(location) >= 2:
+                    lng, lat = location[0], location[1]
+                    # 简化城市信息
+
+                    # 格式化经纬度，最多显示8位小数，不补零
+                    formatted_lng = f"{lng:.8f}".rstrip('0').rstrip('.')
+                    formatted_lat = f"{lat:.8f}".rstrip('0').rstrip('.')
+                    content += f"📍 位置：{formatted_lng}, {formatted_lat}\n"
+
+                # 账户信息
+                account = person.get('account', '')
+                if account:
+                    content += f"💬 account: {account}\n"
+
+                # SNS信息
+                sns_url = person.get('sns_url', '')
+                if sns_url:
+                    content += f"🔗 sns: {sns_url}\n"
+
+                # ID信息
+                nation_id = person.get('nation_id', '')
+                if nation_id:
+                    content += f"🆔 nation_id: {nation_id}\n"
+
+                # 简介信息
+                profile = person.get('profile', '')
+                if profile:
+                    content += f"📝 profile: {profile}\n"
+
+                # 分隔线（除了最后一个人）
+                if i < len(people_list) - 1:
+                    content += "\n──────────────────────────\n\n"
+
+            content += "\n\n"
+
+        # 格式化地址列表
+        if place_list:
+            content += f"🗺️ 地址列表（共 {len(place_list)} 处）\n"
+            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+
+            for i, place in enumerate(place_list):
+                # 地点名称
+                place_name = place.get('place_name', '')
+                content += f"🏞️ {place_name}\n"
+
+                # 位置坐标
+                position = place.get('place_position', [])
+                if position and len(position) >= 2:
+                    lng, lat = position[0], position[1]
+                    # 格式化经纬度，最多显示8位小数，不补零
+                    formatted_lng = f"{lng:.8f}".rstrip('0').rstrip('.')
+                    formatted_lat = f"{lat:.8f}".rstrip('0').rstrip('.')
+                    content += f"📍 {formatted_lng}, {formatted_lat}\n"
+
+                # 描述信息
+                description = place.get('description', '')
+                if description:
+                    content += f"📖 {description}\n"
+
+                # 分隔线（除了最后一个地点）
+                if i < len(place_list) - 1:
+                    content += "\n──────────────────────────\n\n"
+
+            content += "\n"
+
+        return content.strip()
+
+    def send_command_to_map(self, command, param_1, param_2):
+        """
+        发送命令到地图系统
+
+        Args:
+            command: 命令类型
+            param_1: 参数1
+            param_2: 参数2
+        """
+        import asyncio
+        from backend.shared.websocket_manager import manager as websocket_manager
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # 构建消息
+        message = {
+            "type": "command",
+            "command": command,
+            "param_1": param_1,
+            "param_2": param_2
+        }
+
+        # 异步发送到前端
+        async def send_message():
+            try:
+                await websocket_manager.broadcast(message)
+                logger.info(f"Command sent to map: {command}, param_1={param_1}, param_2={param_2}")
+            except Exception as e:
+                logger.error(f"Failed to send command to map: {e}")
+
+        asyncio.create_task(send_message())
+
+    def send_talk_message(self, fromuser, touser, message):
+        """
+        发送聊天消息到前端地图
+
+        Args:
+            fromuser: 发送者账户
+            touser: 接收者账户
+            message: 消息内容
+        """
+        import asyncio
+        from backend.shared.websocket_manager import manager as websocket_manager
+        from datetime import datetime
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # 构建chatWindow消息（原有格式）
+        chat_msg = {
+            "type": "chat_message",
+            "from": fromuser,
+            "to": touser,
+            "content": message
+        }
+
+        # 构建地图消息（新格式）
+        map_msg = {
+            "type": "map_chat_message",
+            "from_user": fromuser,
+            "to_user": touser,
+            "content": message,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # 异步发送两种格式到前端
+        async def send_messages():
+            try:
+                # 发送到 chatWindow
+                await websocket_manager.broadcast(chat_msg)
+                # 发送到地图
+                await websocket_manager.broadcast(map_msg)
+                logger.info(f"Chat messages sent from {fromuser} to {touser}: {message}")
+            except Exception as e:
+                logger.error(f"Failed to send chat messages: {e}")
+
+        asyncio.create_task(send_messages())
 
     def show_status_on_map(self, status):
         """
-        在地图上显示状态
-        
+        在地图上显示状态信息
+
         Args:
-            status: 状态字符串 (thinking/moving/talking等)
+            status: 状态信息字符串
         """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.show_status(status)
-            logger.debug(f"Status shown on map: {status}")
-        except Exception as e:
-            logger.error(f"Failed to show status on map: {e}")
+        import asyncio
+        from backend.shared.websocket_manager import manager as websocket_manager
+        import logging
 
-    def show_alert_on_map(self, message):
+        logger = logging.getLogger(__name__)
+
+        # 构建消息
+        msg = {
+            "type": "status_update",
+            "status": status
+        }
+
+        # 异步发送到前端
+        async def send_message():
+            try:
+                await websocket_manager.broadcast(msg)
+                logger.info(f"Status update sent: {status}")
+            except Exception as e:
+                logger.error(f"Failed to send status update: {e}")
+
+        asyncio.create_task(send_message())
+
+    def show_alert_on_map(self, message, is_error=False):
         """
-        在地图上显示警告消息
-        
+        在地图上显示警告/提示信息
+
         Args:
-            message: 警告消息内容
+            message: 警告/提示信息
+            is_error: 是否为错误信息，默认False
         """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.show_alert(message)
-            logger.debug(f"Alert shown on map: {message}")
-        except Exception as e:
-            logger.error(f"Failed to show alert on map: {e}")
+        import asyncio
+        from backend.shared.websocket_manager import manager as websocket_manager
+        import logging
 
-    def write_on_going_process_to_pane(self, process_text):
-        """
-        将正在进行的过程写入面板
-        
-        Args:
-            process_text: 过程描述文本
-        """
-        try:
-            self.current_ongoing_content = process_text
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_ongoing_process(process_text)
-            logger.debug(f"Ongoing process updated: {process_text[:50]}...")
-        except Exception as e:
-            logger.error(f"Failed to write ongoing process: {e}")
+        logger = logging.getLogger(__name__)
 
-    def write_task_process_to_pane(self, process_text):
-        """
-        将任务过程写入面板
-        
-        Args:
-            process_text: 任务过程描述文本
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.append_task_process(process_text)
-            logger.debug(f"Task process appended: {process_text[:50]}...")
-        except Exception as e:
-            logger.error(f"Failed to write task process: {e}")
+        # 构建消息
+        msg = {
+            "type": "alert",
+            "message": message,
+            "is_error": is_error
+        }
 
-    def update_resource_display(self):
-        """更新资源显示"""
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
-            logger.debug("Resource display updated")
-        except Exception as e:
-            logger.error(f"Failed to update resource display: {e}")
+        # 异步发送到前端
+        async def send_message():
+            try:
+                await websocket_manager.broadcast(msg)
+                logger.info(f"Alert sent: {message} (is_error={is_error})")
+            except Exception as e:
+                logger.error(f"Failed to send alert: {e}")
 
-    def update_map_charts(self):
-        """更新地图图表"""
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_charts()
-            logger.debug("Map charts updated")
-        except Exception as e:
-            logger.error(f"Failed to update map charts: {e}")
+        asyncio.create_task(send_message())
 
-    def update_current_location_display(self, position):
-        """
-        更新当前位置显示
-        
-        Args:
-            position: 位置坐标 [lng, lat]
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_current_location(position)
-            logger.debug(f"Current location display updated: {position}")
-        except Exception as e:
-            logger.error(f"Failed to update location display: {e}")
 
-    def clear_task_display(self):
-        """清空任务显示"""
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.clear_task_display()
-            logger.debug("Task display cleared")
-        except Exception as e:
-            logger.error(f"Failed to clear task display: {e}")
 
-    def show_notification(self, title, message, notification_type="info"):
+    def send_msg_to_map(self, command):
         """
-        显示通知
-        
-        Args:
-            title: 通知标题
-            message: 通知消息
-            notification_type: 通知类型 (info/warning/error/success)
+        将命令发送到地图系统。
         """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.show_notification(title, message, notification_type)
-            logger.info(f"Notification shown: [{notification_type}] {title}: {message}")
-        except Exception as e:
-            logger.error(f"Failed to show notification: {e}")
+        action, param_1, param_2 = command
+        if action == "Use skills":
+            print(f"执行技能：{param_1}")
 
-    def update_people_list_display(self, people_list):
-        """
-        更新人员列表显示
-        
-        Args:
-            people_list: 人员列表数据
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_people_list(people_list)
-            logger.debug(f"People list updated with {len(people_list)} people")
-        except Exception as e:
-            logger.error(f"Failed to update people list display: {e}")
+            self.send_command_to_map(action, param_1, param_2)
+        else:
+            print(f"执行行动：{action}")
 
-    def update_place_list_display(self, place_list):
-        """
-        更新地点列表显示
-        
-        Args:
-            place_list: 地点列表数据
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_place_list(place_list)
-            logger.debug(f"Place list updated with {len(place_list)} places")
-        except Exception as e:
-            logger.error(f"Failed to update place list display: {e}")
+            self.send_command_to_map(action, param_1, param_2)
 
-    def update_tool_list_display(self, tool_list):
-        """
-        更新工具列表显示
-        
-        Args:
-            tool_list: 工具列表数据
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_tool_list(tool_list)
-            logger.debug(f"Tool list updated with {len(tool_list)} tools")
-        except Exception as e:
-            logger.error(f"Failed to update tool list display: {e}")
+    def show_status_on_map(self, status):
+        print("show_status_on_map" + status)
+        # self.message_handler.show_status_on_map(status)
 
-    def show_conversation_window(self, person_info):
-        """
-        显示对话窗口
-        
-        Args:
-            person_info: 对话人员信息
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.show_conversation_window(person_info)
-            logger.debug(f"Conversation window shown for {person_info.get('nick_name', 'Unknown')}")
-        except Exception as e:
-            logger.error(f"Failed to show conversation window: {e}")
-
-    def close_conversation_window(self):
-        """关闭对话窗口"""
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.close_conversation_window()
-            logger.debug("Conversation window closed")
-        except Exception as e:
-            logger.error(f"Failed to close conversation window: {e}")
-
-    def update_task_progress_bar(self, progress_percentage):
-        """
-        更新任务进度条
-        
-        Args:
-            progress_percentage: 进度百分比 (0-100)
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_progress_bar(progress_percentage)
-            logger.debug(f"Progress bar updated: {progress_percentage}%")
-        except Exception as e:
-            logger.error(f"Failed to update progress bar: {e}")
-
-    def highlight_location_on_map(self, position, label=""):
-        """
-        在地图上高亮显示位置
-        
-        Args:
-            position: 位置坐标 [lng, lat]
-            label: 位置标签
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.highlight_location(position, label)
-            logger.debug(f"Location highlighted on map: {position} - {label}")
-        except Exception as e:
-            logger.error(f"Failed to highlight location: {e}")
-
-    def draw_route_on_map(self, route_positions, route_info=None):
-        """
-        在地图上绘制路线
-        
-        Args:
-            route_positions: 路线位置列表 [[lng, lat], ...]
-            route_info: 路线信息字典
-        """
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.draw_route(route_positions, route_info)
-            logger.debug(f"Route drawn on map with {len(route_positions)} points")
-        except Exception as e:
-            logger.error(f"Failed to draw route on map: {e}")
-
-    def clear_map_highlights(self):
-        """清除地图上的所有高亮标记"""
-        try:
-            if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.clear_highlights()
-            logger.debug("Map highlights cleared")
-        except Exception as e:
-            logger.error(f"Failed to clear map highlights: {e}")
+    def show_alert_on_map(self, msg):
+        print("show_status_on_map" + msg)
+        # self.message_handler.show_alert_on_map(msg)

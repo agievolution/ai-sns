@@ -33,7 +33,7 @@ class ResourceManagementMixin:
 
             # 更新UI显示
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info("User data loaded successfully")
 
@@ -70,7 +70,7 @@ class ResourceManagementMixin:
             self.aichatcfg_record.life_point = self.life_point
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Life point decreased to {self.life_point}")
 
@@ -89,7 +89,7 @@ class ResourceManagementMixin:
             self.aichatcfg_record.life_point = self.life_point
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Life point increased to {self.life_point}")
 
@@ -103,7 +103,7 @@ class ResourceManagementMixin:
             self.aichatcfg_record.energy_point = self.energy_point
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Energy point decreased to {self.energy_point}")
 
@@ -121,7 +121,7 @@ class ResourceManagementMixin:
             self.aichatcfg_record.energy_point = self.energy_point
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Energy point increased to {self.energy_point}")
 
@@ -135,7 +135,7 @@ class ResourceManagementMixin:
             self.aichatcfg_record.move_point = self.move_point
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Move point decreased to {self.move_point}")
 
@@ -149,7 +149,7 @@ class ResourceManagementMixin:
             self.aichatcfg_record.move_point = self.move_point
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Move point increased to {self.move_point}")
 
@@ -163,7 +163,7 @@ class ResourceManagementMixin:
             self.aichatcfg_record.money = self.money
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Money increased by {amount} to {self.money}")
             return {"status": "success", "new_balance": self.money}
@@ -183,7 +183,7 @@ class ResourceManagementMixin:
             self.aichatcfg_record.money = self.money
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Money decreased by {amount} to {self.money}")
             return {"status": "success", "new_balance": self.money}
@@ -204,7 +204,7 @@ class ResourceManagementMixin:
                 self.level_up()
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
+                self.update_resource_display()
 
             logger.info(f"Experience increased by {amount} to {self.exp_point}")
 
@@ -224,8 +224,8 @@ class ResourceManagementMixin:
             self.iq_point = min(100, self.iq_point + 5)
 
             if hasattr(self, 'ui_adapter'):
-                self.ui_adapter.update_resource_display()
-                self.ui_adapter.show_level_up_notification(self.level)
+                self.update_resource_display()
+                self.show_level_up_notification(self.level)
 
             logger.info(f"Level up! New level: {self.level}")
 

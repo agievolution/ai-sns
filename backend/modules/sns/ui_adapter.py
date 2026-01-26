@@ -1,6 +1,4 @@
 class UIAdapter:
-    def __init__(self,parent):
-        self.parent = parent
 
     def get_ai_model_display_name(self):
         """
@@ -10,7 +8,7 @@ class UIAdapter:
             from db.DBFactory import query_AgentCfg
 
             # 获取账户信息
-            snsaccount = self.parent.aichatcfg_record.account
+            snsaccount = self.aichatcfg_record.account
             agent_cfg = query_AgentCfg(snsaccount=snsaccount)
 
             # 获取默认模型
@@ -28,16 +26,16 @@ class UIAdapter:
         更新资源显示内容，包括工具列表、人员名单和地址列表
         """
         # 获取各类资源数据
-        tool_list = self.parent.get_tool_list()
-        people_list = self.parent.get_people_list()
-        place_list = self.parent.get_place_list()
+        tool_list = self.get_tool_list()
+        people_list = self.get_people_list()
+        place_list = self.get_place_list()
 
         # 格式化内容
         formatted_content = self._format_resource_content(tool_list, people_list, place_list)+"\n"
 
         # 发送到前端 Resource 页签
         import asyncio
-        asyncio.create_task(self.parent._send_to_frontend('resource', formatted_content))
+        asyncio.create_task(self._send_to_frontend('resource', formatted_content))
 
     def _format_resource_content(self, tool_list, people_list, place_list):
         """

@@ -262,6 +262,35 @@ export default {
 
             // 处理不同的动作
             console.log('SNS Action:', action);
+
+            // 建立 action 到 map.html 按钮 data-title 的映射
+            const actionToTitleMap = {
+                'home': 'home',
+                'square': 'plaza',
+                'ai': 'AI',
+                'move': 'move',
+                'board': 'activity'
+            };
+
+            // 如果是 home, square, ai, move, board 这些动作，向 map iframe 发送消息
+            const mapActions = ['home', 'square', 'ai', 'move', 'board'];
+            if (mapActions.includes(action)) {
+                const iframe = document.querySelector('#mapContainer iframe');
+                if (iframe && iframe.contentWindow) {
+                    const message = {
+                        type: 'mapButtonAction',
+                        action: actionToTitleMap[action]  // 转换为对应的 data-title
+                    };
+                    try {
+                        iframe.contentWindow.postMessage(message, 'http://localhost:8788');
+                        console.log('Sent mapButtonAction to iframe:', message);
+                    } catch (error) {
+                        console.error('Failed to send message to iframe:', error);
+                    }
+                } else {
+                    console.warn('Map iframe not found or not ready');
+                }
+            }
         });
 
         // Start 按钮
@@ -558,6 +587,12 @@ export default {
                         break;
                     case 'markerAdd':
                         this.handleMarkerAdd(data.data);
+                        break;
+                    case 'openDialog':
+                        this.handleOpenDialog(data.dialogType);
+                        break;
+                    case 'togglePanels':
+                        this.handleTogglePanels(data.action);
                         break;
                     default:
                         console.log('未知消息类型:', data.type);
@@ -967,5 +1002,95 @@ export default {
         resourceSection.innerHTML = '';
         resourceSection.appendChild(contentDiv);
         console.log('Resource tab updated successfully');
+    },
+
+    /**
+     * 处理来自 map.html 的打开对话框请求
+     */
+    async handleOpenDialog(dialogType) {
+        console.log('handleOpenDialog called with dialogType:', dialogType);
+
+        try {
+            let dialog;
+            switch (dialogType) {
+                case 'avatar':
+                    dialog = new SNSAvatarDialog();
+                    break;
+                case 'profession':
+                    dialog = new SNSProfessionDialog();
+                    break;
+                case 'socialRole':
+                    dialog = new SNSSocialRoleDialog();
+                    break;
+                case 'mapConfig':
+                    dialog = new SNSMapConfigDialog();
+                    break;
+                default:
+                    console.warn('Unknown dialog type:', dialogType);
+                    return;
+            }
+
+            if (dialog) {
+                await dialog.show();
+                console.log('Dialog opened successfully:', dialogType);
+            }
+        } catch (error) {
+            console.error('Error opening dialog:', dialogType, error);
+            this.showToast(`打开对话框失败: ${error.message}`, 'error');
+        }
+    },
+
+    /**
+     * 处理来自 map.html 的面板折叠/展开请求
+     */
+    handleTogglePanels(action) {
+        console.log('handleTogglePanels called with action:', action);
+
+        // 获取侧边栏相关元素（二级侧边栏）
+        const secondarySidebar = document.getElementById('secondarySidebar');
+        const sidebarResizer = document.getElementById('sidebarResizer');
+        const mainContent = document.getElementById('mainContent');
+
+        // 获取 SNS 页面右侧面板相关元素
+        const statusPanel = document.getElementById('snsStatusPanel');
+        const panelResizer = document.getElementById('snsPanelResizer');
+
+        if (!secondarySidebar || !sidebarResizer || !mainContent) {
+            console.warn('Sidebar elements not found');
+            return;
+        }
+
+        if (action === 'collapse') {
+            // 折叠侧边栏
+            secondarySidebar.classList.add('collapsed');
+            sidebarResizer.classList.add('collapsed');
+            mainContent.classList.add('sidebar-collapsed');
+
+            console.log('Sidebar collapsed');
+        } else if (action === 'expand') {
+            // 展开侧边栏
+            secondarySidebar.classList.remove('collapsed');
+            sidebarResizer.classList.remove('collapsed');
+            mainContent.classList.remove('sidebar-collapsed');
+
+            console.log('Sidebar expanded');
+        }
+
+        // 处理右侧状态面板（仅在 SNS 页面时）
+        if (statusPanel && panelResizer) {
+            if (action === 'collapse') {
+                // 折叠右侧面板
+                statusPanel.classList.add('collapsed');
+                panelResizer.classList.add('collapsed');
+                localStorage.setItem('snsPanelCollapsed', 'true');
+                console.log('SNS panel collapsed');
+            } else if (action === 'expand') {
+                // 展开右侧面板
+                statusPanel.classList.remove('collapsed');
+                panelResizer.classList.remove('collapsed');
+                localStorage.setItem('snsPanelCollapsed', 'false');
+                console.log('SNS panel expanded');
+            }
+        }
     }
 };

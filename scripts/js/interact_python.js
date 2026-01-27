@@ -154,6 +154,21 @@ window.addEventListener('message', function(event) {
         } catch (error) {
             console.error('Error sending message back to parent:', error);
         }
+    } else if (event.data.type === 'mapButtonAction') {
+        // 处理来自 electron 前端的按钮点击请求
+        const action = event.data.action;
+        console.log('Received mapButtonAction from electron:', action);
+
+        // 查找对应的按钮并触发点击
+        const buttonSelector = `.map-btn[data-title="${action}"]`;
+        const button = document.querySelector(buttonSelector);
+
+        if (button) {
+            console.log('Found button, triggering click:', buttonSelector);
+            button.click();
+        } else {
+            console.warn('Button not found:', buttonSelector);
+        }
     }
     // 可以在这里添加处理其他类型消息的逻辑
 });
@@ -552,7 +567,13 @@ function open_url(url) {
 }
 
 function userInfo() {
-    // TODO: 实现用户信息设置功能
+    // 通过 postMessage 向 electron 前端发送打开用户配置对话框的消息
+    if (typeof window.parent !== 'undefined') {
+        window.parent.postMessage({
+            type: 'openDialog',
+            dialogType: 'avatar'
+        }, '*');
+    }
     console.log("userInfo");
 }
 
@@ -576,6 +597,14 @@ function Maximize() {
     rightMenuIcon.classList.remove('fa-angle-double-right');
     rightMenuIcon.classList.add('fa-angle-double-left');
 
+    // 向 electron 前端发送消息，折叠侧边栏和右侧面板
+    if (typeof window.parent !== 'undefined') {
+        window.parent.postMessage({
+            type: 'togglePanels',
+            action: 'collapse'
+        }, '*');
+    }
+
     if (typeof window.electron !== 'undefined') {
         window.electron.maximize();
     }
@@ -596,18 +625,38 @@ function Minimize() {
     rightMenuIcon.classList.remove('fa-angle-double-left');
     rightMenuIcon.classList.add('fa-angle-double-right');
 
+    // 向 electron 前端发送消息，展开侧边栏和右侧面板
+    if (typeof window.parent !== 'undefined') {
+        window.parent.postMessage({
+            type: 'togglePanels',
+            action: 'expand'
+        }, '*');
+    }
+
     if (typeof window.electron !== 'undefined') {
         window.electron.minimize();
     }
 }
 
 function userSetting() {
-    // TODO: 实现用户设置功能
+    // 通过 postMessage 向 electron 前端发送打开社交角色对话框的消息
+    if (typeof window.parent !== 'undefined') {
+        window.parent.postMessage({
+            type: 'openDialog',
+            dialogType: 'socialRole'
+        }, '*');
+    }
     console.log("userSetting");
 }
 
 function jobSetting() {
-    // TODO: 实现职业设置功能
+    // 通过 postMessage 向 electron 前端发送打开职业对话框的消息
+    if (typeof window.parent !== 'undefined') {
+        window.parent.postMessage({
+            type: 'openDialog',
+            dialogType: 'profession'
+        }, '*');
+    }
     console.log("jobSetting");
 }
 
@@ -617,7 +666,13 @@ function showGameTarget() {
 }
 
 function mapcfgSetting() {
-    // TODO: 实现地图配置功能
+    // 通过 postMessage 向 electron 前端发送打开地图配置对话框的消息
+    if (typeof window.parent !== 'undefined') {
+        window.parent.postMessage({
+            type: 'openDialog',
+            dialogType: 'mapConfig'
+        }, '*');
+    }
     console.log("mapcfgSetting");
 }
 

@@ -2541,3 +2541,34 @@ backend/modules/sns/
 ├── xmpp_communication_adapter.py (XMPP通信)
 ├── utility_helpers.py (辅助函数)
 └── aichat_config_manager.py (配置管理)
+
+
+请你仔细研读如下几个文件，然后完成我给你的任务：
+以下2个是electron的前端文件
+renderer/js/modules/sns/snsHandlers.js
+renderer/js/modules/sns/SNSPage.js
+
+以下是electron加载的map.html
+scripts/map.html
+scripts/js/interact_python.js
+scripts/js/page_ui_menu.js
+
+具体任务如下：
+给map.html中的几个函数做下改造
+用户配置 userInfo()调用electron前端的SNSAvatarDialog就像snsAvatarConfigBtn按钮一样
+角色职业 jobSetting()调用electron前端的SNSProfessionDialog就像snsProfessionConfigBtn按钮一样
+角色调教 userSetting()调用electron前端的SNSSocialRoleDialog就像snsSocialRoleConfigBtn按钮一样
+地图设置 mapcfgSetting()调用electron前端的SNSMapConfigDialog就像snsMapConfigBtn按钮一样
+
+
+给renderer/js/modules/sns/snsHandlers.js里面的动作按钮点击事件actionBar.addEventListener('click'做下改造
+Action: home，则调用scripts/map.html中<span>家</span>这个按钮的点击
+Action: square，则调用scripts/map.html中<span>广场</span>这个按钮的点击
+Action: ai，则调用scripts/map.html中<span>ai</span>这个按钮的点击
+Action: move，则调用scripts/map.html中<span>移动</span>这个按钮的点击
+Action: board，则调用scripts/map.html中<span>信息板</span>这个按钮的点击
+以上5个按钮的点击可参考scripts/js/page_ui_menu.js里面的const buttonActions = {
+要求尽可能不要修改page_ui_menu.js里面的代码，你只要想办法调用就可以。
+
+
+

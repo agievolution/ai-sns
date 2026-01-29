@@ -102,7 +102,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
 
     // 打开链接
-    openUrl: (url) => ipcRenderer.send('open-url', url)
+    openUrl: (url) => ipcRenderer.send('open-url', url),
+
+    openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
+
+    downloadAndOpen: (url, filename) => ipcRenderer.invoke('download-and-open', { url, filename })
 });
 
 // 暴露平台信息

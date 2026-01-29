@@ -1,6 +1,10 @@
 const { app, BrowserWindow, BrowserView, ipcMain, Menu, Tray, dialog, shell, clipboard, globalShortcut } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const fsp = require('fs/promises');
+const http = require('http');
+const https = require('https');
 
 // Windows 10 + 无边框窗口：禁用 GPU 硬件加速（可选，根据需要启用）
 // app.disableHardwareAcceleration();
@@ -19,6 +23,62 @@ let browserView = null;
 let tray = null;
 let pythonProcess = null;
 let isQuitting = false;
+
+ipcMain.handle('open-path', async (event, filePath) => {
+    try {
+        if (!filePath) {
+            return 'Empty path';
+        }
+        const result = await shell.openPath(filePath);
+        return result;
+    } catch (e) {
+        return String(e);
+    }
+});
+
+ipcMain.handle('download-and-open', async (event, payload) => {
+    try {
+        const url = payload && payload.url;
+        const filename = (payload && payload.filename) ? String(payload.filename) : 'file';
+        if (!url) {
+            return 'Empty url';
+        }
+
+        console.log('[download-and-open] start', { url, filename });
+
+        const tempRoot = app.getPath('temp');
+        const dir = path.join(tempRoot, 'ai-sns-attachments');
+        await fsp.mkdir(dir, { recursive: true });
+
+        const safeName = path.basename(filename);
+        const targetPath = path.join(dir, `${Date.now()}_${Math.random().toString(16).slice(2)}_${safeName}`);
+
+        await new Promise((resolve, reject) => {
+            const mod = String(url).startsWith('https') ? https : http;
+            const req = mod.get(url, (res) => {
+                console.log('[download-and-open] http status', res.statusCode);
+                if (res.statusCode && res.statusCode >= 400) {
+                    reject(new Error(`HTTP ${res.statusCode}`));
+                    return;
+                }
+                const stream = fs.createWriteStream(targetPath);
+                res.pipe(stream);
+                stream.on('finish', () => stream.close(resolve));
+                stream.on('error', reject);
+            });
+            req.on('error', reject);
+        });
+
+        console.log('[download-and-open] saved', { targetPath });
+
+        const result = await shell.openPath(targetPath);
+        console.log('[download-and-open] openPath result', result);
+        return result;
+    } catch (e) {
+        console.error('[download-and-open] failed', e);
+        return String(e);
+    }
+});
 
 function toggleDevToolsForFocused() {
     const win = BrowserWindow.getFocusedWindow();

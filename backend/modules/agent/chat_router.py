@@ -6,6 +6,7 @@ Agent Chat Router - Agent问答API接口
 import logging
 import json
 import base64
+import uuid
 from typing import Optional
 from typing import List
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -101,6 +102,8 @@ async def agent_chat_stream_with_files(
 
         attachments_text_parts = []
         image_data_urls: List[str] = []
+        attachments_meta_full: List[dict] = []
+        attachments_public: List[dict] = []
 
         from pathlib import Path
         from backend.modules.km.document_loader import DocumentLoader
@@ -112,10 +115,34 @@ async def agent_chat_stream_with_files(
             filename = f.filename or 'unknown'
             content = await f.read()
 
+            safe_name = Path(filename).name
+            attachment_id = uuid.uuid4().hex
+            unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+            file_path = upload_dir / unique_name
+
+            try:
+                file_path.write_bytes(content)
+            except Exception:
+                continue
+
             content_type = f.content_type or ''
             if content_type.startswith('image/'):
                 b64 = base64.b64encode(content).decode('utf-8')
                 image_data_urls.append(f"data:{content_type};base64,{b64}")
+                meta = {
+                    'id': attachment_id,
+                    'name': safe_name,
+                    'size': len(content),
+                    'type': content_type,
+                    'saved_path': str(file_path.resolve())
+                }
+                attachments_meta_full.append(meta)
+                attachments_public.append({
+                    'id': attachment_id,
+                    'name': safe_name,
+                    'size': len(content),
+                    'type': content_type
+                })
                 continue
 
             suffix = Path(filename).suffix.lower()
@@ -129,17 +156,39 @@ async def agent_chat_stream_with_files(
                         text = ''
                 if text:
                     attachments_text_parts.append(f"[文件: {filename}]\n{text}")
-                continue
-
-            file_path = upload_dir / filename
-            try:
-                file_path.write_bytes(content)
-            except Exception:
+                meta = {
+                    'id': attachment_id,
+                    'name': safe_name,
+                    'size': len(content),
+                    'type': content_type or 'text/plain',
+                    'saved_path': str(file_path.resolve())
+                }
+                attachments_meta_full.append(meta)
+                attachments_public.append({
+                    'id': attachment_id,
+                    'name': safe_name,
+                    'size': len(content),
+                    'type': content_type or 'text/plain'
+                })
                 continue
 
             extracted = DocumentLoader.load_document(file_path)
             if extracted:
                 attachments_text_parts.append(f"[文件: {filename}]\n{extracted}")
+            meta = {
+                'id': attachment_id,
+                'name': safe_name,
+                'size': len(content),
+                'type': content_type,
+                'saved_path': str(file_path.resolve())
+            }
+            attachments_meta_full.append(meta)
+            attachments_public.append({
+                'id': attachment_id,
+                'name': safe_name,
+                'size': len(content),
+                'type': content_type
+            })
 
         attachments_text = "\n\n".join(attachments_text_parts)
 
@@ -151,10 +200,11 @@ async def agent_chat_stream_with_files(
                     use_memory=use_memory,
                     use_knowledge_base=use_knowledge_base,
                     attachments_text=attachments_text,
-                    image_data_urls=image_data_urls
+                    image_data_urls=image_data_urls,
+                    attachments_meta=attachments_meta_full
                 ):
                     yield f"data: {json.dumps({'content': chunk})}\n\n"
-                yield f"data: {json.dumps({'done': True})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'attachments': attachments_public})}\n\n"
             except Exception as e:
                 logger.error(f"流式生成失败: {e}", exc_info=True)
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"

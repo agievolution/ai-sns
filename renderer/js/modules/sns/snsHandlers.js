@@ -473,6 +473,7 @@ export default {
 
         if (!tabsContainer || !tabContent) return;
 
+        // 页签切换事件
         tabsContainer.addEventListener('click', (e) => {
             const tabBtn = e.target.closest('.status-tab');
             if (!tabBtn) return;
@@ -489,7 +490,45 @@ export default {
             tabContent.querySelectorAll('.tab-pane').forEach(pane => {
                 pane.classList.toggle('active', pane.dataset.tab === targetTab);
             });
+
+            // 滚动到激活的页签
+            tabBtn.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'nearest', 
+                inline: 'center' 
+            });
         });
+
+        // 检测滚动状态并添加渐变提示
+        const updateScrollIndicators = () => {
+            const scrollLeft = tabsContainer.scrollLeft;
+            const scrollWidth = tabsContainer.scrollWidth;
+            const clientWidth = tabsContainer.clientWidth;
+            const maxScroll = scrollWidth - clientWidth;
+
+            // 添加或移除滚动指示类
+            if (scrollLeft > 5) {
+                tabsContainer.classList.add('can-scroll-left');
+            } else {
+                tabsContainer.classList.remove('can-scroll-left');
+            }
+
+            if (scrollLeft < maxScroll - 5) {
+                tabsContainer.classList.add('can-scroll-right');
+            } else {
+                tabsContainer.classList.remove('can-scroll-right');
+            }
+        };
+
+        // 监听滚动事件
+        tabsContainer.addEventListener('scroll', updateScrollIndicators);
+
+        // 监听窗口大小变化
+        const resizeObserver = new ResizeObserver(updateScrollIndicators);
+        resizeObserver.observe(tabsContainer);
+
+        // 初始检查
+        setTimeout(updateScrollIndicators, 100);
     },
 
     /**
@@ -1254,8 +1293,47 @@ export default {
     /**
      * 处理打开 SNS Profile 页签请求
      */
-    handleOpenSNSProfile(url) {
+    handleOpenSNSProfile(url) {        
         console.log('handleOpenSNSProfile called with url:', url);
+
+        // URL 规范化处理
+        if (!url || typeof url !== 'string') {
+            console.error('Invalid URL provided:', url);
+            return;
+        }
+
+        // 去除首尾空格
+        url = url.trim();
+
+        // 检查是否有协议头
+        if (!url.match(/^https?:\/\//i)) {
+            // 判断是否是本地地址
+            if (url.startsWith('localhost') || url.startsWith('127.0.0.1') || url.startsWith('192.168.')) {
+                url = 'http://' + url;
+                console.log('Added http:// to local URL:', url);
+            } else if (url.startsWith('//')) {
+                // 协议相对 URL
+                url = 'https:' + url;
+                console.log('Added https: to protocol-relative URL:', url);
+            } else if (url.startsWith('/')) {
+                // 相对路径，使用当前服务器
+                url = 'http://localhost:8788' + url;
+                console.log('Converted relative path to absolute URL:', url);
+            } else {
+                // 默认添加 https://
+                url = 'https://' + url;
+                console.log('Added https:// to URL:', url);
+            }
+        }
+
+        // 验证 URL 格式
+        try {
+            new URL(url);
+        } catch (e) {
+            console.error('Invalid URL format after normalization:', url, e);
+            this.showToast('无效的 URL 格式: ' + url, 'error');
+            return;
+        }
 
         const statusTabs = document.getElementById('statusTabs');
         const statusTabContent = document.getElementById('statusTabContent');
@@ -1312,6 +1390,15 @@ export default {
         statusTabContent.querySelectorAll('.tab-pane').forEach(pane => {
             pane.classList.toggle('active', pane === profilePane);
         });
+
+        // 自动滚动到 Profile 页签（确保可见）
+        if (profileTab) {
+            profileTab.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'nearest', 
+                inline: 'center' 
+            });
+        }
 
         console.log('SNS Profile tab opened with URL:', url);
     },

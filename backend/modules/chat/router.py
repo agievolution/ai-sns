@@ -7,12 +7,15 @@ import logging
 from typing import Optional
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
 from .schemas import ChatRequest, StreamChatRequest, AiChatConfig
 from .service import ChatService
 from .streaming import StreamingService
 from .dependencies import get_chat_service, get_streaming_service
+
+from db.DBFactory import query_AIChatMessages_All as query_AIChatMessages
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +157,49 @@ async def get_conversation_messages(
         return {"success": True, "data": messages}
     except Exception as e:
         logger.error(f"Error getting conversation messages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/conversations/{conversation_id}/attachments/{attachment_id}")
+async def download_conversation_attachment(conversation_id: str, attachment_id: str):
+    try:
+        messages = query_AIChatMessages(limit=None, conversation_id=conversation_id, is_delete=False)
+        for msg in messages or []:
+            al = getattr(msg, 'attachment_list', None)
+            if not al:
+                continue
+            try:
+                attachments = json.loads(al)
+            except Exception:
+                continue
+            if not isinstance(attachments, list):
+                continue
+            for a in attachments:
+                if not isinstance(a, dict):
+                    continue
+                if a.get('id') != attachment_id:
+                    continue
+
+                saved_path = a.get('saved_path')
+                name = a.get('name') or 'file'
+                if not saved_path:
+                    raise HTTPException(status_code=404, detail='Attachment file not found')
+
+                p = Path(saved_path)
+                if not p.exists():
+                    raise HTTPException(status_code=404, detail='Attachment file not found')
+
+                return FileResponse(
+                    path=str(p),
+                    filename=name,
+                    media_type='application/octet-stream'
+                )
+
+        raise HTTPException(status_code=404, detail='Attachment not found')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading attachment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

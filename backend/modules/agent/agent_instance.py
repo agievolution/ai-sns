@@ -524,7 +524,8 @@ IMPORTANT Tool Usage Guidelines:
         use_memory: bool = True,
         use_knowledge_base: bool = True,
         attachments_text: str = "",
-        image_data_urls: Optional[List[str]] = None
+        image_data_urls: Optional[List[str]] = None,
+        attachments_meta: Optional[List[Dict[str, Any]]] = None
     ) -> AsyncIterator[str]:
         """
         流式问答
@@ -725,6 +726,7 @@ IMPORTANT Tool Usage Guidelines:
                                 flag=0,  # 0=send
                                 title=message[:50] if len(message) > 50 else message,
                                 content=message,
+                                attachment_list=json.dumps(attachments_meta, ensure_ascii=False) if attachments_meta else None,
                                 owner_name="User",
                                 owner_account="user",
                                 friend_name=self.name,
@@ -739,6 +741,7 @@ IMPORTANT Tool Usage Guidelines:
                                 agent_id=self.agent_id,  # 添加agent_id
                                 flag=0,  # 0=send
                                 content=message,
+                                attachment_list=json.dumps(attachments_meta, ensure_ascii=False) if attachments_meta else None,
                                 owner_name="User",
                                 owner_account="user",
                                 friend_name=self.name,

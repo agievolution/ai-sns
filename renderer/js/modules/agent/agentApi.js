@@ -65,7 +65,7 @@ const agentApi = {
 
                 if (done) {
                     if (callbacks.onEnd) {
-                        callbacks.onEnd();
+                        callbacks.onEnd([]);
                     }
                     break;
                 }
@@ -91,9 +91,9 @@ const agentApi = {
 
                             if (parsed.done) {
                                 if (callbacks.onEnd) {
-                                    callbacks.onEnd();
+                                    callbacks.onEnd(parsed.attachments || []);
                                 }
-                                return { success: true };
+                                return { success: true, attachments: parsed.attachments || [] };
                             }
 
                             if (parsed.content) {

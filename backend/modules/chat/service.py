@@ -3,6 +3,7 @@
 Chat module - Service layer
 """
 import asyncio
+import json
 import logging
 import os
 from typing import List, Dict, Any, Optional
@@ -249,10 +250,29 @@ class ChatService:
                 # Determine role from flag (0=user, 1=assistant)
                 role = "user" if msg.flag == 0 else "assistant"
 
+                attachments = []
+                try:
+                    if getattr(msg, 'attachment_list', None):
+                        raw = json.loads(msg.attachment_list)
+                        if isinstance(raw, list):
+                            attachments = [
+                                {
+                                    'id': a.get('id'),
+                                    'name': a.get('name'),
+                                    'size': a.get('size'),
+                                    'type': a.get('type')
+                                }
+                                for a in raw
+                                if isinstance(a, dict)
+                            ]
+                except Exception:
+                    attachments = []
+
                 result.append({
                     "id": msg.id,
                     "role": role,
                     "content": msg.content,
+                    "attachments": attachments,
                     "create_time": str(msg.create_time) if hasattr(msg, 'create_time') else None
                 })
 

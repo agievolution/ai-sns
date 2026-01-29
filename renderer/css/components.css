@@ -89,6 +89,7 @@
      background: var(--bg-secondary);
      border: 1px solid var(--border-color);
      color: var(--text-secondary);
+     cursor: pointer;
  }
 
 /* ========== SNS 页面 - 地图探索 ========== */
@@ -2349,11 +2350,43 @@ body.theme-dark .action-btn.active svg {
     display: flex;
     border-top: 1px solid var(--border-light);
     margin-top: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    /* 滚动条样式 */
+    scrollbar-width: auto;
+    scrollbar-color: var(--border-light) var(--bg-secondary, #f5f5f5);
+}
+
+/* Webkit 浏览器滚动条样式 */
+.status-tabs::-webkit-scrollbar {
+    height: 8px;
+}
+
+.status-tabs::-webkit-scrollbar-track {
+    background: var(--bg-secondary, #f5f5f5);
+    border-radius: 4px;
+}
+
+.status-tabs::-webkit-scrollbar-thumb {
+    background: var(--border-light);
+    border-radius: 4px;
+    border: 1px solid var(--bg-primary, #fff);
+}
+
+.status-tabs::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+    cursor: pointer;
+}
+
+.status-tabs::-webkit-scrollbar-thumb:active {
+    background: var(--color-primary, #1a73e8);
 }
 
 .status-tab {
-    flex: 1;
-    padding: 12px;
+    flex: 0 0 auto;
+    min-width: 80px;
+    padding: 12px 16px;
     background: transparent;
     border: none;
     font-size: 12px;
@@ -2361,6 +2394,11 @@ body.theme-dark .action-btn.active svg {
     cursor: pointer;
     transition: all 0.2s ease;
     border-top: 2px solid transparent;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
 }
 
 .status-tab:hover {
@@ -8576,25 +8614,87 @@ body.theme-dark .control-send-btn:hover {
 
 /* Tab close button */
 .status-tab .tab-close-btn {
-    display: inline-block;
-    margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
     padding: 0 4px;
     font-size: 16px;
     line-height: 1;
     color: var(--text-secondary);
     opacity: 0;
     transition: opacity 0.2s ease, color 0.2s ease;
+    cursor: pointer;
+    flex-shrink: 0;
 }
 
-.status-tab:hover .tab-close-btn {
-    opacity: 1;
+.status-tab:hover .tab-close-btn,
+.status-tab.active .tab-close-btn {
+    opacity: 0.7;
 }
 
 .status-tab .tab-close-btn:hover {
+    opacity: 1 !important;
     color: var(--color-danger, #f44336);
 }
 
 /* Dark theme support */
 body.theme-dark .profile-webview {
     background: var(--bg-primary);
+}
+
+/* 页签滚动提示 - 渐变效果 */
+.status-tabs::before,
+.status-tabs::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 10px; /* 留出滚动条空间（8px 高度 + 2px 间距） */
+    width: 30px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.status-tabs::before {
+    left: 0;
+    background: linear-gradient(to right, var(--bg-primary), transparent);
+}
+
+.status-tabs::after {
+    right: 0;
+    background: linear-gradient(to left, var(--bg-primary), transparent);
+}
+
+/* 当可以滚动时显示渐变 */
+.status-tabs.can-scroll-left::before {
+    opacity: 1;
+}
+
+.status-tabs.can-scroll-right::after {
+    opacity: 1;
+}
+
+/* 响应式优化 - 小屏幕下的页签样式 */
+@media (max-width: 768px) {
+    .status-tab {
+        min-width: 70px;
+        padding: 10px 12px;
+        font-size: 11px;
+    }
+    
+    .status-tab .tab-close-btn {
+        font-size: 14px;
+        margin-left: 2px;
+    }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 480px) {
+    .status-tab {
+        min-width: 60px;
+        padding: 8px 10px;
+        font-size: 10px;
+    }
 }

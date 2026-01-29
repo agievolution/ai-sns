@@ -64,6 +64,39 @@ const multiAgentHandlers = {
         console.log('[MultiAgentHandlers] 多Agent系统初始化完成');
     },
 
+    async downloadAndOpenAttachment(conversationId, attachmentId, filename) {
+        try {
+            if (window.electronAPI && typeof window.electronAPI.downloadAndOpen === 'function') {
+                const url = `http://127.0.0.1:8788/api/chat/conversations/${encodeURIComponent(conversationId)}/attachments/${encodeURIComponent(attachmentId)}`;
+                const result = await window.electronAPI.downloadAndOpen(url, filename || 'file');
+                if (result) {
+                    console.error('[MultiAgentHandlers] downloadAndOpen失败:', result);
+                    if (typeof Notification !== 'undefined' && Notification.error) {
+                        Notification.error(`打开附件失败: ${result}`);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[MultiAgentHandlers] downloadAndOpen异常:', e);
+            if (typeof Notification !== 'undefined' && Notification.error) {
+                Notification.error(`打开附件失败: ${e && e.message ? e.message : String(e)}`);
+            }
+        }
+    },
+
+    createAttachmentBlock(conversationId, attachments) {
+        const items = Array.isArray(attachments) ? attachments : [];
+        if (items.length === 0) return '';
+
+        const chips = items.map(a => {
+            const id = (a && a.id) ? String(a.id) : '';
+            const name = (a && a.name) ? a.name : 'file';
+            return `<span class="attachment-chip" data-conversation-id="${this.escapeHtml(String(conversationId || ''))}" data-attachment-id="${this.escapeHtml(id)}">${this.escapeHtml(name)}</span>`;
+        }).join('');
+
+        return `<div class="message-attachments">${chips}</div>`;
+    },
+
     /**
      * 绑定全局事件
      */
@@ -272,6 +305,60 @@ const multiAgentHandlers = {
             }
         });
 
+        document.addEventListener('click', (e) => {
+            const fileItem = e.target.closest('.file-item[data-file-path][data-agent-id]');
+            if (fileItem && !e.target.closest('.file-remove-btn')) {
+                const filePath = fileItem.dataset.filePath;
+                if (filePath) {
+                    this.openFilePath(filePath);
+                }
+            }
+
+            const chip = e.target.closest('.attachment-chip');
+            if (chip) {
+                const attachmentId = (chip.dataset && chip.dataset.attachmentId) ? chip.dataset.attachmentId : '';
+                const conversationId = (chip.dataset && chip.dataset.conversationId) ? chip.dataset.conversationId : '';
+                const filePath = (chip.dataset && chip.dataset.filePath) ? chip.dataset.filePath : '';
+                const filename = (chip.textContent || '').trim();
+
+                console.log('[MultiAgentHandlers] 点击气泡附件chip:', {
+                    outerHTML: chip.outerHTML,
+                    dataset: { ...chip.dataset },
+                    conversationId,
+                    attachmentId,
+                    filePath,
+                    filename,
+                    hasElectronAPI: !!window.electronAPI,
+                    hasDownloadAndOpen: !!(window.electronAPI && window.electronAPI.downloadAndOpen)
+                });
+
+                // 兼容旧逻辑：如果有本地路径，直接打开
+                if (filePath) {
+                    this.openFilePath(filePath);
+                    return;
+                }
+
+                // 新逻辑：从后端按attachment_id下载打开
+                if (!conversationId || !attachmentId) {
+                    console.warn('[MultiAgentHandlers] 附件缺少conversationId或attachmentId，无法下载打开');
+                    if (typeof Notification !== 'undefined' && Notification.error) {
+                        Notification.error('附件信息不完整，请重新加载对话或重新发送后再点击');
+                    }
+                    return;
+                }
+
+                if (!window.electronAPI || typeof window.electronAPI.downloadAndOpen !== 'function') {
+                    console.error('[MultiAgentHandlers] electronAPI.downloadAndOpen 不可用（请重启Electron或检查preload）');
+                    if (typeof Notification !== 'undefined' && Notification.error) {
+                        Notification.error('打开附件失败：Electron能力未就绪，请重启应用');
+                    }
+                    return;
+                }
+
+                this.downloadAndOpenAttachment(conversationId, attachmentId, filename);
+            }
+        }, true);
+
         console.log('[MultiAgentHandlers] 所有事件绑定完成');
     },
 
@@ -303,6 +390,7 @@ const multiAgentHandlers = {
                 id: 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
                 key,
                 file: f,
+                path: f.path || '',
                 name: f.name,
                 size: f.size,
                 type: f.type
@@ -310,6 +398,7 @@ const multiAgentHandlers = {
         }
 
         this.renderAttachments(agentId);
+        this.showFileTab(agentId);
 
         if (typeof Notification !== 'undefined' && Notification.success) {
             Notification.success(`已添加 ${files.length} 个附件`);
@@ -322,10 +411,91 @@ const multiAgentHandlers = {
         this.renderAttachments(agentId);
     },
 
+    updateLastUserMessageAttachmentIds(agentId, conversationId, savedAttachments) {
+        const list = Array.isArray(savedAttachments) ? savedAttachments : [];
+        if (list.length === 0) return;
+
+        const container = document.getElementById(`chatMessages-${agentId}`);
+        if (!container) return;
+
+        const userMessages = container.querySelectorAll('.message-item.user-message');
+        const last = userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
+        if (!last) return;
+
+        const chips = last.querySelectorAll('.attachment-chip');
+        if (!chips || chips.length === 0) return;
+
+        const byName = new Map();
+        for (const a of list) {
+            const name = String((a && a.name) || '');
+            const id = String((a && a.id) || '');
+            if (name && id && !byName.has(name)) {
+                byName.set(name, id);
+            }
+        }
+
+        chips.forEach(chip => {
+            const label = (chip.textContent || '').trim();
+            const id = byName.get(label);
+            if (id) {
+                chip.dataset.attachmentId = id;
+                chip.dataset.conversationId = String(conversationId || '');
+            }
+        });
+    },
+
     clearAttachments(agentId) {
         const state = agentState.ensureAgentState(agentId);
         state.attachments = [];
         this.renderAttachments(agentId);
+    },
+
+    setHistoryAttachments(agentId, attachments) {
+        const state = agentState.ensureAgentState(agentId);
+        const list = Array.isArray(attachments) ? attachments : [];
+        const seen = new Set();
+        state.historyAttachments = list.filter(a => {
+            const p = String((a && (a.saved_path || a.file_path || a.path)) || '');
+            if (!p) return false;
+            if (seen.has(p)) return false;
+            seen.add(p);
+            return true;
+        }).map(a => {
+            const p = (a && (a.saved_path || a.file_path || a.path)) || '';
+            return {
+                name: (a && a.name) || 'file',
+                size: (a && a.size) || 0,
+                type: (a && a.type) || (a && a.content_type) || '',
+                path: String(p)
+            };
+        });
+        this.renderAttachments(agentId);
+    },
+
+    showFileTab(agentId) {
+        const panel = document.getElementById(`agentSettingsPanel-${agentId}`);
+        const resizer = document.getElementById(`agentPanelResizer-${agentId}`);
+        if (panel) {
+            panel.classList.remove('collapsed');
+        }
+        if (resizer) {
+            resizer.classList.remove('collapsed');
+        }
+
+        const fileTab = document.querySelector(`#settingsTabs-${agentId} .settings-tab[data-tab="file"]`);
+        if (fileTab) {
+            fileTab.click();
+        }
+    },
+
+    openFilePath(filePath) {
+        try {
+            if (window.electronAPI && typeof window.electronAPI.openPath === 'function') {
+                window.electronAPI.openPath(filePath);
+                return;
+            }
+        } catch (e) {
+        }
     },
 
     renderAttachments(agentId) {
@@ -348,8 +518,10 @@ const multiAgentHandlers = {
         }
 
         fileList.innerHTML = attachments.map(att => {
+            const filePath = String(att.path || '');
+            const isPending = true;
             return `
-                <div class="file-item" data-attachment-id="${this.escapeHtml(att.id)}" data-agent-id="${agentId}">
+                <div class="file-item" data-attachment-id="${this.escapeHtml(att.id || '')}" data-agent-id="${agentId}" data-file-path="${this.escapeHtml(filePath)}">
                     <div class="file-icon">
                         <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                             <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
@@ -359,11 +531,13 @@ const multiAgentHandlers = {
                         <div class="file-name">${this.escapeHtml(att.name)}</div>
                         <div class="file-size">${this.formatFileSize(att.size)}</div>
                     </div>
-                    <button class="file-remove-btn" title="移除文件" data-attachment-id="${this.escapeHtml(att.id)}" data-agent-id="${agentId}">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
-                    </button>
+                    ${isPending ? `
+                        <button class="file-remove-btn" title="移除文件" data-attachment-id="${this.escapeHtml(att.id || '')}" data-agent-id="${agentId}">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                            </svg>
+                        </button>
+                    ` : ''}
                 </div>
             `;
         }).join('');
@@ -373,7 +547,9 @@ const multiAgentHandlers = {
                 e.stopPropagation();
                 const aId = btn.dataset.attachmentId;
                 const aAgentId = parseInt(btn.dataset.agentId);
-                this.removeAttachment(aAgentId, aId);
+                if (aId) {
+                    this.removeAttachment(aAgentId, aId);
+                }
             });
         });
     },
@@ -510,9 +686,9 @@ const multiAgentHandlers = {
 
         const state = agentState.ensureAgentState(agentId);
         const attachments = state.attachments || [];
-        const attachmentNames = attachments.map(a => a.name).filter(Boolean);
-        const attachmentBlock = attachmentNames.length > 0
-            ? `<div class="message-attachments">${attachmentNames.map(n => `<span class="attachment-chip">${this.escapeHtml(n)}</span>`).join('')}</div>`
+        const currentConversationId = agentState.getConversationId();
+        const attachmentBlock = attachments.length > 0
+            ? `<div class="message-attachments">${attachments.map(a => `<span class="attachment-chip" data-conversation-id="${this.escapeHtml(String(currentConversationId || ''))}" data-attachment-id="">${this.escapeHtml(a.name || 'file')}</span>`).join('')}</div>`
             : '';
 
         // 添加用户消息
@@ -537,10 +713,11 @@ const multiAgentHandlers = {
         agentState.addMessage('user', message);
 
         // 获取或生成 conversation_id
-        let conversationId = agentState.getConversationId();
+        let conversationId = currentConversationId;
         if (!conversationId) {
             conversationId = agentState.generateConversationId();
             agentState.setConversationId(conversationId);
+            console.log(`[MultiAgentHandlers] Agent ${agentId} 发送消息, conversation_id=${conversationId}`);
             console.log('[MultiAgentHandlers] 生成新对话ID:', conversationId);
         }
 
@@ -588,9 +765,12 @@ const multiAgentHandlers = {
                     agentState.appendStreamingContent(content);
                     this.updateStreamingMessageForAgent(agentState.getStreamingContent(), agentId);
                 },
-                onEnd: () => {
+                onEnd: (savedAttachments) => {
                     this.finalizeStreamingMessageForAgent(agentId);
                     this.clearAttachments(agentId);
+                    if (savedAttachments && savedAttachments.length > 0) {
+                        this.updateLastUserMessageAttachmentIds(agentId, conversationId, savedAttachments);
+                    }
                     agentState.clearRequestId();
                     enableSendBtn();
                     // 重新加载聊天列表
@@ -605,12 +785,13 @@ const multiAgentHandlers = {
 
             // 调用Agent专属的流式接口
             console.log('[MultiAgentHandlers] 调用Agent专属接口:', `/api/agent/${agentId}/chat/stream`);
-            if (attachments.length > 0) {
+            const uploadFiles = (attachments || []).filter(a => a && a.file).map(a => a.file);
+            if (uploadFiles.length > 0) {
                 await agentApi.agentChatStreamWithFiles(
                     agentId,
                     message,
                     conversationId,
-                    attachments.map(a => a.file),
+                    uploadFiles,
                     callbacks,
                     {
                         use_memory: true,
@@ -776,8 +957,18 @@ const multiAgentHandlers = {
                     this.formatTime(msg.create_time)
                 );
                 messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
+
+                if (msg.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+                    const last = messagesContainer.lastElementChild;
+                    const body = last ? last.querySelector('.message-body') : null;
+                    if (body) {
+                        body.insertAdjacentHTML('beforeend', this.createAttachmentBlock(conversationId, msg.attachments));
+                    }
+                }
                 agentState.addMessage(msg.role, msg.content);
             }
+
+            this.clearAttachments(agentId);
 
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
 

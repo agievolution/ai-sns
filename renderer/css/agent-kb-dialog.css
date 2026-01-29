@@ -1,0 +1,225 @@
+/* Agent Knowledge Base Configuration Dialog */
+
+.agent-kb-dialog {
+    background: var(--bg-content);
+    border-radius: 12px;
+    box-shadow: var(--shadow-xl);
+    width: 90%;
+    max-width: 720px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease;
+}
+
+.agent-kb-dialog .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.agent-kb-dialog .dialog-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.agent-kb-dialog .dialog-close-btn {
+    background: none;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    color: var(--text-tertiary);
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.agent-kb-dialog .dialog-close-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.agent-kb-dialog .dialog-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 24px;
+    background: var(--bg-content);
+}
+
+.kb-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.kb-search svg {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.kb-search input {
+    flex: 1;
+    border: none;
+    background: none;
+    outline: none;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.kb-search input::placeholder {
+    color: var(--text-muted);
+}
+
+.kb-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.kb-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.kb-list::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+.kb-list::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+.kb-list::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+.kb-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.kb-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--color-primary);
+}
+
+.kb-item.selected {
+    background: var(--color-primary-bg);
+    border-color: var(--color-primary);
+}
+
+.kb-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+.kb-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.kb-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.kb-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selected-kb-summary {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.selected-kb-summary .summary-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.selected-kb-summary strong {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.agent-kb-dialog .dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.agent-kb-dialog .btn-secondary,
+.agent-kb-dialog .btn-primary {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.agent-kb-dialog .btn-secondary {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.agent-kb-dialog .btn-secondary:hover {
+    background: var(--bg-hover);
+}
+
+.agent-kb-dialog .btn-primary {
+    background: var(--color-primary);
+    color: var(--text-inverse);
+}
+
+.agent-kb-dialog .btn-primary:hover {
+    background: var(--color-primary-hover);
+}
+
+@media (max-width: 768px) {
+    .agent-kb-dialog {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .agent-kb-dialog .dialog-header,
+    .agent-kb-dialog .dialog-body,
+    .agent-kb-dialog .dialog-footer {
+        padding: 16px;
+    }
+}

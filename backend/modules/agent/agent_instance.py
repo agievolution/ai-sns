@@ -240,19 +240,31 @@ IMPORTANT Tool Usage Guidelines:
             return ""
 
         try:
-            # TODO: 实现实际的知识库检索逻辑
-            # 这里需要调用 langchainhandler 或向量数据库
-            from langchainhandler import getvectorkm_String
+            from backend.modules.km.vector_service import get_vector_service
+
+            vector_service = get_vector_service()
 
             kb_results = []
             for kb in self.knowledge_bases:
-                kb_id = kb.get('id') or kb.get('name')
+                km_id = kb.get('km_id') or kb.get('id') or kb.get('name')
+                kb_name = kb.get('name', km_id)
+
                 try:
-                    result = getvectorkm_String(kb_id, query)
-                    if result:
-                        kb_results.append(f"[来自知识库 {kb.get('name', kb_id)}]\n{result}")
+                    hits = vector_service.search(str(km_id), query, top_k=5)
+                    if not hits:
+                        continue
+
+                    chunks = []
+                    for h in hits:
+                        content = (h or {}).get('content', '')
+                        if content:
+                            chunks.append(content)
+
+                    if chunks:
+                        kb_results.append(f"[来自知识库 {kb_name}]\n" + "\n---\n".join(chunks))
+
                 except Exception as e:
-                    logger.error(f"检索知识库 {kb_id} 失败: {e}")
+                    logger.error(f"检索知识库 {km_id} 失败: {e}")
 
             return "\n\n".join(kb_results) if kb_results else ""
         except Exception as e:
@@ -357,7 +369,9 @@ IMPORTANT Tool Usage Guidelines:
         conversation_id: Optional[str] = None,
         use_memory: bool = True,
         use_knowledge_base: bool = True,
-        stream: bool = False
+        stream: bool = False,
+        attachments_text: str = "",
+        image_data_urls: Optional[List[str]] = None
     ) -> str:
         """
         非流式问答
@@ -408,11 +422,18 @@ IMPORTANT Tool Usage Guidelines:
                             'content': msg['content']
                         })
 
-            # 添加当前用户消息
-            messages.append({
-                'role': 'user',
-                'content': message
-            })
+            user_text = message
+            if attachments_text:
+                user_text += f"\n\n附件内容：\n{attachments_text}"
+
+            if image_data_urls and self.get_model_name().lower().startswith('gpt-4o'):
+                content_parts = [{'type': 'text', 'text': user_text}]
+                for url in image_data_urls:
+                    if url:
+                        content_parts.append({'type': 'image_url', 'image_url': {'url': url}})
+                messages.append({'role': 'user', 'content': content_parts})
+            else:
+                messages.append({'role': 'user', 'content': user_text})
 
             # 准备工具
             tools = self._prepare_tools_schema()
@@ -501,7 +522,9 @@ IMPORTANT Tool Usage Guidelines:
         message: str,
         conversation_id: Optional[str] = None,
         use_memory: bool = True,
-        use_knowledge_base: bool = True
+        use_knowledge_base: bool = True,
+        attachments_text: str = "",
+        image_data_urls: Optional[List[str]] = None
     ) -> AsyncIterator[str]:
         """
         流式问答
@@ -557,11 +580,18 @@ IMPORTANT Tool Usage Guidelines:
                             'content': msg['content']
                         })
 
-            # 添加当前用户消息
-            messages.append({
-                'role': 'user',
-                'content': message
-            })
+            user_text = message
+            if attachments_text:
+                user_text += f"\n\n附件内容：\n{attachments_text}"
+
+            if image_data_urls and self.get_model_name().lower().startswith('gpt-4o'):
+                content_parts = [{'type': 'text', 'text': user_text}]
+                for url in image_data_urls:
+                    if url:
+                        content_parts.append({'type': 'image_url', 'image_url': {'url': url}})
+                messages.append({'role': 'user', 'content': content_parts})
+            else:
+                messages.append({'role': 'user', 'content': user_text})
 
             # 准备工具
             tools = self._prepare_tools_schema()

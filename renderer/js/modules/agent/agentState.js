@@ -38,9 +38,29 @@ const agentState = {
                 currentModelConfig: null,
                 currentRoleConfig: null,
                 streamingContent: '',
-                requestId: null
+                requestId: null,
+                attachments: []
             };
         }
+    },
+
+    ensureAgentState(agentId) {
+        if (!this.agentStates[agentId]) {
+            this.agentStates[agentId] = {
+                chatHistory: [],
+                conversationId: null,
+                currentModelConfig: null,
+                currentRoleConfig: null,
+                streamingContent: '',
+                requestId: null,
+                attachments: []
+            };
+        }
+        return this.agentStates[agentId];
+    },
+
+    getAgentState(agentId) {
+        return this.agentStates[agentId] || null;
     },
 
     /**

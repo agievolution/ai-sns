@@ -197,14 +197,15 @@ class AgentManager:
 
                 # 查询知识库配置
                 for kb_id in kb_ids:
-                    kb = query_KMCfg(kb_id)
+                    kb = query_KMCfg(km_id=kb_id)
                     if kb:
                         kbs.append({
-                            'id': kb_id,
+                            'id': getattr(kb, 'id', None),
+                            'km_id': getattr(kb, 'km_id', kb_id),
                             'name': getattr(kb, 'name', kb_id),
-                            'description': getattr(kb, 'description', ''),
-                            'km_type': getattr(kb, 'km_type', 'vector'),
-                            'path': getattr(kb, 'path', '')
+                            'memo': getattr(kb, 'memo', ''),
+                            'kmtype': getattr(kb, 'kmtype', ''),
+                            'kmpath': getattr(kb, 'kmpath', '')
                         })
 
         except Exception as e:

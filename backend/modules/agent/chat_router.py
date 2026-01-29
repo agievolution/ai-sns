@@ -5,8 +5,10 @@ Agent Chat Router - Agent问答API接口
 """
 import logging
 import json
+import base64
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from typing import List
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -80,6 +82,97 @@ async def agent_chat_by_id(
         raise
     except Exception as e:
         logger.error(f"Agent问答失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{agent_id}/chat/stream-with-files")
+async def agent_chat_stream_with_files(
+    agent_id: int,
+    message: str = Form(...),
+    conversation_id: Optional[str] = Form(None),
+    use_memory: bool = Form(True),
+    use_knowledge_base: bool = Form(True),
+    files: List[UploadFile] = File(default=[])
+):
+    try:
+        agent = agent_manager.get_agent_by_id(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+
+        attachments_text_parts = []
+        image_data_urls: List[str] = []
+
+        from pathlib import Path
+        from backend.modules.km.document_loader import DocumentLoader
+
+        upload_dir = Path(f"uploads/agent_attachments/{agent_id}")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        for f in files or []:
+            filename = f.filename or 'unknown'
+            content = await f.read()
+
+            content_type = f.content_type or ''
+            if content_type.startswith('image/'):
+                b64 = base64.b64encode(content).decode('utf-8')
+                image_data_urls.append(f"data:{content_type};base64,{b64}")
+                continue
+
+            suffix = Path(filename).suffix.lower()
+            if suffix in {'.txt', '.md', '.markdown'}:
+                try:
+                    text = content.decode('utf-8')
+                except Exception:
+                    try:
+                        text = content.decode('gbk')
+                    except Exception:
+                        text = ''
+                if text:
+                    attachments_text_parts.append(f"[文件: {filename}]\n{text}")
+                continue
+
+            file_path = upload_dir / filename
+            try:
+                file_path.write_bytes(content)
+            except Exception:
+                continue
+
+            extracted = DocumentLoader.load_document(file_path)
+            if extracted:
+                attachments_text_parts.append(f"[文件: {filename}]\n{extracted}")
+
+        attachments_text = "\n\n".join(attachments_text_parts)
+
+        async def generate():
+            try:
+                async for chunk in agent.chat_stream(
+                    message=message,
+                    conversation_id=conversation_id,
+                    use_memory=use_memory,
+                    use_knowledge_base=use_knowledge_base,
+                    attachments_text=attachments_text,
+                    image_data_urls=image_data_urls
+                ):
+                    yield f"data: {json.dumps({'content': chunk})}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+            except Exception as e:
+                logger.error(f"流式生成失败: {e}", exc_info=True)
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Agent流式问答失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

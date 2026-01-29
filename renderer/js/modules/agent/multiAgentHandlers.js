@@ -256,7 +256,134 @@ const multiAgentHandlers = {
             }
         });
 
+        document.addEventListener('click', (e) => {
+            const attachBtn = e.target.closest('.toolbar-icon-btn[title="附件"][data-agent-id]');
+            if (attachBtn) {
+                const agentId = parseInt(attachBtn.dataset.agentId);
+                this.openAttachmentPicker(agentId);
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            const uploadBtn = e.target.closest('.file-upload-btn[data-agent-id]');
+            if (uploadBtn) {
+                const agentId = parseInt(uploadBtn.dataset.agentId);
+                this.openAttachmentPicker(agentId);
+            }
+        });
+
         console.log('[MultiAgentHandlers] 所有事件绑定完成');
+    },
+
+    openAttachmentPicker(agentId) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*,text/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.md,.markdown';
+
+        input.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length > 0) {
+                this.addAttachments(agentId, files);
+            }
+        });
+
+        input.click();
+    },
+
+    addAttachments(agentId, files) {
+        const state = agentState.ensureAgentState(agentId);
+        state.attachments = state.attachments || [];
+
+        const existingKeys = new Set(state.attachments.map(a => a.key));
+        for (const f of files) {
+            const key = `${f.name}:${f.size}:${f.lastModified}`;
+            if (existingKeys.has(key)) continue;
+            state.attachments.push({
+                id: 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                key,
+                file: f,
+                name: f.name,
+                size: f.size,
+                type: f.type
+            });
+        }
+
+        this.renderAttachments(agentId);
+
+        if (typeof Notification !== 'undefined' && Notification.success) {
+            Notification.success(`已添加 ${files.length} 个附件`);
+        }
+    },
+
+    removeAttachment(agentId, attachmentId) {
+        const state = agentState.ensureAgentState(agentId);
+        state.attachments = (state.attachments || []).filter(a => a.id !== attachmentId);
+        this.renderAttachments(agentId);
+    },
+
+    clearAttachments(agentId) {
+        const state = agentState.ensureAgentState(agentId);
+        state.attachments = [];
+        this.renderAttachments(agentId);
+    },
+
+    renderAttachments(agentId) {
+        const fileList = document.getElementById(`chatFileList-${agentId}`);
+        if (!fileList) return;
+
+        const state = agentState.ensureAgentState(agentId);
+        const attachments = state.attachments || [];
+
+        if (attachments.length === 0) {
+            fileList.innerHTML = `
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="#ccc">
+                        <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                    </svg>
+                    <p>暂无附件</p>
+                </div>
+            `;
+            return;
+        }
+
+        fileList.innerHTML = attachments.map(att => {
+            return `
+                <div class="file-item" data-attachment-id="${this.escapeHtml(att.id)}" data-agent-id="${agentId}">
+                    <div class="file-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                        </svg>
+                    </div>
+                    <div class="file-info">
+                        <div class="file-name">${this.escapeHtml(att.name)}</div>
+                        <div class="file-size">${this.formatFileSize(att.size)}</div>
+                    </div>
+                    <button class="file-remove-btn" title="移除文件" data-attachment-id="${this.escapeHtml(att.id)}" data-agent-id="${agentId}">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        fileList.querySelectorAll('.file-remove-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const aId = btn.dataset.attachmentId;
+                const aAgentId = parseInt(btn.dataset.agentId);
+                this.removeAttachment(aAgentId, aId);
+            });
+        });
+    },
+
+    formatFileSize(bytes) {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     },
 
     /**
@@ -381,6 +508,13 @@ const multiAgentHandlers = {
             minute: '2-digit'
         });
 
+        const state = agentState.ensureAgentState(agentId);
+        const attachments = state.attachments || [];
+        const attachmentNames = attachments.map(a => a.name).filter(Boolean);
+        const attachmentBlock = attachmentNames.length > 0
+            ? `<div class="message-attachments">${attachmentNames.map(n => `<span class="attachment-chip">${this.escapeHtml(n)}</span>`).join('')}</div>`
+            : '';
+
         // 添加用户消息
         const userMessageHtml = `
             <div class="message-item user-message">
@@ -391,7 +525,7 @@ const multiAgentHandlers = {
                     <span class="message-sender">You</span>
                     <span class="message-time">${timeStr}</span>
                 </div>
-                <div class="message-body">${this.escapeHtml(message)}</div>
+                <div class="message-body">${this.escapeHtml(message)}${attachmentBlock}</div>
             </div>
         `;
         messagesContainer.insertAdjacentHTML('beforeend', userMessageHtml);
@@ -456,6 +590,7 @@ const multiAgentHandlers = {
                 },
                 onEnd: () => {
                     this.finalizeStreamingMessageForAgent(agentId);
+                    this.clearAttachments(agentId);
                     agentState.clearRequestId();
                     enableSendBtn();
                     // 重新加载聊天列表
@@ -470,16 +605,30 @@ const multiAgentHandlers = {
 
             // 调用Agent专属的流式接口
             console.log('[MultiAgentHandlers] 调用Agent专属接口:', `/api/agent/${agentId}/chat/stream`);
-            await agentApi.agentChatStream(
-                agentId,
-                message,
-                conversationId,
-                callbacks,
-                {
-                    use_memory: true,
-                    use_knowledge_base: true
-                }
-            );
+            if (attachments.length > 0) {
+                await agentApi.agentChatStreamWithFiles(
+                    agentId,
+                    message,
+                    conversationId,
+                    attachments.map(a => a.file),
+                    callbacks,
+                    {
+                        use_memory: true,
+                        use_knowledge_base: true
+                    }
+                );
+            } else {
+                await agentApi.agentChatStream(
+                    agentId,
+                    message,
+                    conversationId,
+                    callbacks,
+                    {
+                        use_memory: true,
+                        use_knowledge_base: true
+                    }
+                );
+            }
 
             // 设置超时处理
             setTimeout(() => {

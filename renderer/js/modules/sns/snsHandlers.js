@@ -609,6 +609,12 @@ export default {
                     case 'togglePanels':
                         this.handleTogglePanels(data.action);
                         break;
+                    case 'openSNSProfile':
+                        this.handleOpenSNSProfile(data.url);
+                        break;
+                    case 'closeSNSProfile':
+                        this.handleCloseSNSProfile();
+                        break;
                     default:
                         console.log('未知消息类型:', data.type);
                 }
@@ -1243,5 +1249,108 @@ export default {
                 console.log('SNS panel expanded');
             }
         }
+    },
+
+    /**
+     * 处理打开 SNS Profile 页签请求
+     */
+    handleOpenSNSProfile(url) {
+        console.log('handleOpenSNSProfile called with url:', url);
+
+        const statusTabs = document.getElementById('statusTabs');
+        const statusTabContent = document.getElementById('statusTabContent');
+
+        if (!statusTabs || !statusTabContent) {
+            console.warn('Status tabs container not found');
+            return;
+        }
+
+        // 检查是否已存在 Profile 页签
+        let profileTab = statusTabs.querySelector('.status-tab[data-tab="profile"]');
+        let profilePane = statusTabContent.querySelector('.tab-pane[data-tab="profile"]');
+
+        if (!profileTab) {
+            // 创建 Profile 页签按钮
+            profileTab = document.createElement('button');
+            profileTab.className = 'status-tab';
+            profileTab.dataset.tab = 'profile';
+            profileTab.innerHTML = `Profile <span class="tab-close-btn" title="关闭">×</span>`;
+            statusTabs.appendChild(profileTab);
+
+            // 绑定关闭按钮事件
+            const closeBtn = profileTab.querySelector('.tab-close-btn');
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.handleCloseSNSProfile();
+            });
+        }
+
+        if (!profilePane) {
+            // 创建 Profile 页签内容
+            profilePane = document.createElement('div');
+            profilePane.className = 'tab-pane';
+            profilePane.dataset.tab = 'profile';
+            profilePane.innerHTML = `
+                <div class="profile-webview-container">
+                    <iframe src="${url}" class="profile-webview" frameborder="0"></iframe>
+                </div>
+            `;
+            statusTabContent.appendChild(profilePane);
+        } else {
+            // 更新现有 iframe 的 URL
+            const iframe = profilePane.querySelector('.profile-webview');
+            if (iframe) {
+                iframe.src = url;
+            }
+        }
+
+        // 切换到 Profile 页签
+        statusTabs.querySelectorAll('.status-tab').forEach(btn => {
+            btn.classList.toggle('active', btn === profileTab);
+        });
+
+        statusTabContent.querySelectorAll('.tab-pane').forEach(pane => {
+            pane.classList.toggle('active', pane === profilePane);
+        });
+
+        console.log('SNS Profile tab opened with URL:', url);
+    },
+
+    /**
+     * 处理关闭 SNS Profile 页签请求
+     */
+    handleCloseSNSProfile() {
+        console.log('handleCloseSNSProfile called');
+
+        const statusTabs = document.getElementById('statusTabs');
+        const statusTabContent = document.getElementById('statusTabContent');
+
+        if (!statusTabs || !statusTabContent) {
+            console.warn('Status tabs container not found');
+            return;
+        }
+
+        // 查找并移除 Profile 页签
+        const profileTab = statusTabs.querySelector('.status-tab[data-tab="profile"]');
+        const profilePane = statusTabContent.querySelector('.tab-pane[data-tab="profile"]');
+
+        if (profileTab) {
+            profileTab.remove();
+        }
+
+        if (profilePane) {
+            profilePane.remove();
+        }
+
+        // 切换到第一个页签（Process）
+        const firstTab = statusTabs.querySelector('.status-tab');
+        const firstPane = statusTabContent.querySelector('.tab-pane');
+
+        if (firstTab && firstPane) {
+            firstTab.classList.add('active');
+            firstPane.classList.add('active');
+        }
+
+        console.log('SNS Profile tab closed');
     }
 };

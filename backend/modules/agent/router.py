@@ -10,6 +10,7 @@ from .schemas import AgentConfig, AgentResponse, AgentUpdateConfig
 from .service import AgentService
 from .dependencies import get_agent_service
 from .agent_manager import AgentManager
+from db.DBFactory import Session, AgentCfg
 
 logger = logging.getLogger(__name__)
 
@@ -235,4 +236,59 @@ async def get_available_tools(
     except Exception as e:
         logger.error(f"Error getting available tools: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{agent_id}/knowledge-bases", response_model=dict)
+async def get_agent_knowledge_bases(agent_id: int):
+    """Get agent's configured knowledge bases (km_id list)"""
+    session = Session()
+    try:
+        agent = session.query(AgentCfg).filter_by(id=agent_id).first()
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        kms_str = getattr(agent, 'kms', '') or ''
+        km_ids = [k.strip() for k in kms_str.split(',') if k.strip()]
+        return {
+            "success": True,
+            "data": {
+                "agent_id": agent_id,
+                "km_ids": km_ids
+            }
+        }
+    finally:
+        session.close()
+
+
+@router.post("/{agent_id}/knowledge-bases", response_model=dict)
+async def update_agent_knowledge_bases(agent_id: int, request_body: dict):
+    """Update agent's knowledge base list and reload agent instance"""
+    km_ids = request_body.get('km_ids', [])
+    if km_ids is None:
+        km_ids = []
+
+    if not isinstance(km_ids, list):
+        raise HTTPException(status_code=400, detail="km_ids must be a list")
+
+    normalized = []
+    for item in km_ids:
+        s = str(item).strip()
+        if s and s not in normalized:
+            normalized.append(s)
+
+    session = Session()
+    try:
+        agent = session.query(AgentCfg).filter_by(id=agent_id).first()
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        agent.kms = ','.join(normalized)
+        session.commit()
+
+        agent_manager = AgentManager()
+        agent_manager.reload_agent(agent_id)
+
+        return {"success": True, "data": {"agent_id": agent_id, "km_ids": normalized}}
+    finally:
+        session.close()
 

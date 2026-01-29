@@ -30,6 +30,94 @@ const agentApi = {
         }
     },
 
+    async agentChatStreamWithFiles(agentId, message, conversationId = null, files = [], callbacks = {}, options = {}) {
+        try {
+            const formData = new FormData();
+            formData.append('message', message);
+            if (conversationId) {
+                formData.append('conversation_id', conversationId);
+            }
+            formData.append('use_memory', options.use_memory !== false ? 'true' : 'false');
+            formData.append('use_knowledge_base', options.use_knowledge_base !== false ? 'true' : 'false');
+
+            (files || []).forEach(f => {
+                formData.append('files', f);
+            });
+
+            const response = await fetch(`http://localhost:8788/api/agent/${agentId}/chat/stream-with-files`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'text/event-stream'
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                    if (callbacks.onEnd) {
+                        callbacks.onEnd();
+                    }
+                    break;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6);
+
+                        try {
+                            const parsed = JSON.parse(data);
+
+                            if (parsed.error) {
+                                if (callbacks.onError) {
+                                    callbacks.onError(parsed.error);
+                                }
+                                return { success: false, error: parsed.error };
+                            }
+
+                            if (parsed.done) {
+                                if (callbacks.onEnd) {
+                                    callbacks.onEnd();
+                                }
+                                return { success: true };
+                            }
+
+                            if (parsed.content) {
+                                if (callbacks.onData) {
+                                    callbacks.onData(parsed.content);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse SSE data:', data);
+                        }
+                    }
+                }
+            }
+
+            return { success: true };
+        } catch (error) {
+            console.error('Agent流式问答(含附件)失败:', error);
+            if (callbacks.onError) {
+                callbacks.onError(error.message);
+            }
+            throw error;
+        }
+    },
+
     /**
      * 获取Agent实例信息
      */

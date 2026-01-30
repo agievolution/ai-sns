@@ -153,6 +153,153 @@ const kmHandlers = {
         }
     },
 
+    async vectorizeCurrentNote() {
+        try {
+            const noteId = this.currentNoteId;
+            const kmId = this.currentKmId;
+            if (!noteId || !kmId) {
+                Toast.warning('请先选择一个已保存的笔记');
+                return;
+            }
+
+            const loading = Toast.loading('向量化中...');
+            const response = await fetch(`http://localhost:8788/api/km/notes/${encodeURIComponent(String(noteId))}/vectorize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ km_id: kmId })
+            });
+            loading.close();
+
+            if (!response.ok) {
+                let message = '向量化失败';
+                try {
+                    const data = await response.json();
+                    if (data && data.detail) message = data.detail;
+                } catch (e) {
+                    // ignore
+                }
+                throw new Error(message);
+            }
+
+            const result = await response.json();
+            const chunks = (result && result.data && typeof result.data.chunks !== 'undefined') ? result.data.chunks : 0;
+            Toast.success(`向量化完成（chunks: ${chunks}）`);
+        } catch (e) {
+            console.error('[kmHandlers] vectorizeCurrentNote failed:', e);
+            Toast.error('向量化失败: ' + (e && e.message ? e.message : String(e)));
+        }
+    },
+
+    showNoteVectorSearchDialog() {
+        const kmId = this.currentKmId;
+        if (!kmId) {
+            Toast.warning('请先选择一个知识库');
+            return;
+        }
+
+        if (!window.Modal || typeof window.Modal.show !== 'function') {
+            Toast.error('Modal组件未就绪');
+            return;
+        }
+
+        window.Modal.show({
+            title: '向量查询',
+            width: '720px',
+            content: `
+                <div class="form-group">
+                    <label class="form-label">查询内容</label>
+                    <input type="text" id="noteVectorQueryInput" class="form-input" placeholder="输入自然语言问题..." autofocus>
+                </div>
+                <div class="form-group" style="margin-top: 10px;">
+                    <div id="noteVectorSearchResults" style="max-height: 50vh; overflow-y: auto;"></div>
+                </div>
+            `,
+            confirmText: '搜索',
+            onConfirm: async (modal) => {
+                const input = modal.element.querySelector('#noteVectorQueryInput');
+                const resultsEl = modal.element.querySelector('#noteVectorSearchResults');
+                const query = input ? input.value.trim() : '';
+                if (!query) {
+                    Toast.warning('请输入查询内容');
+                    return false;
+                }
+                if (resultsEl) {
+                    resultsEl.innerHTML = '<div class="loading">Searching...</div>';
+                }
+
+                try {
+                    const response = await fetch('http://localhost:8788/api/km/notes/vector-search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ km_id: kmId, query, top_k: 5 })
+                    });
+                    if (!response.ok) {
+                        let message = 'Search failed';
+                        try {
+                            const data = await response.json();
+                            if (data && data.detail) message = data.detail;
+                        } catch (e) {
+                            // ignore
+                        }
+                        throw new Error(message);
+                    }
+
+                    const result = await response.json();
+                    const results = result.data || [];
+                    if (!resultsEl) return false;
+
+                    if (!results.length) {
+                        resultsEl.innerHTML = '<div class="empty-state">No results found</div>';
+                        return false;
+                    }
+
+                    const html = results.map((r, idx) => {
+                        const score = (r && typeof r.score === 'number') ? r.score.toFixed(3) : '0.000';
+                        const title = r && r.metadata && r.metadata.title ? r.metadata.title : '';
+                        const content = r && (r.content || r.text) ? (r.content || r.text) : '';
+                        return `
+                            <div class="search-result-item" style="margin-bottom: 10px;">
+                                <div class="result-header">
+                                    <span class="result-number">${idx + 1}</span>
+                                    <span class="result-score">Score: ${score}</span>
+                                </div>
+                                ${title ? `<div class="result-metadata">Title: ${this.escapeHtml(title)}</div>` : ''}
+                                <div class="result-content">${this.escapeHtml(content)}</div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    resultsEl.innerHTML = html;
+                } catch (e) {
+                    console.error('[kmHandlers] note vector search failed:', e);
+                    if (resultsEl) {
+                        resultsEl.innerHTML = `<div class="error-state">Search failed: ${this.escapeHtml(e && e.message ? e.message : String(e))}</div>`;
+                    }
+                }
+
+                return false;
+            }
+        });
+    },
+
+    async downloadAndOpenKmFile(kbId, fileId, filename) {
+        try {
+            if (!window.electronAPI || typeof window.electronAPI.downloadAndOpen !== 'function') {
+                Toast.error('打开文件失败：Electron能力未就绪，请重启应用');
+                return;
+            }
+
+            const url = `http://127.0.0.1:8788/api/km/${encodeURIComponent(String(kbId))}/files/${encodeURIComponent(String(fileId))}/download`;
+            const result = await window.electronAPI.downloadAndOpen(url, filename || 'file');
+            if (result) {
+                Toast.error(`打开文件失败: ${result}`);
+            }
+        } catch (e) {
+            console.error('[kmHandlers] downloadAndOpenKmFile failed:', e);
+            Toast.error('打开文件失败: ' + (e && e.message ? e.message : String(e)));
+        }
+    },
+
     /**
      * Load notes for a specific KB (kmtype=1)
      */
@@ -593,6 +740,15 @@ const kmHandlers = {
                     this.confirmDeleteFile(kbId, fileId);
                 }
                 return;
+            }
+
+            const item = e.target.closest('.km-file-item[data-file-id]');
+            if (item) {
+                const fileId = parseInt(item.dataset.fileId);
+                const files = this.files[kbId] || [];
+                const file = files.find(f => f.id === fileId);
+                const filename = file ? file.filename : 'file';
+                this.downloadAndOpenKmFile(kbId, fileId, filename);
             }
         });
 

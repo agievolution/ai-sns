@@ -62,6 +62,60 @@ class VectorService:
             logger.error(f"Error getting embedding: {e}")
             raise
 
+    def upsert_note(
+        self,
+        km_id: str,
+        note_id: int,
+        title: str,
+        text: str,
+        chunk_size: int = 1000,
+        overlap: int = 100
+    ) -> int:
+        try:
+            collection = self.get_or_create_collection(km_id)
+
+            try:
+                collection.delete(where={"note_id": str(note_id)})
+            except Exception:
+                pass
+
+            chunks = self.chunk_text(text, chunk_size, overlap)
+            if not chunks:
+                logger.warning(f"No chunks generated for note {note_id}")
+                return 0
+
+            ids = []
+            embeddings = []
+            documents = []
+            metadatas = []
+
+            for i, chunk in enumerate(chunks):
+                chunk_id = f"note_{note_id}_chunk_{i}"
+                embedding = self.get_embedding(chunk)
+                ids.append(chunk_id)
+                embeddings.append(embedding)
+                documents.append(chunk)
+                metadatas.append({
+                    "note_id": str(note_id),
+                    "title": title or "",
+                    "chunk_index": i,
+                    "total_chunks": len(chunks)
+                })
+
+            collection.add(
+                ids=ids,
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas
+            )
+
+            logger.info(f"Added {len(chunks)} chunks for note {note_id} to collection {km_id}")
+            return len(chunks)
+
+        except Exception as e:
+            logger.error(f"Error upserting note to vector DB: {e}")
+            raise
+
     def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 100) -> List[str]:
         """Split text into chunks with overlap"""
         if not text:
@@ -195,6 +249,18 @@ class VectorService:
 
         except Exception as e:
             logger.error(f"Error deleting document from vector DB: {e}")
+            raise
+
+    def delete_note(self, km_id: str, note_id: int):
+        """Delete all chunks of a note from the vector database"""
+        try:
+            collection = self.get_or_create_collection(km_id)
+            results = collection.get(where={"note_id": str(note_id)})
+            if results.get('ids'):
+                collection.delete(ids=results['ids'])
+                logger.info(f"Deleted {len(results['ids'])} chunks for note_id {note_id}")
+        except Exception as e:
+            logger.error(f"Error deleting note from vector DB: {e}")
             raise
 
     def delete_collection(self, km_id: str):

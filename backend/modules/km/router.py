@@ -4,6 +4,9 @@ KM module - API router
 """
 import logging
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
+from fastapi.responses import FileResponse
+from pathlib import Path
+import sqlite3
 
 from .schemas import KMConfig, KMResponse
 from .service import KMService
@@ -180,6 +183,41 @@ async def delete_file(
     except Exception as e:
         logger.error(f"Error deleting file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{kb_id}/files/{file_id}/download")
+async def download_file(kb_id: int, file_id: int):
+    """Download original uploaded file for a knowledge base"""
+    conn = sqlite3.connect('db/db.sqlite')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT km_id FROM km_cfg WHERE id = ?", (kb_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Knowledge base not found")
+        km_id_str = row['km_id']
+
+        cursor.execute(
+            "SELECT filename FROM km_data WHERE id = ? AND km_id = ? AND (is_delete IS NULL OR is_delete = 0)",
+            (file_id, km_id_str)
+        )
+        frow = cursor.fetchone()
+        if not frow:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        filename = frow['filename']
+        file_path = Path(f"km/{km_id_str}/doc") / filename
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+
+        return FileResponse(
+            path=str(file_path),
+            filename=Path(filename).name,
+            media_type='application/octet-stream'
+        )
+    finally:
+        conn.close()
 
 
 @router.post("/{kb_id}/upload-image", response_model=dict)

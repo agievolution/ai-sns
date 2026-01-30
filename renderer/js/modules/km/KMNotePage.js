@@ -15,6 +15,14 @@ const KMNotePage = {
                                     <path d="M17 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
                                 </svg>
                             </button>
+                            <button class="km-tool-btn" id="noteVectorizeBtn" title="向量化笔记">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 15 C7 5, 17 5, 20 15" />
+                                <circle cx="4" cy="15" r="1.2" fill="currentColor"/>
+                                <circle cx="12" cy="7" r="1.2" fill="currentColor"/>
+                                <circle cx="20" cy="15" r="1.2" fill="currentColor"/>
+                                </svg>
+                            </button>
                             <button class="km-tool-btn" id="printBtn" title="打印">
                                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                                     <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
@@ -54,6 +62,16 @@ const KMNotePage = {
                             <button class="km-tool-btn" id="searchBtn" title="搜索 (Ctrl+F)">
                                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                                     <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                                </svg>
+                            </button>
+                            <button class="km-tool-btn" id="noteVectorSearchBtn" title="向量查询">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                                    stroke="currentColor" stroke-width="1.7"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="10" cy="10" r="5"/>
+                                <path d="M14.5 14.5l4.5 4.5"/>
+                                <circle cx="8" cy="10" r="1" fill="currentColor"/>
+                                <circle cx="12" cy="10" r="1" fill="currentColor"/>
                                 </svg>
                             </button>
                             <button class="km-tool-btn" id="dateBtn" title="插入日期">
@@ -339,6 +357,24 @@ const KMNotePage = {
             });
             searchBtn.addEventListener('click', () => {
                 this.showSearchDialog();
+            });
+        }
+
+        const noteVectorizeBtn = document.getElementById('noteVectorizeBtn');
+        if (noteVectorizeBtn) {
+            noteVectorizeBtn.addEventListener('click', () => {
+                if (window.kmHandlers && typeof window.kmHandlers.vectorizeCurrentNote === 'function') {
+                    window.kmHandlers.vectorizeCurrentNote();
+                }
+            });
+        }
+
+        const noteVectorSearchBtn = document.getElementById('noteVectorSearchBtn');
+        if (noteVectorSearchBtn) {
+            noteVectorSearchBtn.addEventListener('click', () => {
+                if (window.kmHandlers && typeof window.kmHandlers.showNoteVectorSearchDialog === 'function') {
+                    window.kmHandlers.showNoteVectorSearchDialog();
+                }
             });
         }
 

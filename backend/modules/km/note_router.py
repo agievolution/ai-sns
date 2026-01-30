@@ -6,6 +6,14 @@ import logging
 from fastapi import APIRouter, HTTPException
 from typing import List
 
+import re
+from html import unescape
+from sqlalchemy import and_
+
+from backend.database.base import SessionLocal
+from backend.database.models.km import NoteMng
+from .vector_service import get_vector_service
+
 from .note_schemas import NoteCreate, NoteUpdate, NoteResponse
 from .note_service import NoteService
 
@@ -13,6 +21,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 note_service = NoteService()
+
+
+def _html_to_text(html: str) -> str:
+    if not html:
+        return ''
+    try:
+        cleaned = re.sub(r'<(script|style)[^>]*>[\s\S]*?</\\1>', ' ', html, flags=re.IGNORECASE)
+        cleaned = re.sub(r'<[^>]+>', ' ', cleaned)
+        cleaned = unescape(cleaned)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        return cleaned
+    except Exception:
+        return str(html)
 
 
 @router.get("/notes", response_model=List[NoteResponse])
@@ -93,14 +114,109 @@ async def update_note(note_id: int, note_data: NoteUpdate):
 async def delete_note(note_id: int):
     """删除笔记"""
     try:
+        km_id_str = None
+        session = SessionLocal()
+        try:
+            note = session.query(NoteMng).filter(
+                and_(NoteMng.id == note_id, NoteMng.is_delete == False)
+            ).first()
+            km_id_str = getattr(note, 'km_id', None) if note else None
+        finally:
+            session.close()
+
         success = note_service.delete_note(note_id)
         if not success:
             raise HTTPException(status_code=404, detail="Note not found")
+
+        if km_id_str:
+            try:
+                vector_service = get_vector_service()
+                vector_service.delete_note(km_id_str, note_id)
+            except Exception as e:
+                logger.warning(f"Failed to delete note vectors for note_id={note_id}: {e}")
         return {"success": True, "message": "Note deleted"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error deleting note: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/notes/{note_id}/vectorize", response_model=dict)
+async def vectorize_note(note_id: int, request: dict):
+    try:
+        chunk_size = int(request.get('chunk_size') or 1000)
+        overlap = int(request.get('overlap') or 100)
+        km_id_req = request.get('km_id')
+
+        session = SessionLocal()
+        try:
+            note = session.query(NoteMng).filter(
+                and_(NoteMng.id == note_id, NoteMng.is_delete == False)
+            ).first()
+            if not note:
+                raise HTTPException(status_code=404, detail="Note not found")
+
+            km_id_str = getattr(note, 'km_id', None) or km_id_req
+            if not km_id_str:
+                raise HTTPException(status_code=400, detail="km_id is required")
+
+            try:
+                note.waitvectorization = True
+                session.commit()
+            except Exception:
+                session.rollback()
+
+            title = getattr(note, 'title', '') or ''
+            content = getattr(note, 'content', '') or ''
+            text = _html_to_text(content)
+
+            vector_service = get_vector_service()
+            chunks = vector_service.upsert_note(
+                km_id=km_id_str,
+                note_id=note_id,
+                title=title,
+                text=text,
+                chunk_size=chunk_size,
+                overlap=overlap
+            )
+
+            try:
+                note.waitvectorization = False
+                session.commit()
+            except Exception:
+                session.rollback()
+
+            return {"success": True, "data": {"note_id": note_id, "chunks": int(chunks or 0)}}
+        finally:
+            session.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error vectorizing note: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/notes/vector-search", response_model=dict)
+async def vector_search_notes(request: dict):
+    try:
+        km_id_str = request.get('km_id')
+        query = request.get('query') or ''
+        top_k = int(request.get('top_k') or 5)
+
+        if not km_id_str:
+            raise HTTPException(status_code=400, detail="km_id is required")
+        if not query.strip():
+            raise HTTPException(status_code=400, detail="query is required")
+
+        vector_service = get_vector_service()
+        results = vector_service.search(km_id_str, query, top_k)
+        return {"success": True, "data": results}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error performing note vector search: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -116,15 +232,4 @@ async def toggle_pin_note(note_id: int):
         raise
     except Exception as e:
         logger.error(f"Error toggling pin: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/notes/search", response_model=List[NoteResponse])
-async def search_notes(query: str = "", km_id: str = None):
-    """搜索笔记 - 支持标题、内容、标签搜索"""
-    try:
-        notes = note_service.search_notes(query=query, km_id=km_id)
-        return notes
-    except Exception as e:
-        logger.error(f"Error searching notes: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -67,7 +67,8 @@ ask_agent_and_get_instruction
         # 保存原始system prompt
         original_prompt = agent.role_config.get('system_prompt', '')
 
-        modified_prompt = system_role_prompt + original_prompt
+        # modified_prompt = system_role_prompt + original_prompt
+        modified_prompt = system_role_prompt
 
         # 临时修改system prompt
         agent.role_config['system_prompt'] = modified_prompt

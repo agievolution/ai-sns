@@ -438,6 +438,8 @@ IMPORTANT Tool Usage Guidelines:
             # 准备工具
             tools = self._prepare_tools_schema()
 
+            print("[info]:Message Send to llm:",messages)
+
             # 调用LLM
             kwargs = {
                 'model': self.get_model_name(),

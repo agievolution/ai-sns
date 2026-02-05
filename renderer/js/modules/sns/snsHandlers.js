@@ -317,7 +317,7 @@ export default {
             startBtn.addEventListener('click', async () => {
                 const isRunning = startBtn.classList.contains('running');
                 const buttonText = startBtn.textContent.trim();
-                
+
                 if (!isRunning && buttonText === 'Start') {
                     // 启动引擎
                     startBtn.disabled = true;
@@ -486,7 +486,14 @@ export default {
 
             // 向左拖拽增加宽度,向右拖拽减少宽度
             const deltaX = startX - e.clientX;
-            const newWidth = Math.max(200, Math.min(500, startWidth + deltaX));
+            const minPanelWidth = 200;
+            const minMapWidth = 0;
+            const layout = document.querySelector('.sns-page-layout');
+            const layoutWidth = layout ? layout.getBoundingClientRect().width : window.innerWidth;
+            const resizerWidth = resizer.getBoundingClientRect().width || 8;
+            const maxPanelWidth = Math.max(minPanelWidth, Math.floor(layoutWidth - resizerWidth - minMapWidth));
+            let newWidth = Math.max(minPanelWidth, Math.min(maxPanelWidth, startWidth + deltaX));
+            if (newWidth > maxPanelWidth - 1) newWidth = maxPanelWidth;
             statusPanel.style.width = `${newWidth}px`;
         });
 
@@ -627,7 +634,7 @@ export default {
 
             // 显示自定义右键菜单
             contextMenu.style.display = 'block';
-            
+
             // 计算菜单位置
             const menuWidth = 180;
             const menuHeight = 120;
@@ -1040,6 +1047,9 @@ export default {
                         break;
                     case 'openSNSProfile':
                         this.handleOpenSNSProfile(data.url);
+                        break;
+                    case 'openPlaceWebAddress':
+                        this.handleOpenPlaceWebAddress(data.url);
                         break;
                     case 'closeSNSProfile':
                         this.handleCloseSNSProfile();
@@ -1681,7 +1691,7 @@ export default {
     /**
      * 处理打开 SNS Profile 页签请求
      */
-    handleOpenSNSProfile(url) {        
+    handleOpenSNSProfile(url) {
         console.log('handleOpenSNSProfile called with url:', url);
 
         // URL 规范化处理
@@ -1781,10 +1791,10 @@ export default {
 
         // 自动滚动到 Profile 页签（确保可见）
         if (profileTab) {
-            profileTab.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'nearest', 
-                inline: 'center' 
+            profileTab.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+                inline: 'center'
             });
         }
 
@@ -1827,5 +1837,129 @@ export default {
         }
 
         console.log('SNS Profile tab closed');
+    }
+
+    ,
+
+    /**
+     * 处理打开 Place intro 页签请求
+     */
+    handleOpenPlaceWebAddress(url) {
+        console.log('handleOpenPlaceWebAddress called with url:', url);
+
+        // URL 规范化处理
+        if (!url || typeof url !== 'string') {
+            console.error('Invalid URL provided:', url);
+            return;
+        }
+
+        // 去除首尾空格
+        url = url.trim();
+
+        // 检查是否有协议头
+        if (!url.match(/^https?:\/\//i)) {
+            // 判断是否是本地地址
+            if (url.startsWith('localhost') || url.startsWith('127.0.0.1') || url.startsWith('192.168.')) {
+                url = 'http://' + url;
+                console.log('Added http:// to local URL:', url);
+            } else if (url.startsWith('//')) {
+                // 协议相对 URL
+                url = 'https:' + url;
+                console.log('Added https: to protocol-relative URL:', url);
+            } else if (url.startsWith('/')) {
+                // 相对路径，使用当前服务器
+                url = 'http://localhost:8788' + url;
+                console.log('Converted relative path to absolute URL:', url);
+            } else {
+                // 默认添加 https://
+                url = 'https://' + url;
+                console.log('Added https:// to URL:', url);
+            }
+        }
+
+        // 验证 URL 格式
+        try {
+            new URL(url);
+        } catch (e) {
+            console.error('Invalid URL format after normalization:', url, e);
+            this.showToast('无效的 URL 格式: ' + url, 'error');
+            return;
+        }
+
+        const statusTabs = document.getElementById('statusTabs');
+        const statusTabContent = document.getElementById('statusTabContent');
+
+        if (!statusTabs || !statusTabContent) {
+            console.warn('Status tabs container not found');
+            return;
+        }
+
+        // 检查是否已存在 Place intro 页签
+        let placeTab = statusTabs.querySelector('.status-tab[data-tab="placeIntro"]');
+        let placePane = statusTabContent.querySelector('.tab-pane[data-tab="placeIntro"]');
+
+        if (!placeTab) {
+            // 创建 Place intro 页签按钮
+            placeTab = document.createElement('button');
+            placeTab.className = 'status-tab';
+            placeTab.dataset.tab = 'placeIntro';
+            placeTab.innerHTML = `Place intro <span class="tab-close-btn" title="关闭">×</span>`;
+            statusTabs.appendChild(placeTab);
+
+            // 绑定关闭按钮事件
+            const closeBtn = placeTab.querySelector('.tab-close-btn');
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (placeTab) placeTab.remove();
+                if (placePane) placePane.remove();
+
+                // 切换到第一个页签（Process）
+                const firstTab = statusTabs.querySelector('.status-tab');
+                const firstPane = statusTabContent.querySelector('.tab-pane');
+                if (firstTab && firstPane) {
+                    firstTab.classList.add('active');
+                    firstPane.classList.add('active');
+                }
+            });
+        }
+
+        if (!placePane) {
+            // 创建 Place intro 页签内容
+            placePane = document.createElement('div');
+            placePane.className = 'tab-pane';
+            placePane.dataset.tab = 'placeIntro';
+            placePane.innerHTML = `
+                <div class="profile-webview-container">
+                    <iframe src="${url}" class="profile-webview" frameborder="0"></iframe>
+                </div>
+            `;
+            statusTabContent.appendChild(placePane);
+        } else {
+            // 更新现有 iframe 的 URL
+            const iframe = placePane.querySelector('.profile-webview');
+            if (iframe) {
+                iframe.src = url;
+            }
+        }
+
+        // 切换到 Place intro 页签
+        statusTabs.querySelectorAll('.status-tab').forEach(btn => {
+            btn.classList.toggle('active', btn === placeTab);
+        });
+
+        statusTabContent.querySelectorAll('.tab-pane').forEach(pane => {
+            pane.classList.toggle('active', pane === placePane);
+        });
+
+        // 自动滚动到 Place intro 页签（确保可见）
+        if (placeTab) {
+            placeTab.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+                inline: 'center'
+            });
+        }
+
+        console.log('Place intro tab opened with URL:', url);
     }
 };

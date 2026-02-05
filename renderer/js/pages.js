@@ -1565,7 +1565,14 @@ const PageControllers = {
 
             // 向左拖拽增加宽度，向右拖拽减少宽度
             const deltaX = startX - e.clientX;
-            const newWidth = Math.max(200, Math.min(500, startWidth + deltaX));
+            const minPanelWidth = 200;
+            const minMapWidth = 0;
+            const layout = document.querySelector('.sns-page-layout');
+            const layoutWidth = layout ? layout.getBoundingClientRect().width : window.innerWidth;
+            const resizerWidth = resizer.getBoundingClientRect().width || 8;
+            const maxPanelWidth = Math.max(minPanelWidth, Math.floor(layoutWidth - resizerWidth - minMapWidth));
+            let newWidth = Math.max(minPanelWidth, Math.min(maxPanelWidth, startWidth + deltaX));
+            if (newWidth > maxPanelWidth - 1) newWidth = maxPanelWidth;
             statusPanel.style.width = `${newWidth}px`;
         });
 

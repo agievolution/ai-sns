@@ -516,14 +516,15 @@ map.addEventListener('click', function (e) {
         //
         // console.log(list[0]);
 
-        setPersonModelPointByNationId(nation_id_me, e.latlng)
+        setPersonModelPointByNationId(nation_id_me, e.latlng);
+        setPersonPointByNationId(nation_id_me, e.latlng.lng, e.latlng.lat);
 
         service = getServiceForUser();
         if (service !== null) {
             const userConfirmed = confirm("此处有相应的应用服务，要继续吗？");
             if (userConfirmed) {
                 alert("您选择了确定！");
-                api_object.request_service(service.type, service.address);
+                open_place_web_address(service.address);
             } else {
                 return;
             }

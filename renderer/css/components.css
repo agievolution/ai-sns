@@ -1438,6 +1438,7 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    min-width: 0;
     overflow: hidden;
     background: linear-gradient(145deg, #1a1f2e 0%, #2d3548 100%);
 }
@@ -1620,6 +1621,7 @@
 .map-container {
     flex: 1;
     position: relative;
+    min-width: 0;
     background: linear-gradient(145deg, #243447 0%, #1a2634 100%);
     border-radius: 0;
     overflow: hidden;

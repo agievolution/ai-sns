@@ -330,42 +330,6 @@ class MapTaskManager:
             self.set_command_status("")
             self.parent.handle_agent_tell_me_how_to_talk_result(result)
 
-        elif action_requested == "find_tool_from_list_to_use":
-            self.parent.write_on_going_process_to_pane("Is picking a tool")
-            self.js_task_manager.show_information(lt(f"Try to find a tool", f"尝试使用工具"))
-            self.set_command_status("ask_agent_to_pick_a_tool")
-            task_summary = self.get_task_summary()
-
-            provided_tool_list = self.parent.get_tool_list()
-
-            self.parent.ask_agent_to_pick_a_tool_sync(task_summary, json.dumps(provided_tool_list, indent=4, ensure_ascii=False))
-
-        elif event == "ask_agent_to_pick_a_tool_returned":
-            self.show_status_on_map("using-tool")
-            self.parent.write_on_going_process_to_pane("Is using tool")
-            result = kwargs.get("result", "")
-            tool_dict = json.loads(result)
-            if tool_dict:
-                tool_name = tool_dict[0]["name"]
-            else:
-                tool_name = ""
-            self.js_task_manager.show_information(lt(f"Agent choose the tool:{tool_name}", f"Agent选择了工具：{tool_name}"))
-            self.set_command_status("")
-            if result:
-                result_list = json.loads(result)
-                if result_list:
-                    self.last_param = {}
-                    self.last_param["tool_picked"] = result
-                    self.parent.handle_agent_pick_a_tool_result(result)
-                    return
-
-        elif event == "skill_executed":
-            self.set_sub_task_completed()
-            if self.current_sub_task:
-                self.set_command_status("process_activity")
-                result = kwargs.get("result", "")
-                asyncio.create_task(self.process_task(action="process_activity", ask_content=self.get_current_sub_task_str() + result))
-
 
     def set_command_status(self, status):
         self.parent.command_status = status

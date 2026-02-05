@@ -166,7 +166,7 @@ class UIDisplayMixin:
         更新资源显示内容，包括工具列表、人员名单和地址列表
         """
         # 获取各类资源数据
-        tool_list = self.get_tool_list()
+        tool_list = self.get_service_list()
         people_list = self.get_people_list()
         place_list = self.get_place_list()
 

@@ -676,6 +676,18 @@ function mapcfgSetting() {
     console.log("mapcfgSetting");
 }
 
+function open_place_web_address(url) {
+    console.log("open_place_web_address", url);
+
+    // 向 electron 前端发送消息，在右侧状态面板中添加 Profile 页签
+    if (typeof window.parent !== 'undefined') {
+        window.parent.postMessage({
+            type: 'openPlaceWebAddress',
+            url: url
+        }, '*');
+    }
+}
+
 function open_sns_profile(url) {
     console.log("open_sns_profile", url);
 

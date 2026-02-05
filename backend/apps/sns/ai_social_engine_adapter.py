@@ -365,13 +365,12 @@ class AISocialEngine(
 
         role_prompt = get_prompt_by_title("__main_control__")
         process_info_list_str = "\n".join(f"{index + 1}. {info}" for index, info in enumerate(self.taskmng.process_info_list))
-        ability_list = self.get_ability_list()
         # question_to_llm = ask_content + "请告诉我，我接着应该干什么，具体请从功能列表中挑选。"
         question_to_llm = ask_content
-        full_ask_content = self.compose_full_ask_content(process_info_list_str, ability_list, question_to_llm)
+        full_ask_content = self.compose_full_ask_content(process_info_list_str, question_to_llm)
         await self.ask_agent_and_get_instruction(full_ask_content, role_prompt)
 
-    def compose_full_ask_content(self, task_description, ability_list, question_to_llm):
+    def compose_full_ask_content(self, task_description, question_to_llm):
         if self.temp_index > 7:
             self.decline_life()
 
@@ -400,7 +399,7 @@ class AISocialEngine(
         # prompt = prompt.replace(f"__current_action__", self.current_action)
         prompt = prompt.replace(f"__action_result__", self.action_result)
         prompt = prompt.replace(f"__current_status__", current_status)
-        prompt = prompt.replace(f"__tool_list__", json.dumps(self.get_tool_list(), indent=4, ensure_ascii=False))
+        prompt = prompt.replace(f"__tool_list__", json.dumps(self.get_service_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__people_list__", json.dumps(self.get_people_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__place_list__", json.dumps(self.get_place_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__question_to_llm__", question_to_llm)
@@ -473,9 +472,9 @@ class AISocialEngine(
             self.buy_from_a_people(action_str, instruction)
             return
 
-        elif "工具" in action_str:
-            action_result = self.use_tools()
-
+        elif "Web Service" in action_str:
+            self.use_service(action_str, instruction)
+            return
         elif "付款" in action_str:
             action_result = self.pay_to_a_people("", "", 0)
 
@@ -573,16 +572,14 @@ class AISocialEngine(
 
         role_prompt = get_prompt_by_title("__human_instruction_to_process_activity_role__")
         task_description = self.taskmng.get_task_summary()
-        ability_list = self.get_ability_list()
         question_to_llm = ask_content
-        full_ask_content = self.compose_full_ask_content_human(task_description, ability_list, question_to_llm)
+        full_ask_content = self.compose_full_ask_content_human(task_description,  question_to_llm)
         await self.ask_agent_and_get_instruction(full_ask_content, role_prompt)
 
-    def compose_full_ask_content_human(self, task_description, ability_list, question_to_llm):
+    def compose_full_ask_content_human(self, task_description,  question_to_llm):
         prompt = get_prompt_by_title("__human_instruction_to_process_activity_content__")
         prompt = prompt.replace(f"__human_instruction__", question_to_llm)
-        # prompt = prompt.replace(f"__ability_list__", json.dumps(ability_list, indent=4, ensure_ascii=False))
-        prompt = prompt.replace(f"__tool_list__", json.dumps(self.get_tool_list(), indent=4, ensure_ascii=False))
+        prompt = prompt.replace(f"__tool_list__", json.dumps(self.get_service_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__people_list__", json.dumps(self.get_people_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__place_list__", json.dumps(self.get_place_list(), indent=4, ensure_ascii=False))
 

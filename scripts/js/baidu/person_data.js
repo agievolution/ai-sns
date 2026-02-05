@@ -22,6 +22,7 @@ function getPersonPointByNationId(nation_id) {
         return new BMapGL.Point(116.397428, 39.90923);
     }
     let location = persondata["location"];
+
     const point = new BMapGL.Point(location[0], location[1]);
     return point;
 }

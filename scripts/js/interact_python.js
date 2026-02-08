@@ -689,6 +689,7 @@ function open_place_web_address(url) {
 }
 
 function open_sns_profile(url) {
+
     console.log("open_sns_profile", url);
 
     // 向 electron 前端发送消息，在右侧状态面板中添加 Profile 页签

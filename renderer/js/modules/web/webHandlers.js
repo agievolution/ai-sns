@@ -87,6 +87,43 @@ const webHandlers = {
         const url = iconItem.dataset.url;
         const name = iconItem.dataset.name;
 
+        const copyTextToClipboard = async (text) => {
+            if (!text) return false;
+
+            try {
+                if (window.electronAPI && typeof window.electronAPI.writeClipboardText === 'function') {
+                    const res = await window.electronAPI.writeClipboardText(text);
+                    if (res && res.success) return true;
+                }
+            } catch (e) {
+            }
+
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+            } catch (e) {
+            }
+
+            try {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.top = '-9999px';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                return !!ok;
+            } catch (e) {
+                return false;
+            }
+        };
+
         // Remove existing context menu
         const existingMenu = document.querySelector('.web-context-menu');
         if (existingMenu) {
@@ -118,16 +155,19 @@ const webHandlers = {
         document.body.appendChild(menu);
 
         // Handle menu item clicks
-        menu.addEventListener('click', (e) => {
+        menu.addEventListener('click', async (e) => {
             const item = e.target.closest('.web-context-menu-item');
             if (item) {
                 const action = item.dataset.action;
                 if (action === 'open-browser') {
                     this.webPage.openInBrowser(url);
                 } else if (action === 'copy-url') {
-                    navigator.clipboard.writeText(url).then(() => {
+                    const ok = await copyTextToClipboard(url);
+                    if (ok) {
                         console.log('URL copied to clipboard');
-                    });
+                    } else {
+                        console.error('Copy failed');
+                    }
                 }
                 menu.remove();
             }

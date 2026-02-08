@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, ipcMain, Menu, Tray, dialog, shell, clipboard, globalShortcut } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, Menu, Tray, dialog, shell, clipboard, globalShortcut, session } = require('electron');
 
 const path = require('path');
 
@@ -48,7 +48,51 @@ let pythonProcess = null;
 
 let isQuitting = false;
 
+function isAudioOnlyMediaRequest(details) {
+    const types = (details && Array.isArray(details.mediaTypes)) ? details.mediaTypes : [];
+    const hasAudio = types.includes('audio');
+    const hasVideo = types.includes('video');
+    return hasAudio && !hasVideo;
+}
 
+function setupMediaPermissions() {
+    const s = session && session.defaultSession;
+    if (!s || typeof s.setPermissionRequestHandler !== 'function') return;
+
+    s.setPermissionRequestHandler((webContents, permission, callback, details) => {
+        // Allow microphone for ALL websites, but deny camera/video by default.
+        if (permission === 'media' && isAudioOnlyMediaRequest(details)) {
+            callback(true);
+            return;
+        }
+        callback(false);
+    });
+
+    if (typeof s.setPermissionCheckHandler === 'function') {
+        s.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+            if (permission !== 'media') return false;
+            return isAudioOnlyMediaRequest(details);
+        });
+    }
+}
+
+ipcMain.handle('write-clipboard-text', async (event, text) => {
+
+    try {
+
+        const v = (text === undefined || text === null) ? '' : String(text);
+
+        clipboard.writeText(v);
+
+        return { success: true };
+
+    } catch (e) {
+
+        return { success: false, error: e && e.message ? e.message : String(e) };
+
+    }
+
+});
 
 ipcMain.handle('open-path', async (event, filePath) => {
 
@@ -1272,6 +1316,96 @@ ipcMain.handle('load-url-in-browserview', async (event, url) => {
 
 
 
+        let loadFailedNotified = false;
+
+        const cleanupBrowserView = () => {
+
+            if (browserView && mainWindow) {
+
+                try {
+
+                    mainWindow.removeBrowserView(browserView);
+
+                } catch (e) {
+
+                }
+
+
+
+                try {
+
+                    browserView.webContents.destroy();
+
+                } catch (e) {
+
+                }
+
+
+
+                browserView = null;
+
+            }
+
+        };
+
+
+
+        const notifyLoadFailed = (payload) => {
+
+            if (loadFailedNotified) return;
+
+            loadFailedNotified = true;
+
+
+
+            if (mainWindow && !mainWindow.isDestroyed()) {
+
+                mainWindow.webContents.send('browserview-load-failed', payload);
+
+            }
+
+        };
+
+
+
+        const handleLoadFailed = (payload) => {
+
+            notifyLoadFailed(payload);
+
+            cleanupBrowserView();
+
+        };
+
+
+
+        browserView.webContents.on('did-fail-provisional-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+
+            if (!isMainFrame) return;
+
+            handleLoadFailed({ url: validatedURL, errorCode, errorDescription });
+
+        });
+
+
+
+        browserView.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+
+            if (!isMainFrame) return;
+
+            handleLoadFailed({ url: validatedURL, errorCode, errorDescription });
+
+        });
+
+
+
+        browserView.webContents.on('render-process-gone', (event, details) => {
+
+            handleLoadFailed({ url, errorCode: details && details.exitCode, errorDescription: details && details.reason });
+
+        });
+
+
+
         browserView.webContents.on('context-menu', (event, params) => {
 
             if (!mainWindow || !browserView) return;
@@ -1446,6 +1580,42 @@ ipcMain.handle('load-url-in-browserview', async (event, url) => {
 
         console.error('Failed to load URL in BrowserView:', error);
 
+        if (browserView && mainWindow) {
+
+            try {
+
+                mainWindow.webContents.send('browserview-load-failed', { url, errorCode: error && error.code, errorDescription: error && error.message });
+
+            } catch (e) {
+
+            }
+
+
+
+            try {
+
+                mainWindow.removeBrowserView(browserView);
+
+            } catch (e) {
+
+            }
+
+
+
+            try {
+
+                browserView.webContents.destroy();
+
+            } catch (e) {
+
+            }
+
+
+
+            browserView = null;
+
+        }
+
         return { success: false, error: error.message };
 
     }
@@ -1613,6 +1783,8 @@ if (mainWindow) {
 // 应用生命周期
 
 app.whenReady().then(() => {
+
+    setupMediaPermissions();
 
     createWindow();
 

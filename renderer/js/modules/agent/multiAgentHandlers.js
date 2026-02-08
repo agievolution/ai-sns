@@ -138,6 +138,286 @@ const multiAgentHandlers = {
     bindAllAgentEvents() {
         console.log('[MultiAgentHandlers] 绑定所有agent的UI事件...');
 
+        if (!this._agentTabReloadMenuInitialized) {
+            this._agentTabReloadMenuInitialized = true;
+
+            const existingMenu = document.getElementById('agentTabReloadContextMenu');
+            const menu = existingMenu || (() => {
+                const el = document.createElement('div');
+                el.id = 'agentTabReloadContextMenu';
+                el.className = 'status-context-menu compact';
+                el.innerHTML = `
+                    <button type="button" class="context-menu-item" data-action="reload">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                            <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                        </svg>
+                        <span>刷新</span>
+                    </button>
+                    <button type="button" class="context-menu-item" data-action="open-browser">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        <span>Open in Browser</span>
+                    </button>
+                    <button type="button" class="context-menu-item" data-action="copy-url">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        <span>Copy URL</span>
+                    </button>
+                `;
+                document.body.appendChild(el);
+                return el;
+            })();
+
+            let currentAgentId = null;
+            let currentTabKey = null;
+            let removeObserver = null;
+
+            const hideMenu = () => {
+                menu.style.display = 'none';
+                menu.dataset.agentId = '';
+                menu.dataset.tab = '';
+                currentAgentId = null;
+                currentTabKey = null;
+                if (removeObserver) {
+                    removeObserver.disconnect();
+                    removeObserver = null;
+                }
+            };
+
+            const getCurrentIframeUrl = () => {
+                if (!isCurrentTargetAlive()) return '';
+                const pane = document.querySelector(`#settingsTabContent-${currentAgentId} .tab-pane[data-tab="${currentTabKey}"]`);
+                const iframe = pane ? pane.querySelector('iframe') : null;
+                const src = iframe && iframe.src ? String(iframe.src) : '';
+                if (!src) return '';
+                try {
+                    const u = new URL(src);
+                    u.searchParams.delete('_ts');
+                    return u.toString();
+                } catch (e) {
+                    return src;
+                }
+            };
+
+            const copyTextToClipboard = async (text) => {
+                if (!text) return false;
+
+                try {
+                    if (window.electronAPI && typeof window.electronAPI.writeClipboardText === 'function') {
+                        const res = await window.electronAPI.writeClipboardText(text);
+                        if (res && res.success) return true;
+                    }
+                } catch (e) {
+                }
+
+                try {
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    }
+                } catch (e) {
+                }
+
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.setAttribute('readonly', '');
+                    textarea.style.position = 'fixed';
+                    textarea.style.left = '-9999px';
+                    textarea.style.top = '-9999px';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    textarea.setSelectionRange(0, textarea.value.length);
+                    const ok = document.execCommand('copy');
+                    textarea.remove();
+                    return !!ok;
+                } catch (e) {
+                    return false;
+                }
+            };
+
+            const isCurrentTargetAlive = () => {
+                if (!currentAgentId || !currentTabKey) return false;
+                const tabBtn = document.querySelector(`#settingsTabs-${currentAgentId} .settings-tab[data-tab="${currentTabKey}"]`);
+                const pane = document.querySelector(`#settingsTabContent-${currentAgentId} .tab-pane[data-tab="${currentTabKey}"]`);
+                return !!(tabBtn && pane);
+            };
+
+            const reloadCurrentIframe = () => {
+                if (!isCurrentTargetAlive()) {
+                    hideMenu();
+                    return;
+                }
+
+                const pane = document.querySelector(`#settingsTabContent-${currentAgentId} .tab-pane[data-tab="${currentTabKey}"]`);
+                const iframe = pane ? pane.querySelector('iframe') : null;
+                if (iframe && iframe.src) {
+                    try {
+                        if (iframe.contentWindow && iframe.contentWindow.location && typeof iframe.contentWindow.location.reload === 'function') {
+                            iframe.contentWindow.location.reload();
+                            return;
+                        }
+                    } catch (e) {
+                        // ignore and fallback to src reload
+                    }
+
+                    try {
+                        const u = new URL(iframe.src);
+                        u.searchParams.set('_ts', String(Date.now()));
+                        iframe.src = u.toString();
+                    } catch (e) {
+                        const sep = iframe.src.includes('?') ? '&' : '?';
+                        iframe.src = `${iframe.src}${sep}_ts=${Date.now()}`;
+                    }
+                }
+            };
+
+            const showMenuAt = (x, y) => {
+                menu.style.display = 'block';
+                const menuWidth = menu.offsetWidth || 140;
+                const menuHeight = menu.offsetHeight || 38;
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                let left = x;
+                let top = y;
+                if (left + menuWidth > viewportWidth) left = viewportWidth - menuWidth - 10;
+                if (top + menuHeight > viewportHeight) top = viewportHeight - menuHeight - 10;
+                menu.style.left = left + 'px';
+                menu.style.top = top + 'px';
+            };
+
+            document.addEventListener('click', (e) => {
+                if (!menu.contains(e.target)) hideMenu();
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') hideMenu();
+            });
+
+            window.addEventListener('blur', hideMenu);
+            window.addEventListener('resize', hideMenu);
+            window.addEventListener('scroll', hideMenu, true);
+
+            menu.addEventListener('click', (e) => {
+                const item = e.target.closest('.context-menu-item');
+                if (!item) return;
+                const action = item.dataset.action;
+                if (action === 'reload') {
+                    reloadCurrentIframe();
+                } else if (action === 'open-browser') {
+                    const url = getCurrentIframeUrl();
+                    if (url) {
+                        if (window.electronAPI && window.electronAPI.openUrl) {
+                            window.electronAPI.openUrl(url);
+                        } else {
+                            window.open(url, '_blank');
+                        }
+                    }
+                } else if (action === 'copy-url') {
+                    const url = getCurrentIframeUrl();
+                    if (url) {
+                        copyTextToClipboard(url).then((ok) => {
+                            if (ok) console.log('URL copied to clipboard');
+                        });
+                    }
+                }
+                hideMenu();
+            });
+
+            document.addEventListener('contextmenu', (e) => {
+                const tabBtn = e.target.closest('.settings-tab[data-agent-id]');
+                if (!tabBtn) return;
+                if (e.target.closest('.tab-close-btn')) return;
+
+                const agentId = tabBtn.dataset.agentId;
+                const tabKey = tabBtn.dataset.tab;
+                if (tabKey !== 'plugin-avatar3d') return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                currentAgentId = agentId;
+                currentTabKey = tabKey;
+                menu.dataset.agentId = agentId;
+                menu.dataset.tab = tabKey;
+
+                showMenuAt(e.clientX, e.clientY);
+
+                if (removeObserver) {
+                    removeObserver.disconnect();
+                    removeObserver = null;
+                }
+                removeObserver = new MutationObserver(() => {
+                    if (!isCurrentTargetAlive()) hideMenu();
+                });
+                removeObserver.observe(document.body, { childList: true, subtree: true });
+            });
+
+            document.addEventListener('click', (e) => {
+                if (e.target.closest(`#settingsTabs-${currentAgentId || ''} .tab-close-btn`)) {
+                    hideMenu();
+                }
+            });
+        }
+
+        // Agent 右侧设置面板拖拽调整宽度（参考 SNS 右侧状态面板做法）
+        let isResizingPanel = false;
+        let resizingAgentId = null;
+        let startX = 0;
+        let startWidth = 0;
+        let activeResizer = null;
+        let activePanel = null;
+        let disabledIframes = null;
+
+        const onPanelMouseMove = (e) => {
+            if (!isResizingPanel || !activePanel || !activeResizer) return;
+
+            // 向左拖拽增加宽度,向右拖拽减少宽度
+            const deltaX = startX - e.clientX;
+            const minPanelWidth = 200;
+            const minChatWidth = 0;
+            const layout = activeResizer.closest('.agent-page-layout');
+            const layoutWidth = layout ? layout.getBoundingClientRect().width : window.innerWidth;
+            const resizerWidth = activeResizer.getBoundingClientRect().width || 8;
+            const maxPanelWidth = Math.max(minPanelWidth, Math.floor(layoutWidth - resizerWidth - minChatWidth));
+
+            let newWidth = Math.max(minPanelWidth, Math.min(maxPanelWidth, startWidth + deltaX));
+            if (newWidth > maxPanelWidth - 1) newWidth = maxPanelWidth;
+            activePanel.style.width = `${newWidth}px`;
+        };
+
+        const onPanelMouseUp = () => {
+            if (!isResizingPanel) return;
+
+            isResizingPanel = false;
+            resizingAgentId = null;
+            if (activeResizer) activeResizer.classList.remove('resizing');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            if (disabledIframes) {
+                disabledIframes.forEach(iframe => {
+                    iframe.style.pointerEvents = '';
+                });
+            }
+
+            activeResizer = null;
+            activePanel = null;
+            disabledIframes = null;
+
+            document.removeEventListener('mousemove', onPanelMouseMove);
+            document.removeEventListener('mouseup', onPanelMouseUp);
+        };
+
         // 1. 发送消息按钮 - 使用事件委托
         document.addEventListener('click', (e) => {
             const sendBtn = e.target.closest('.send-btn[data-agent-id]');
@@ -265,6 +545,39 @@ const multiAgentHandlers = {
                     }
                 }
             }
+        });
+
+        // 6.1 设置面板拖拽调整宽度（事件委托，支持多Agent）
+        document.addEventListener('mousedown', (e) => {
+            const resizer = e.target.closest('.agent-panel-resizer[data-agent-id]');
+            if (!resizer) return;
+
+            const agentId = resizer.dataset.agentId;
+            const collapseBtn = document.getElementById(`agentPanelCollapseBtn-${agentId}`);
+            if (collapseBtn && (e.target === collapseBtn || collapseBtn.contains(e.target))) return;
+
+            const panel = document.getElementById(`agentSettingsPanel-${agentId}`);
+            if (!panel || panel.classList.contains('collapsed')) return;
+
+            isResizingPanel = true;
+            resizingAgentId = agentId;
+            activeResizer = resizer;
+            activePanel = panel;
+            startX = e.clientX;
+            startWidth = panel.offsetWidth;
+            resizer.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+
+            // 禁用 iframe 的鼠标事件，防止拖动时卡顿
+            disabledIframes = Array.from(document.querySelectorAll('iframe'));
+            disabledIframes.forEach(iframe => {
+                iframe.style.pointerEvents = 'none';
+            });
+
+            document.addEventListener('mousemove', onPanelMouseMove);
+            document.addEventListener('mouseup', onPanelMouseUp);
+            e.preventDefault();
         });
 
         // 7. Prompt保存按钮
@@ -1438,6 +1751,7 @@ const multiAgentHandlers = {
                         <option value="code">代码执行插件</option>
                         <option value="calendar">日历插件</option>
                         <option value="chart">图表插件</option>
+                        <option value="avatar3d">3D Avatar</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -1473,7 +1787,8 @@ const multiAgentHandlers = {
                         'mindmap': '将聊天内容中的 Markdown mindmap 语法转换为可视化的思维导图',
                         'code': '从聊天中提取代码块，提供编辑和运行功能（支持 JavaScript、Python、HTML/CSS/JS）',
                         'calendar': '在聊天中显示和管理日历事件',
-                        'chart': '将数据可视化为各种图表'
+                        'chart': '将数据可视化为各种图表',
+                        'avatar3d': '在右侧设置面板中打开 3D Avatar 页面'
                     };
 
                     descriptionEl.textContent = descriptions[e.target.value] || '请先选择一个插件';
@@ -1513,6 +1828,12 @@ const multiAgentHandlers = {
                 fullName: '图表插件',
                 description: '将数据可视化为各种图表',
                 icon: '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>'
+            },
+            'avatar3d': {
+                name: '3D Avatar',
+                fullName: '3D Avatar',
+                description: '在右侧设置面板中打开 3D Avatar 页面',
+                icon: '<path d="M12 2a4 4 0 0 1 4 4c0 1.1-.45 2.1-1.17 2.83A6 6 0 0 1 18 14v2h-2v-2a4 4 0 0 0-8 0v2H6v-2a6 6 0 0 1 3.17-5.17A3.98 3.98 0 0 1 8 6a4 4 0 0 1 4-4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>'
             }
         };
 
@@ -1545,15 +1866,8 @@ const multiAgentHandlers = {
         tabButton.dataset.tab = `plugin-${pluginId}`;
         tabButton.dataset.agentId = agentId;
         tabButton.innerHTML = `
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                ${config.icon}
-            </svg>
             <span>${config.name}</span>
-            <button class="tab-close-btn" title="关闭插件">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-            </button>
+            <span class="tab-close-btn" title="关闭">×</span>
         `;
 
         // 绑定关闭按钮事件
@@ -1576,19 +1890,27 @@ const multiAgentHandlers = {
         const tabPane = document.createElement('div');
         tabPane.className = 'tab-pane';
         tabPane.dataset.tab = `plugin-${pluginId}`;
-        tabPane.innerHTML = `
-            <div class="settings-section">
-                <div class="settings-section-title">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
-                        ${config.icon}
-                    </svg>
-                    <span>${config.fullName}</span>
-                </div>
+        if (pluginId === 'avatar3d') {
+            tabPane.innerHTML = `
                 <div class="plugin-content" id="plugin-content-${pluginId}-${agentId}">
                     <p style="font-size: 11px; color: #999; text-align: center; padding: 20px;">正在加载插件...</p>
                 </div>
-            </div>
-        `;
+            `;
+        } else {
+            tabPane.innerHTML = `
+                <div class="settings-section">
+                    <div class="settings-section-title">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
+                            ${config.icon}
+                        </svg>
+                        <span>${config.fullName}</span>
+                    </div>
+                    <div class="plugin-content" id="plugin-content-${pluginId}-${agentId}">
+                        <p style="font-size: 11px; color: #999; text-align: center; padding: 20px;">正在加载插件...</p>
+                    </div>
+                </div>
+            `;
+        }
 
         tabContent.appendChild(tabPane);
         console.log('[MultiAgentHandlers] ✓ 已创建页签内容');
@@ -1677,6 +1999,13 @@ const multiAgentHandlers = {
                     container.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--text-secondary, #666);">代码执行插件未加载，请刷新页面</p>';
                     console.error('[MultiAgentHandlers] CodePlugin 未找到');
                 }
+                break;
+            case 'avatar3d':
+                container.innerHTML = `
+                    <div class="profile-webview-container">
+                        <iframe src="https://cjragents.ngrok.app/server1/wschat/static/desktop.html" class="profile-webview" frameborder="0" allow="microphone"></iframe>
+                    </div>
+                `;
                 break;
             case 'calendar':
                 container.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--text-secondary, #666);">日历插件开发中...</p>';

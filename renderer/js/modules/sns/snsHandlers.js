@@ -21,6 +21,7 @@ export default {
         this.initSNSPanelResizer();
         this.initSNSStatusTabs();
         this.initSNSContextMenu();
+        this.initSNSStatusTabReloadMenu();
         this.initSNSSearch();
         this.initSNSToolbar();
         this.initSNSSettingsPanel();
@@ -28,6 +29,235 @@ export default {
         this.initSNSActionBar();
         this.initMapReloadListener();
         this.initSNSUpdateListener();
+    },
+
+    initSNSStatusTabReloadMenu() {
+        const statusTabs = document.getElementById('statusTabs');
+        const statusTabContent = document.getElementById('statusTabContent');
+        if (!statusTabs || !statusTabContent) return;
+
+        if (this._snsTabReloadMenuInitialized) return;
+        this._snsTabReloadMenuInitialized = true;
+
+        const existingMenu = document.getElementById('snsTabReloadContextMenu');
+        const menu = existingMenu || (() => {
+            const el = document.createElement('div');
+            el.id = 'snsTabReloadContextMenu';
+            el.className = 'status-context-menu compact';
+            el.innerHTML = `
+                <button type="button" class="context-menu-item" data-action="reload">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+                        <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+                    </svg>
+                    <span>刷新</span>
+                </button>
+                <button type="button" class="context-menu-item" data-action="open-browser">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                    <span>Open in Browser</span>
+                </button>
+                <button type="button" class="context-menu-item" data-action="copy-url">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                    <span>Copy URL</span>
+                </button>
+            `;
+            document.body.appendChild(el);
+            return el;
+        })();
+
+        let currentTabKey = null;
+        let removeObserver = null;
+
+        const hideMenu = () => {
+            menu.style.display = 'none';
+            menu.dataset.tab = '';
+            currentTabKey = null;
+            if (removeObserver) {
+                removeObserver.disconnect();
+                removeObserver = null;
+            }
+        };
+
+        const getCurrentIframeUrl = () => {
+            if (!isCurrentTargetAlive()) return '';
+            const pane = statusTabContent.querySelector(`.tab-pane[data-tab="${currentTabKey}"]`);
+            const iframe = pane ? pane.querySelector('iframe') : null;
+            const src = iframe && iframe.src ? String(iframe.src) : '';
+            if (!src) return '';
+            try {
+                const u = new URL(src);
+                u.searchParams.delete('_ts');
+                return u.toString();
+            } catch (e) {
+                return src;
+            }
+        };
+
+        const copyTextToClipboard = async (text) => {
+            if (!text) return false;
+
+            try {
+                if (window.electronAPI && typeof window.electronAPI.writeClipboardText === 'function') {
+                    const res = await window.electronAPI.writeClipboardText(text);
+                    if (res && res.success) return true;
+                }
+            } catch (e) {
+            }
+
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+            } catch (e) {
+            }
+
+            try {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                textarea.style.top = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                textarea.setSelectionRange(0, textarea.value.length);
+                const ok = document.execCommand('copy');
+                textarea.remove();
+                return !!ok;
+            } catch (e) {
+                return false;
+            }
+        };
+
+        const isCurrentTargetAlive = () => {
+            if (!currentTabKey) return false;
+            const tabBtn = statusTabs.querySelector(`.status-tab[data-tab="${currentTabKey}"]`);
+            const pane = statusTabContent.querySelector(`.tab-pane[data-tab="${currentTabKey}"]`);
+            return !!(tabBtn && pane);
+        };
+
+        const reloadCurrentIframe = () => {
+            if (!isCurrentTargetAlive()) {
+                hideMenu();
+                return;
+            }
+
+            const pane = statusTabContent.querySelector(`.tab-pane[data-tab="${currentTabKey}"]`);
+            const iframe = pane ? pane.querySelector('iframe') : null;
+            if (iframe && iframe.src) {
+                try {
+                    if (iframe.contentWindow && iframe.contentWindow.location && typeof iframe.contentWindow.location.reload === 'function') {
+                        iframe.contentWindow.location.reload();
+                        return;
+                    }
+                } catch (e) {
+                    // ignore and fallback to src reload
+                }
+
+                try {
+                    const u = new URL(iframe.src);
+                    u.searchParams.set('_ts', String(Date.now()));
+                    iframe.src = u.toString();
+                } catch (e) {
+                    const sep = iframe.src.includes('?') ? '&' : '?';
+                    iframe.src = `${iframe.src}${sep}_ts=${Date.now()}`;
+                }
+            }
+        };
+
+        const showMenuAt = (x, y) => {
+            menu.style.display = 'block';
+            const menuWidth = menu.offsetWidth || 140;
+            const menuHeight = menu.offsetHeight || 38;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            let left = x;
+            let top = y;
+            if (left + menuWidth > viewportWidth) left = viewportWidth - menuWidth - 10;
+            if (top + menuHeight > viewportHeight) top = viewportHeight - menuHeight - 10;
+            menu.style.left = left + 'px';
+            menu.style.top = top + 'px';
+        };
+
+        document.addEventListener('click', (e) => {
+            if (!menu.contains(e.target)) hideMenu();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') hideMenu();
+        });
+
+        window.addEventListener('blur', hideMenu);
+        window.addEventListener('resize', hideMenu);
+        window.addEventListener('scroll', hideMenu, true);
+
+        menu.addEventListener('click', (e) => {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+            const action = item.dataset.action;
+            if (action === 'reload') {
+                reloadCurrentIframe();
+            } else if (action === 'open-browser') {
+                const url = getCurrentIframeUrl();
+                if (url) {
+                    if (window.electronAPI && window.electronAPI.openUrl) {
+                        window.electronAPI.openUrl(url);
+                    } else {
+                        window.open(url, '_blank');
+                    }
+                }
+            } else if (action === 'copy-url') {
+                const url = getCurrentIframeUrl();
+                if (url) {
+                    copyTextToClipboard(url).then((ok) => {
+                        if (ok) console.log('URL copied to clipboard');
+                    });
+                }
+            }
+            hideMenu();
+        });
+
+        statusTabs.addEventListener('contextmenu', (e) => {
+            const tabBtn = e.target.closest('.status-tab');
+            if (!tabBtn) return;
+            if (e.target.closest('.tab-close-btn')) return;
+
+            const tabKey = tabBtn.dataset.tab;
+            if (tabKey !== 'profile' && tabKey !== 'placeIntro') return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            currentTabKey = tabKey;
+            menu.dataset.tab = tabKey;
+            showMenuAt(e.clientX, e.clientY);
+
+            if (removeObserver) {
+                removeObserver.disconnect();
+                removeObserver = null;
+            }
+            removeObserver = new MutationObserver(() => {
+                if (!isCurrentTargetAlive()) hideMenu();
+            });
+            removeObserver.observe(document.body, { childList: true, subtree: true });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#statusTabs .tab-close-btn')) {
+                hideMenu();
+            }
+        });
     },
 
     /**

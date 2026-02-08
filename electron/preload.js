@@ -108,6 +108,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     showBrowserView: () => ipcRenderer.send('show-browserview'),
 
+    onBrowserViewLoadFailed: (callback) => {
+
+        ipcRenderer.on('browserview-load-failed', (event, payload) => callback(payload));
+
+    },
+
     getBrowserViewBounds: () => ipcRenderer.invoke('get-browserview-bounds'),
 
     updateBrowserViewBounds: (collapsed) => ipcRenderer.send('update-browserview-bounds', collapsed),
@@ -207,6 +213,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 打开链接
 
     openUrl: (url) => ipcRenderer.send('open-url', url),
+
+
+
+    writeClipboardText: (text) => ipcRenderer.invoke('write-clipboard-text', text),
 
 
 

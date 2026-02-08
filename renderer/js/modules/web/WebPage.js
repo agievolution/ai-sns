@@ -4,6 +4,31 @@
 
 const WebPage = {
     currentUrl: null,
+    _loadFailedBound: false,
+    _lastConnectFailAt: 0,
+    _lastConnectFailUrl: null,
+
+    _notifyConnectFailed(url) {
+        const now = Date.now();
+        const normalizedUrl = url || null;
+        if (now - this._lastConnectFailAt < 1500) {
+            if (!normalizedUrl || normalizedUrl === this._lastConnectFailUrl) {
+                return;
+            }
+        }
+
+        this._lastConnectFailAt = now;
+        this._lastConnectFailUrl = normalizedUrl;
+
+        if (window.Toast && typeof window.Toast.error === 'function') {
+            window.Toast.error('WebSite Can not connect');
+            return;
+        }
+
+        if (window.Notification && typeof window.Notification.error === 'function') {
+            window.Notification.error('WebSite Can not connect');
+        }
+    },
 
     render() {
         return `
@@ -29,6 +54,19 @@ const WebPage = {
     async loadUrl(url) {
         if (window.electronAPI && window.electronAPI.loadUrlInBrowserView) {
             try {
+                if (!this._loadFailedBound && window.electronAPI.onBrowserViewLoadFailed) {
+                    this._loadFailedBound = true;
+                    window.electronAPI.onBrowserViewLoadFailed((payload) => {
+                        console.error('[WebPage] BrowserView load failed:', payload);
+                        this._notifyConnectFailed(payload && payload.url);
+                        this.currentUrl = null;
+                        const emptyState = document.getElementById('webEmptyState');
+                        if (emptyState) {
+                            emptyState.style.display = 'flex';
+                        }
+                    });
+                }
+
                 const result = await window.electronAPI.loadUrlInBrowserView(url);
                 if (result.success) {
                     this.currentUrl = url;
@@ -38,9 +76,21 @@ const WebPage = {
                     }
                 } else {
                     console.error('Failed to load URL:', result.error);
+                    this._notifyConnectFailed(url);
+                    this.currentUrl = null;
+                    const emptyState = document.getElementById('webEmptyState');
+                    if (emptyState) {
+                        emptyState.style.display = 'flex';
+                    }
                 }
             } catch (error) {
                 console.error('Error loading URL in BrowserView:', error);
+                this._notifyConnectFailed(url);
+                this.currentUrl = null;
+                const emptyState = document.getElementById('webEmptyState');
+                if (emptyState) {
+                    emptyState.style.display = 'flex';
+                }
             }
         }
     },

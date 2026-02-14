@@ -7,6 +7,9 @@ export class SNSAvatarDialog {
         this.dialog = null;
         this.selectedAvatar3D = null;
         this.uploadedAvatar = null;
+        this.existingConfig = null;
+        this.existingAvatar3DName = null;
+        this.existingAgentId = null;
     }
 
     async show() {
@@ -87,6 +90,8 @@ export class SNSAvatarDialog {
         document.body.insertAdjacentHTML('beforeend', dialogHTML);
         this.dialog = document.getElementById('snsAvatarDialog');
 
+        await this.loadExistingConfig();
+
         // Load 3D avatars
         await this.load3DAvatars();
 
@@ -98,6 +103,37 @@ export class SNSAvatarDialog {
 
         // Setup event listeners
         this.setupEventListeners();
+    }
+
+    setAvatarPreview(avatarSrc) {
+        const img = document.getElementById('avatarPreviewImg');
+        const placeholder = document.getElementById('avatarPlaceholder');
+        if (!img || !placeholder || !avatarSrc) return;
+
+        img.src = avatarSrc;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+    }
+
+    async loadExistingConfig() {
+        try {
+            const response = await fetch('http://localhost:8788/api/sns/config');
+            const result = await response.json();
+
+            const config = result && typeof result === 'object' && 'data' in result ? result.data : result;
+            if (!config || typeof config !== 'object') return;
+
+            this.existingConfig = config;
+            if (config.avatar) {
+                this.setAvatarPreview(config.avatar);
+            }
+            if (config.avatar3d) {
+                const rawName = String(config.avatar3d || '');
+                this.existingAvatar3DName = rawName.toLowerCase().endsWith('.glb') ? rawName.slice(0, -4) : rawName;
+            }
+        } catch (error) {
+            console.error('Error loading existing config:', error);
+        }
     }
 
     async load3DAvatars() {
@@ -120,6 +156,14 @@ export class SNSAvatarDialog {
                 item.addEventListener('click', () => this.select3DAvatar(item, avatar));
                 grid.appendChild(item);
             });
+
+            if (this.existingAvatar3DName) {
+                const existingAvatar = avatars.find(a => a.name === this.existingAvatar3DName);
+                const existingItem = grid.querySelector(`.avatar3d-item[data-name="${CSS.escape(this.existingAvatar3DName)}"]`);
+                if (existingAvatar && existingItem) {
+                    this.select3DAvatar(existingItem, existingAvatar);
+                }
+            }
         } catch (error) {
             console.error('Error loading 3D avatars:', error);
             document.getElementById('avatar3dGrid').innerHTML = '<div class="error">加载失败</div>';
@@ -128,9 +172,11 @@ export class SNSAvatarDialog {
 
     select3DAvatar(element, avatar) {
         // Remove previous selection
-        document.querySelectorAll('.avatar3d-item').forEach(item => {
-            item.classList.remove('selected');
-        });
+        if (this.dialog) {
+            this.dialog.querySelectorAll('.avatar3d-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+        }
 
         // Select current
         element.classList.add('selected');
@@ -139,21 +185,23 @@ export class SNSAvatarDialog {
 
     setupEventListeners() {
         // Tab switching
-        document.querySelectorAll('.modal-tab').forEach(tab => {
+        const modalTabs = this.dialog ? this.dialog.querySelectorAll('.modal-tab') : [];
+        modalTabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
                 const targetTab = e.target.dataset.tab;
 
                 // Update tab buttons
-                document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+                modalTabs.forEach(t => t.classList.remove('active'));
                 e.target.classList.add('active');
 
                 // Update tab content
-                document.querySelectorAll('.tab-content').forEach(content => {
+                const tabContents = this.dialog ? this.dialog.querySelectorAll('.tab-content') : [];
+                tabContents.forEach(content => {
                     content.style.display = 'none';
                     content.classList.remove('active');
                 });
 
-                const targetContent = document.getElementById(targetTab + 'Tab');
+                const targetContent = this.dialog ? this.dialog.querySelector(`#${targetTab}Tab`) : null;
                 if (targetContent) {
                     targetContent.style.display = 'block';
                     targetContent.classList.add('active');
@@ -162,22 +210,31 @@ export class SNSAvatarDialog {
         });
 
         // Upload button
-        document.getElementById('uploadAvatarBtn').addEventListener('click', () => {
-            document.getElementById('avatarFileInput').click();
-        });
+        const uploadBtn = this.dialog ? this.dialog.querySelector('#uploadAvatarBtn') : null;
+        const fileInput = this.dialog ? this.dialog.querySelector('#avatarFileInput') : null;
+        if (uploadBtn && fileInput) {
+            uploadBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+        }
 
         // File input change
-        document.getElementById('avatarFileInput').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                this.previewAvatar(file);
-            }
-        });
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    this.previewAvatar(file);
+                }
+            });
+        }
 
         // Save button
-        document.getElementById('saveAvatarBtn').addEventListener('click', () => {
-            this.saveConfiguration();
-        });
+        const saveBtn = this.dialog ? this.dialog.querySelector('#saveAvatarBtn') : null;
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                this.saveConfiguration();
+            });
+        }
     }
 
     previewAvatar(file) {
@@ -195,7 +252,8 @@ export class SNSAvatarDialog {
 
     async saveConfiguration() {
         try {
-            const activeTab = document.querySelector('.modal-tab.active').dataset.tab;
+            const activeTabEl = this.dialog ? this.dialog.querySelector('.modal-tab.active') : null;
+            const activeTab = activeTabEl ? activeTabEl.dataset.tab : 'avatar';
 
             if (activeTab === 'avatar') {
                 // Save avatar configuration
@@ -219,7 +277,8 @@ export class SNSAvatarDialog {
 
                 // Set 3D avatar if selected
                 if (this.selectedAvatar3D) {
-                    updates.avatar3d = this.selectedAvatar3D.name;
+                    const name = String(this.selectedAvatar3D.name || '');
+                    updates.avatar3d = name.toLowerCase().endsWith('.glb') ? name : `${name}.glb`;
                 }
 
                 // Update configuration
@@ -285,7 +344,8 @@ export class SNSAvatarDialog {
                 document.getElementById('userNickname').value = result.data.nickname || '';
                 document.getElementById('userSign').value = result.data.sign || '';
                 document.getElementById('userSnsUrl').value = result.data.sns_url || '';
-                document.getElementById('userAgentId').value = result.data.agent_id || '';
+                this.existingAgentId = result.data.agent_id || '';
+                document.getElementById('userAgentId').value = this.existingAgentId;
             }
         } catch (error) {
             console.error('Error loading user info:', error);
@@ -305,6 +365,10 @@ export class SNSAvatarDialog {
                     option.textContent = agent.name;
                     select.appendChild(option);
                 });
+
+                if (this.existingAgentId) {
+                    select.value = this.existingAgentId;
+                }
             }
         } catch (error) {
             console.error('Error loading agent list:', error);

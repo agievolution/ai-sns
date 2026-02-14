@@ -132,11 +132,15 @@ export default {
                                 </div>
                                 <div class="control-center-input">
                                     <button class="control-computer-btn" id="computerBtn">
-                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                                            <line x1="8" y1="21" x2="16" y2="21"/>
-                                            <line x1="12" y1="17" x2="12" y2="21"/>
-                                        </svg>
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 显示器外框 -->
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+    <line x1="8" y1="21" x2="16" y2="21"/>
+    <line x1="12" y1="17" x2="12" y2="21"/>
+    <!-- 叉号 -->
+    <line x1="9" y1="7" x2="15" y2="13"/>
+    <line x1="15" y1="7" x2="9" y2="13"/>
+</svg>
                                     </button>
                                     <div class="control-input-group">
                                         <div class="control-toggle-group">

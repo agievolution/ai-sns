@@ -87,32 +87,33 @@ export class SNSSocialRoleDialog {
                     margin: 0 0 12px 0;
                     font-size: 14px;
                     font-weight: 600;
-                    color: #333;
+                    color: var(--text-primary, #333);
                 }
                 
                 .role-list {
                     flex: 1;
                     overflow-y: auto;
-                    border: 1px solid #e0e0e0;
+                    border: 1px solid var(--border-color, #e0e0e0);
                     border-radius: 6px;
-                    background: #fafafa;
+                    background: var(--bg-secondary, #fafafa);
                 }
                 
                 .role-item {
                     padding: 12px;
-                    border-bottom: 1px solid #e0e0e0;
+                    border-bottom: 1px solid var(--border-color, #e0e0e0);
                     cursor: pointer;
                     transition: background-color 0.2s;
-                    background: white;
+                    background: var(--bg-content, #fff);
+                    color: var(--text-primary, #333);
                 }
                 
                 .role-item:hover {
-                    background-color: #f5f5f5;
+                    background-color: var(--bg-hover, #f5f5f5);
                 }
                 
                 .role-item.selected {
-                    background-color: #e3f2fd;
-                    border-left: 3px solid #2196F3;
+                    background-color: var(--bg-active, #e3f2fd);
+                    border-left: 3px solid var(--color-primary, #2196F3);
                 }
                 
                 .role-item-header {
@@ -126,20 +127,20 @@ export class SNSSocialRoleDialog {
                     margin: 0;
                     font-size: 14px;
                     font-weight: 600;
-                    color: #333;
+                    color: var(--text-primary, #333);
                 }
                 
                 .role-tags {
                     font-size: 11px;
-                    color: #666;
-                    background: #e0e0e0;
+                    color: var(--text-secondary, #666);
+                    background: var(--bg-tertiary, #e0e0e0);
                     padding: 2px 6px;
                     border-radius: 3px;
                 }
                 
                 .role-item-preview {
                     font-size: 12px;
-                    color: #666;
+                    color: var(--text-secondary, #666);
                     line-height: 1.4;
                     overflow: hidden;
                     text-overflow: ellipsis;
@@ -166,7 +167,7 @@ export class SNSSocialRoleDialog {
                     margin: 0;
                     font-size: 14px;
                     font-weight: 600;
-                    color: #333;
+                    color: var(--text-primary, #333);
                 }
                 
                 #snsSocialRoleDialog .modal-footer {
@@ -183,11 +184,11 @@ export class SNSSocialRoleDialog {
                 
                 .role-preview {
                     flex: 1;
-                    border: 1px solid #e0e0e0;
+                    border: 1px solid var(--border-color, #e0e0e0);
                     border-radius: 6px;
                     padding: 16px;
                     overflow: hidden;
-                    background: white;
+                    background: var(--bg-content, #fff);
                     display: flex;
                     flex-direction: column;
                     min-height: 0;
@@ -203,7 +204,7 @@ export class SNSSocialRoleDialog {
                 
                 .role-preview-content .placeholder {
                     text-align: center;
-                    color: #999;
+                    color: var(--text-muted, #999);
                     padding: 40px 20px;
                 }
                 
@@ -216,10 +217,10 @@ export class SNSSocialRoleDialog {
                 .role-detail-title {
                     font-size: 18px;
                     font-weight: 600;
-                    color: #333;
+                    color: var(--text-primary, #333);
                     margin: 0;
                     padding-bottom: 12px;
-                    border-bottom: 2px solid #e0e0e0;
+                    border-bottom: 2px solid var(--border-color, #e0e0e0);
                     user-select: text;
                     cursor: text;
                 }
@@ -233,15 +234,15 @@ export class SNSSocialRoleDialog {
                 .role-field-label {
                     font-size: 13px;
                     font-weight: 600;
-                    color: #555;
+                    color: var(--text-secondary, #555);
                 }
                 
                 .role-field-value {
                     font-size: 13px;
-                    color: #333;
+                    color: var(--text-primary, #333);
                     line-height: 1.6;
                     padding: 8px;
-                    background: #f9f9f9;
+                    background: var(--bg-secondary, #f9f9f9);
                     border-radius: 4px;
                     white-space: pre-wrap;
                     user-select: text;
@@ -252,9 +253,11 @@ export class SNSSocialRoleDialog {
                 .role-field-textarea {
                     font-size: 13px;
                     padding: 8px;
-                    border: 1px solid #ddd;
+                    border: 1px solid var(--border-color, #ddd);
                     border-radius: 4px;
                     font-family: inherit;
+                    background: var(--bg-content, #fff);
+                    color: var(--text-primary, #333);
                 }
                 
                 .role-field-textarea {
@@ -287,18 +290,18 @@ export class SNSSocialRoleDialog {
                 .role-field-input:focus,
                 .role-field-textarea:focus {
                     outline: none;
-                    border-color: #2196F3;
+                    border-color: var(--border-focus, #2196F3);
                     box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
                 }
                 
                 .loading, .empty-state, .error {
                     text-align: center;
                     padding: 20px;
-                    color: #999;
+                    color: var(--text-muted, #999);
                 }
                 
                 .error {
-                    color: #f44336;
+                    color: var(--color-danger, #f44336);
                 }
             </style>
         `;
@@ -412,7 +415,6 @@ export class SNSSocialRoleDialog {
         this.showRolePreview(this.selectedRole);
 
         // Toggle buttons
-        document.getElementById('deleteRoleBtn').style.display = 'inline-block';
         document.getElementById('editRoleBtn').style.display = 'inline-block';
         document.getElementById('saveRoleBtn').style.display = 'none';
         document.getElementById('cancelEditBtn').style.display = 'none';

@@ -26,13 +26,19 @@ const InitializationWizard = {
         map_id: ''
     },
 
-    async show() {
+    async show(options = {}) {
         if (typeof Modal === 'undefined') {
             console.error('Modal component not loaded');
             return;
         }
 
         await this.loadInitialData();
+
+        const auto = !!(options && options.auto);
+
+        if (auto && Number(this.state.status) === 1) {
+            return;
+        }
 
         if (Number(this.state.status) === 1) {
             Modal.show({
@@ -54,20 +60,21 @@ const InitializationWizard = {
             cancelText: '取消',
             confirmText: '下一步',
             width: '820px',
+            closeOnClickOutside: false,
             onOpen: (modal) => {
                 this.modal = modal;
                 this.bindStepEvents();
             },
             onCancel: async () => {
-                if (this.step === 0) {
-                    this.cleanupCaptchaObjectUrl();
-                    return true;
+                this.cleanupCaptchaObjectUrl();
+                if (window.electronAPI && typeof window.electronAPI.quitApp === 'function') {
+                    window.electronAPI.quitApp();
+                } else if (window.electronAPI && typeof window.electronAPI.windowClose === 'function') {
+                    window.electronAPI.windowClose();
+                } else {
+                    window.close();
                 }
-                this.collectFormValues();
-                this.step -= 1;
-                await this.saveDraftSilently();
-                this.updateModal();
-                return false;
+                return true;
             },
             onConfirm: async () => {
                 this.collectFormValues();
@@ -155,7 +162,7 @@ const InitializationWizard = {
             <div class="initialization-wizard">
                 <div style="display:flex;gap:16px;align-items:flex-start;">
                     <div style="width:88px;">
-                        ${avatarUrl ? `<img src="${avatarUrl}" style="width:70px;height:70px;border-radius:50%;object-fit:cover;"/>` : ''}
+                        ${avatarUrl ? `<img src="${avatarUrl}" style="width:70px;height:70px;border-radius:50%;object-fit:cover;display:block;margin:0 auto;"/>` : ''}
                     </div>
                     <div style="flex:1;">
                         <h4 style="margin:0 0 8px 0;">已完成初始化</h4>
@@ -204,9 +211,11 @@ const InitializationWizard = {
             <div class="init-step init-step-basic">
                 <div style="display:flex;gap:16px;align-items:flex-start;">
                     <div style="width:96px;text-align:center;">
-                        <img id="initAvatarPreview" src="${avatarUrl}" style="width:70px;height:70px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.2);" />
-                        <div style="margin-top:8px;">
-                            <input id="initAvatarFile" type="file" accept="image/*" />
+                        <img id="initAvatarPreview" src="${avatarUrl}" style="width:70px;height:70px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.2);display:block;margin:0 auto;" />
+                        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;align-items:center;">
+                            <input id="initAvatarFile" type="file" accept="image/*" style="display:none;" />
+                            <button class="btn btn-secondary" id="initAvatarSelectBtn" type="button" style="width:88px;display:block;margin:0 auto;">选择图片</button>
+                            <div id="initAvatarFileName" style="font-size:11px;opacity:0.75;max-width:96px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
                         </div>
                     </div>
 
@@ -273,9 +282,9 @@ const InitializationWizard = {
         const avatarGrid = this.avatar3dItems.map(item => {
             const selected = item.glb_url === this.state.avatar3d;
             return `
-                <div class="avatar3d-item" data-glb-url="${this.escapeHtml(item.glb_url)}" style="cursor:pointer;border:1px solid ${selected ? '#1a73e8' : 'rgba(255,255,255,0.2)'};border-radius:8px;padding:8px;">
-                    <img src="${this.escapeHtml(item.png_url)}" style="width:96px;height:96px;object-fit:cover;border-radius:6px;display:block;" />
-                    <div style="font-size:12px;opacity:0.85;margin-top:6px;word-break:break-all;">${this.escapeHtml(item.key)}</div>
+                <div class="avatar3d-item" data-glb-url="${this.escapeHtml(item.glb_url)}" style="cursor:pointer;border:1px solid ${selected ? '#1a73e8' : 'rgba(255,255,255,0.2)'};border-radius:10px;padding:6px;flex:0 0 auto;width:86px;">
+                    <img src="${this.escapeHtml(item.png_url)}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;margin:0 auto;" />
+                    <div style="font-size:11px;opacity:0.85;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.escapeHtml(item.key)}</div>
                 </div>
             `;
         }).join('');
@@ -287,8 +296,12 @@ const InitializationWizard = {
             <div class="init-step init-step-sns">
                 <div class="form-group">
                     <label>请选择您的3D头像 *</label>
-                    <div id="avatar3dGrid" style="display:grid;grid-template-columns:repeat(5, 1fr);gap:10px;">
-                        ${avatarGrid}
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button class="btn btn-secondary" id="avatar3dPrevBtn" type="button" style="padding:6px 10px;">◀</button>
+                        <div id="avatar3dGrid" style="display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;padding:6px 2px;flex:1;min-width:0;">
+                            ${avatarGrid}
+                        </div>
+                        <button class="btn btn-secondary" id="avatar3dNextBtn" type="button" style="padding:6px 10px;">▶</button>
                     </div>
                     <input type="hidden" id="initAvatar3d" value="${this.escapeHtml(this.state.avatar3d || '')}" />
                 </div>
@@ -403,11 +416,22 @@ const InitializationWizard = {
         });
 
         const fileInput = root.querySelector('#initAvatarFile');
+        const fileSelectBtn = root.querySelector('#initAvatarSelectBtn');
+        const fileNameEl = root.querySelector('#initAvatarFileName');
+        if (fileSelectBtn && fileInput) {
+            fileSelectBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+        }
         if (fileInput) {
             fileInput.addEventListener('change', async () => {
                 const file = fileInput.files && fileInput.files[0];
                 if (!file) {
                     return;
+                }
+
+                if (fileNameEl) {
+                    fileNameEl.textContent = file.name || '';
                 }
 
                 try {
@@ -443,6 +467,8 @@ const InitializationWizard = {
                     if (typeof Notification !== 'undefined') {
                         Notification.error(e.message || '头像上传失败');
                     }
+                } finally {
+                    fileInput.value = '';
                 }
             });
         }
@@ -485,7 +511,28 @@ const InitializationWizard = {
         }
 
         const avatarGrid = root.querySelector('#avatar3dGrid');
+        const prevBtn = root.querySelector('#avatar3dPrevBtn');
+        const nextBtn = root.querySelector('#avatar3dNextBtn');
         if (avatarGrid) {
+            const scrollByAmount = (dir) => {
+                const amount = Math.max(120, Math.floor((avatarGrid.clientWidth || 0) * 0.7));
+                avatarGrid.scrollBy({ left: dir * amount, behavior: 'smooth' });
+            };
+
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => scrollByAmount(-1));
+            }
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => scrollByAmount(1));
+            }
+
+            avatarGrid.addEventListener('wheel', (e) => {
+                if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                    avatarGrid.scrollLeft += e.deltaY;
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
             avatarGrid.querySelectorAll('.avatar3d-item').forEach(item => {
                 item.addEventListener('click', async () => {
                     const glbUrl = item.dataset.glbUrl;

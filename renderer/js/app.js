@@ -31,8 +31,9 @@ const App = {
         // 监听Electron事件
         this.bindElectronEvents();
 
-        // 默认加载第一个导航项 SNS（优先显示界面）
-        this.navigateTo('sns');
+        // 根据 system_init.status 决定启动落地页：未初始化 -> Home，已初始化 -> SNS
+        const initialPage = await this.getInitialPage();
+        this.navigateTo(initialPage);
 
         // 异步初始化API客户端（不阻塞UI）
         this.initApiAsync();
@@ -64,13 +65,29 @@ const App = {
         // 使用 Promise 而不是 await，避免阻塞
         Promise.resolve().then(async () => {
             try {
-                await api.init();
                 await this.checkApiConnection();
                 await this.initWebSocket();
             } catch (error) {
                 console.warn('API initialization failed:', error);
             }
         });
+    },
+
+    async getInitialPage() {
+        try {
+            if (window.api && typeof window.api.init === 'function') {
+                await window.api.init();
+            }
+
+            const res = await window.api.get('/api/system/init-wizard/draft');
+            const status = Number(res?.data?.status);
+            if (res && res.success && status !== 1) {
+                return 'home';
+            }
+        } catch (e) {
+            console.warn('[App] Failed to resolve initial page, fallback to sns:', e);
+        }
+        return 'sns';
     },
 
     async checkApiConnection() {

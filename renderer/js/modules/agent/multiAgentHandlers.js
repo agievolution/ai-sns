@@ -791,6 +791,24 @@ const multiAgentHandlers = {
         });
 
         document.addEventListener('click', (e) => {
+            const avatarBtn = e.target.closest('.toolbar-icon-btn[title="3D Avatar"][data-agent-id]');
+            if (avatarBtn) {
+                const agentId = parseInt(avatarBtn.dataset.agentId);
+
+                const panel = document.getElementById(`agentSettingsPanel-${agentId}`);
+                const resizer = document.getElementById(`agentPanelResizer-${agentId}`);
+                if (panel) {
+                    panel.classList.remove('collapsed');
+                }
+                if (resizer) {
+                    resizer.classList.remove('collapsed');
+                }
+
+                this.loadPluginForAgent('avatar3d', agentId);
+            }
+        });
+
+        document.addEventListener('click', (e) => {
             const attachBtn = e.target.closest('.toolbar-icon-btn[title="附件"][data-agent-id]');
             if (attachBtn) {
                 const agentId = parseInt(attachBtn.dataset.agentId);

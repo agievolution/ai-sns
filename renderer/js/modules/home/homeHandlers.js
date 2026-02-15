@@ -7,6 +7,8 @@ import InitializationWizard from './InitializationWizard.js';
 const homeHandlers = {
     init() {
         this.bindEvents();
+
+        InitializationWizard.show({ auto: true });
     },
 
     bindEvents() {

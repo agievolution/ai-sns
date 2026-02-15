@@ -152,6 +152,15 @@ const AgentPage = {
 </svg>
 
 </button>
+
+                                <button class="toolbar-icon-btn" title="3D Avatar" data-agent-id="${agent.id}">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                            <line x1="8" y1="21" x2="16" y2="21"/>
+                                            <line x1="12" y1="17" x2="12" y2="21"/>
+                                        </svg>
+                                </button>
+
                             </div>
                             <button class="send-btn" id="sendMessageBtn-${agent.id}" data-agent-id="${agent.id}">
                                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">

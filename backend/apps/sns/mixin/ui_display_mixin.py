@@ -166,69 +166,69 @@ class UIDisplayMixin:
         Update resource display content, including tool list, people list, and place list.
         """
         # Get resource data
-        tool_list = self.get_service_list()
+        service_list = self.get_service_list()
         people_list = self.get_people_list()
         place_list = self.get_place_list()
 
         # Format content
-        formatted_content = self._format_resource_content(tool_list, people_list, place_list)+"\n"
+        formatted_content = self._format_resource_content(service_list, people_list, place_list)+"\n"
 
         # Send to the frontend Resource tab
         import asyncio
         asyncio.create_task(self._send_to_frontend('resource', formatted_content))
 
-    def _format_resource_content(self, tool_list, people_list, place_list):
+    def _format_resource_content(self, service_list, people_list, place_list):
         """
         Format resource content for display.
         """
         content = ""
 
         # Format tool list
-        if tool_list:
-            content += f"🌐 服务列表（共 {len(tool_list)} 项）\n"
+        if service_list:
+            content += f"🌐 服务列表（共 {len(service_list)} 项）\n"
             content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
 
-            for i, tool in enumerate(tool_list):
+            for i, service in enumerate(service_list):
                 # Tool ID and name
-                content += f"#{tool.get('id', '')} {tool.get('name', '')}\n"
+                content += f"#{service.get('id', '')} {service.get('name', '')}\n"
 
 
                 # Geo coordinates (if lng/lat are present and non-zero)
-                lng = tool.get('lng', 0)
-                lat = tool.get('lat', 0)
+                lng = service.get('lng', 0)
+                lat = service.get('lat', 0)
                 if lng and lat and lng != 0 and lat != 0:
                     # Format coordinates (up to 8 digits), trim trailing zeros
                     formatted_lng = f"{lng:.8g}"
                     formatted_lat = f"{lat:.8g}"
                     content += f"📍 坐标：{formatted_lng}, {formatted_lat}\n"
-                elif 'place' in tool and tool['place']:
-                    content += f"🌍 位置：{tool['place']}\n"
+                elif 'place' in service and service['place']:
+                    content += f"🌍 位置：{service['place']}\n"
 
                 # Description
-                if 'description' in tool and tool['description']:
-                    content += f"💬 描述：{tool['description']}\n"
+                if 'description' in service and service['description']:
+                    content += f"💬 描述：{service['description']}\n"
 
                 # Address
-                if 'address' in tool and tool['address'] and tool['address'] != "Not needed":
-                    content += f"🔗 地址：{tool['address']}\n"
+                if 'address' in service and service['address'] and service['address'] != "Not needed":
+                    content += f"🔗 地址：{service['address']}\n"
 
                 # Type and method
-                type_info = tool.get('type', '')
-                method_info = tool.get('method', '')
+                type_info = service.get('type', '')
+                method_info = service.get('method', '')
 
                 # Params
                 param_info = ""
-                if 'parameter' in tool and tool['parameter']:
-                    if isinstance(tool['parameter'], dict):
-                        param_strs = [f"{k}={v}" for k, v in tool['parameter'].items()]
+                if 'parameter' in service and service['parameter']:
+                    if isinstance(service['parameter'], dict):
+                        param_strs = [f"{k}={v}" for k, v in service['parameter'].items()]
                         param_info = f"({', '.join(param_strs)})" if param_strs else ""
                     else:
-                        param_info = f"({tool['parameter']})" if tool['parameter'] != "None" else ""
+                        param_info = f"({service['parameter']})" if service['parameter'] != "None" else ""
 
                 content += f"⚙️ 类型：{type_info} ｜ 方法：{method_info}{param_info}\n"
 
                 # Separator line (except for the last tool)
-                if i < len(tool_list) - 1:
+                if i < len(service_list) - 1:
                     content += "\n──────────────────────────\n\n"
 
             content += "\n\n"

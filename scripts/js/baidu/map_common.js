@@ -526,6 +526,14 @@ map.addEventListener('click', function (e) {
         setPersonModelPointByNationId(nation_id_me, e.latlng);
         setPersonPointByNationId(nation_id_me, e.latlng.lng, e.latlng.lat);
 
+        try {
+            if (typeof update_location_and_open_nearest_place === 'function') {
+                update_location_and_open_nearest_place(e.latlng.lng, e.latlng.lat, { maxDistanceM: 1000, throttleMs: 800 });
+            }
+        } catch (err) {
+            console.warn('Failed to sync location to backend:', err);
+        }
+
         service = getServiceForUser();
         if (service !== null) {
             const userConfirmed = confirm("此处有相应的应用服务，要继续吗？");

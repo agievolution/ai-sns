@@ -17,6 +17,8 @@ from db.DBFactory import (
     add_AIChatMessages as add_AIChatMessage
 )
 
+from backend.database.repositories.chat_repository import AIChatMessagesRepository
+
 logger = logging.getLogger(__name__)
 
 # Agent instances management
@@ -25,6 +27,9 @@ agent_instances: Dict[str, Any] = {}
 
 class ChatService:
     """Service for managing chat functionality"""
+
+    def __init__(self):
+        self._chat_repo = AIChatMessagesRepository()
 
     @staticmethod
     def load_ai_config_from_file():
@@ -193,39 +198,36 @@ class ChatService:
             List of conversations with title and last message time
         """
         try:
-            # Query all first messages (is_first=True) to get conversations
-            query_params = {'is_first': True, 'is_delete': False}
-            if agent_id is not None:
-                query_params['agent_id'] = agent_id
-            # Use the _All version to fetch all records (imported via alias as query_AIChatMessages), passing limit
-            conversations = query_AIChatMessages(limit=limit, **query_params)
-
-            # Group by conversation_id and get latest timestamp
-            conversation_dict = {}
-            for msg in conversations:
-                conv_id = msg.conversation_id
-                if conv_id not in conversation_dict:
-                    conversation_dict[conv_id] = {
-                        "conversation_id": conv_id,
-                        "agent_id": getattr(msg, 'agent_id', None),  # Add agent_id field
-                        "title": msg.title or msg.content[:50],
-                        "last_message_time": msg.create_time,
-                        "first_message": msg.content[:100]
-                    }
-                else:
-                    # Update if this message is newer
-                    if msg.create_time > conversation_dict[conv_id]["last_message_time"]:
-                        conversation_dict[conv_id]["last_message_time"] = msg.create_time
-
-            # Convert to list and sort by last message time (descending)
-            result = list(conversation_dict.values())
-            result.sort(key=lambda x: x["last_message_time"], reverse=True)
-
-            # Limit results
-            return result[:limit]
+            repo = AIChatMessagesRepository()
+            rows = repo.get_conversation_summaries(limit=limit, agent_id=agent_id)
+            for r in rows:
+                if r.get('last_message_time') is not None:
+                    r['last_message_time'] = r['last_message_time'].isoformat()
+                if r.get('stick_time') is not None:
+                    r['stick_time'] = r['stick_time'].isoformat()
+            return rows
         except Exception as e:
             logger.error(f"Error getting conversations: {e}")
             return []
+
+    def delete_conversation(self, conversation_id: str) -> int:
+        return self._chat_repo.soft_delete_conversation(conversation_id)
+
+    def update_conversation_title(self, conversation_id: str, title: str) -> bool:
+        return self._chat_repo.update_conversation_title(conversation_id, title)
+
+    def toggle_conversation_pin(self, conversation_id: str) -> Dict[str, Any]:
+        found, dt = self._chat_repo.toggle_conversation_pin(conversation_id)
+        return {
+            'found': bool(found),
+            'stick_time': dt.isoformat() if dt is not None else None
+        }
+
+    def update_conversation_tag(self, conversation_id: str, tag: Optional[str]) -> bool:
+        return self._chat_repo.update_conversation_tag(conversation_id, tag)
+
+    def get_conversation_tag_stats(self, agent_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self._chat_repo.get_tag_stats(agent_id=agent_id)
 
     @staticmethod
     def get_conversation_messages(conversation_id: str) -> List[Dict[str, Any]]:

@@ -76,20 +76,22 @@ const ModelManagementPage = {
         return `
             <div class="page-header">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <button class="btn btn-secondary" id="closeModelManagementBtn" title="返回">
-                        <span>←</span>
+                    <button class="btn btn-secondary" id="closeModelManagementBtn" title="Back">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M20 12H4M10 18L4 12L10 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> Back
                     </button>
-                    <h2>模型管理</h2>
+                    <h2>LLM</h2>
                 </div>
                 <div class="header-actions">
                     <button class="btn btn-secondary" id="importModelsBtn">
-                        <span>📥</span> 导入
+                        <span>📥</span> Import
                     </button>
                     <button class="btn btn-secondary" id="exportModelsBtn">
-                        <span>📤</span> 导出
+                        <span>📤</span> Export
                     </button>
                     <button class="btn btn-primary" id="addModelBtn">
-                        <span>+</span> 添加模型
+                        <span>+</span> New LLM
                     </button>
                 </div>
             </div>

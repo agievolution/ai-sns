@@ -87,7 +87,7 @@ function getServiceForUser() {
             lat: 39.74441,
             category: 'game',
             type: 'web',
-            address: 'https://cdn-factory.marketjs.com/en/epic-city-driver/index.html'
+            address: 'https://gamep.me/'
         },
         {
             name: 'aigc中心',

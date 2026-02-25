@@ -821,7 +821,7 @@ body.theme-dark .message-body {
 }
 
 body.theme-dark .assistant-message .message-body {
-    color: var(--text-secondary);
+    color: #fff;
 }
 
 body.theme-dark .agent-chat-input-area {

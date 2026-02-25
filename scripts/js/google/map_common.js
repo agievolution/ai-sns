@@ -302,6 +302,18 @@ function initMap() {
             console.log("model.position", model.position)
             console.log("model.positionx", model.position.x)
             console.log("model.positionz", model.position.z)
+
+            try {
+                if (typeof update_location_and_open_nearest_place === 'function') {
+                    const clickLng = (coordinates && typeof coordinates.lng === 'function') ? coordinates.lng() : null;
+                    const clickLat = (coordinates && typeof coordinates.lat === 'function') ? coordinates.lat() : null;
+                    if (clickLng !== null && clickLat !== null) {
+                        update_location_and_open_nearest_place(clickLng, clickLat, { maxDistanceM: 1000, throttleMs: 800 });
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to sync location to backend:', err);
+            }
         }
 
         overlay.requestRedraw();

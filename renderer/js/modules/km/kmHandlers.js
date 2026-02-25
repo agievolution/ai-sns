@@ -336,6 +336,7 @@ const kmHandlers = {
             this.notes[kbId] = Array.isArray(notes) ? notes : [];
             this.renderNoteList(kbId);
             this.bindNoteListEvents(kbId);
+            this.renderNoteTagList(kbId);
         } catch (error) {
             console.error('[kmHandlers] Error loading notes:', error);
             noteTree.innerHTML = '<div style="padding: 20px; color: var(--text-muted);">Failed to load notes</div>';
@@ -410,6 +411,91 @@ const kmHandlers = {
                 }
             });
         }
+
+        const tagSearchInput = document.getElementById(`kmNoteTagSearchInput-${kbId}`);
+        if (tagSearchInput) {
+            tagSearchInput.addEventListener('keypress', async (e) => {
+                if (e.key !== 'Enter') return;
+                const query = tagSearchInput.value.trim();
+                this.renderNoteTagList(kbId, query);
+            });
+        }
+    },
+
+    renderNoteTagList(kbId, query = '') {
+        const container = document.getElementById(`kmNoteTagList-${kbId}`);
+        if (!container) return;
+
+        const notes = this.notes[kbId] || [];
+        const taggedNotes = (notes || []).filter(n => Array.isArray(n.tags) && n.tags.length > 0);
+        if (taggedNotes.length === 0) {
+            container.innerHTML = '<div class="empty-state">No tags</div>';
+            return;
+        }
+
+        const groups = {};
+        for (const note of taggedNotes) {
+            for (const rawTag of (note.tags || [])) {
+                const tag = String(rawTag || '').trim();
+                if (!tag) continue;
+                if (!groups[tag]) groups[tag] = [];
+                groups[tag].push(note);
+            }
+        }
+
+        const q = String(query || '').trim().toLowerCase();
+        if (q) {
+            for (const tag of Object.keys(groups)) {
+                const items = (groups[tag] || []).filter(note => {
+                    const t = String(tag).toLowerCase();
+                    const title = String(note && note.title ? note.title : '').toLowerCase();
+                    return t.includes(q) || title.includes(q);
+                });
+                if (items.length === 0) {
+                    delete groups[tag];
+                } else {
+                    groups[tag] = items;
+                }
+            }
+        }
+
+        const tags = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+        if (tags.length === 0) {
+            container.innerHTML = '<div class="empty-state">No tags</div>';
+            return;
+        }
+
+        container.innerHTML = tags.map(tag => {
+            const items = groups[tag] || [];
+            const itemHtml = items.map(note => `
+                <div class="km-tree-item km-tag-note-item" data-note-id="${note.id}" data-kb-id="${kbId}" style="padding-left: 16px;">
+                    <span class="tree-icon">📄</span>
+                    <span class="tree-text">${this.escapeHtml(note.title || 'Untitled Note')}${note.is_pinned ? ' <span style=\"color:#ff9800;\">📌</span>' : ''}</span>
+                </div>
+            `).join('');
+
+            return `
+                <div class="tag-group" style="padding: 6px 8px;">
+                    <div class="tag-group-header" style="font-weight: 600; color: var(--text-primary, #333); padding: 4px 0;">${this.escapeHtml(tag)}</div>
+                    <div class="tag-group-items">${itemHtml}</div>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('.km-tag-note-item').forEach(item => {
+            item.addEventListener('click', () => {
+                container.querySelectorAll('.km-tag-note-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                const noteId = parseInt(item.dataset.noteId);
+                this.openNote(kbId, noteId);
+            });
+
+            item.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const noteId = parseInt(item.dataset.noteId);
+                this.showNoteContextMenu(e, kbId, noteId);
+            });
+        });
     },
 
     /**
@@ -443,6 +529,7 @@ const kmHandlers = {
             this.notes[kbId] = Array.isArray(notes) ? notes : [];
             this.renderNoteList(kbId);
             this.bindNoteListEvents(kbId);
+            this.renderNoteTagList(kbId, query);
             loading.close();
 
             if (query) {
@@ -515,12 +602,15 @@ const kmHandlers = {
             return;
         }
 
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = content;
-        const plainText = tempDiv.textContent || tempDiv.innerText || '';
-        let title = plainText.substring(0, 20).trim();
-        if (plainText.length > 20) title += '...';
-        if (!title) title = 'Untitled Note';
+        let title = null;
+        if (!this.currentNoteId) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            const plainText = tempDiv.textContent || tempDiv.innerText || '';
+            title = plainText.substring(0, 20).trim();
+            if (plainText.length > 20) title += '...';
+            if (!title) title = 'Untitled Note';
+        }
 
         // const loading = Toast.loading('Saving note...');
 
@@ -531,7 +621,7 @@ const kmHandlers = {
                 const response = await fetch(this.resolve(`/api/km/notes/${this.currentNoteId}`), {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title, content })
+                    body: JSON.stringify({ content })
                 });
                 if (!response.ok) throw new Error('Save failed');
                 savedNote = await response.json();
@@ -572,18 +662,17 @@ const kmHandlers = {
         if (existingMenu) existingMenu.remove();
 
         const menu = document.createElement('div');
-        menu.className = 'note-context-menu';
-        menu.style.cssText = `
-            position: fixed; left: ${event.clientX}px; top: ${event.clientY}px;
-            background: white; border: 1px solid #ddd; border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10001;
-            min-width: 160px; padding: 6px 0;
-        `;
+        menu.className = 'status-context-menu note-context-menu';
+        menu.style.left = `${event.clientX}px`;
+        menu.style.top = `${event.clientY}px`;
+        menu.style.display = 'block';
+        menu.style.zIndex = '10001';
 
         menu.innerHTML = `
-            <div class="context-menu-item" data-action="delete" style="color: #f44336; padding: 10px 16px; cursor: pointer;">
-                Delete
-            </div>
+            <button type="button" class="context-menu-item" data-action="rename"><span>Rename</span></button>
+            <button type="button" class="context-menu-item" data-action="pin"><span>${note.is_pinned ? 'Unpin' : 'Pin'}</span></button>
+            <button type="button" class="context-menu-item" data-action="tag"><span>Tag</span></button>
+            <button type="button" class="context-menu-item" data-action="delete" style="color: var(--color-danger, #f44336);"><span>Delete</span></button>
         `;
 
         document.body.appendChild(menu);
@@ -591,6 +680,98 @@ const kmHandlers = {
         menu.addEventListener('click', async (e) => {
             const item = e.target.closest('.context-menu-item');
             if (!item) return;
+
+            if (item.dataset.action === 'rename') {
+                const input = await Toast.prompt('Enter a new title:', {
+                    title: 'Rename Note',
+                    defaultValue: note.title || '',
+                    confirmText: 'Save',
+                    cancelText: 'Cancel',
+                    type: 'info'
+                });
+                if (input === null) {
+                    menu.remove();
+                    return;
+                }
+                const newTitle = String(input).trim();
+                if (!newTitle) {
+                    Toast.warning('Title cannot be empty');
+                    menu.remove();
+                    return;
+                }
+
+                try {
+                    const response = await fetch(this.resolve(`/api/km/notes/${noteId}`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: newTitle })
+                    });
+                    if (!response.ok) throw new Error('Rename failed');
+                    await this.loadNotesForKb(kbId, this.currentKmId);
+                    this.renderNoteTagList(kbId);
+                    Toast.success('Note renamed successfully');
+                } catch (error) {
+                    console.error('Rename failed:', error);
+                    Toast.error('Rename failed: ' + error.message);
+                }
+                menu.remove();
+                return;
+            }
+
+            if (item.dataset.action === 'pin') {
+                try {
+                    const response = await fetch(this.resolve(`/api/km/notes/${noteId}/toggle-pin`), {
+                        method: 'POST'
+                    });
+                    if (!response.ok) throw new Error('Pin toggle failed');
+                    await this.loadNotesForKb(kbId, this.currentKmId);
+                    this.renderNoteTagList(kbId);
+                    Toast.success(note.is_pinned ? 'Note unpinned' : 'Note pinned');
+                } catch (error) {
+                    console.error('Pin toggle failed:', error);
+                    Toast.error('Pin toggle failed: ' + error.message);
+                }
+                menu.remove();
+                return;
+            }
+
+            if (item.dataset.action === 'tag') {
+                const currentTags = Array.isArray(note.tags) ? note.tags : [];
+                const current = currentTags.length > 0 ? currentTags.join(',') : '';
+                const input = await Toast.prompt('Enter tags (comma-separated, leave blank to clear):', {
+                    title: 'Set Tags',
+                    defaultValue: current,
+                    confirmText: 'Save',
+                    cancelText: 'Cancel',
+                    type: 'info'
+                });
+                if (input === null) {
+                    menu.remove();
+                    return;
+                }
+
+                const raw = String(input).trim();
+                const tags = raw
+                    ? Array.from(new Set(raw.split(',').map(t => String(t || '').trim()).filter(Boolean)))
+                    : [];
+
+                try {
+                    const response = await fetch(this.resolve(`/api/km/notes/${noteId}`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tags })
+                    });
+                    if (!response.ok) throw new Error('Tag update failed');
+                    await this.loadNotesForKb(kbId, this.currentKmId);
+                    this.renderNoteTagList(kbId);
+                    Toast.success(tags.length > 0 ? 'Tags updated successfully' : 'Tags cleared successfully');
+                } catch (error) {
+                    console.error('Tag update failed:', error);
+                    Toast.error('Tag update failed: ' + error.message);
+                }
+                menu.remove();
+                return;
+            }
 
             if (item.dataset.action === 'delete') {
                 const confirmed = await Toast.confirm(`Delete note "${note.title}"?`, {
@@ -615,6 +796,7 @@ const kmHandlers = {
                         }
                         this.renderNoteList(kbId);
                         this.bindNoteListEvents(kbId);
+                        this.renderNoteTagList(kbId);
                         Toast.success('Note deleted successfully');
                     } catch (error) {
                         console.error('Delete failed:', error);

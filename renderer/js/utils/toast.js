@@ -61,7 +61,7 @@ const Toast = {
             min-width: 300px;
             max-width: 500px;
             padding: 16px 20px;
-            background: white;
+            background: var(--bg-content, #fff);
             border-left: 4px solid ${config.color};
             border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -110,7 +110,7 @@ const Toast = {
                 .toast-message {
                     flex: 1;
                     font-size: 14px;
-                    color: #333;
+                    color: var(--text-primary, #333);
                     line-height: 1.5;
                     word-wrap: break-word;
                 }
@@ -128,8 +128,8 @@ const Toast = {
                     justify-content: center;
                 }
                 .toast-close:hover {
-                    background: #f0f0f0;
-                    color: #333;
+                    background: var(--hover-bg, #f0f0f0);
+                    color: var(--text-primary, #333);
                 }
             `;
             document.head.appendChild(style);
@@ -247,7 +247,8 @@ const Toast = {
             const config = this.getToastConfig(type);
 
             dialog.style.cssText = `
-                background: white;
+                background: var(--bg-content, #fff);
+                border: 1px solid var(--border-light, #e5e7eb);
                 border-radius: 12px;
                 padding: 24px;
                 min-width: 360px;
@@ -260,10 +261,10 @@ const Toast = {
                 <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px;">
                     <div style="flex-shrink: 0;">${config.icon}</div>
                     <div style="flex: 1;">
-                        <div style="font-size: 18px; font-weight: 600; color: #333; margin-bottom: 8px;">
+                        <div style="font-size: 18px; font-weight: 600; color: var(--text-primary, #333); margin-bottom: 8px;">
                             ${this.escapeHtml(title)}
                         </div>
-                        <div style="font-size: 14px; color: #666; line-height: 1.5;">
+                        <div style="font-size: 14px; color: var(--text-secondary, #666); line-height: 1.5;">
                             ${this.escapeHtml(message)}
                         </div>
                     </div>
@@ -271,12 +272,12 @@ const Toast = {
                 <div style="display: flex; gap: 12px; justify-content: flex-end;">
                     <button id="confirmCancelBtn" style="
                         padding: 10px 20px;
-                        border: 1px solid #ddd;
-                        background: white;
+                        border: 1px solid var(--border-light, #ddd);
+                        background: var(--bg-content, #fff);
                         border-radius: 6px;
                         cursor: pointer;
                         font-size: 14px;
-                        color: #666;
+                        color: var(--text-secondary, #666);
                         transition: all 0.2s;
                     ">${this.escapeHtml(cancelText)}</button>
                     <button id="confirmOkBtn" style="
@@ -314,13 +315,16 @@ const Toast = {
                         }
                     }
                     #confirmCancelBtn:hover {
-                        background: #f5f5f5;
-                        border-color: #ccc;
+                        background: var(--hover-bg, #f5f5f5);
+                        border-color: var(--border-color, #ccc);
                     }
                     #confirmOkBtn:hover {
                         opacity: 0.9;
                         transform: translateY(-1px);
                         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    }
+                    body.theme-dark #confirmCancelBtn:hover {
+                        background: rgba(255, 255, 255, 0.08);
                     }
                 `;
                 document.head.appendChild(style);
@@ -366,6 +370,179 @@ const Toast = {
         });
     },
 
+    prompt(message, options = {}) {
+        return new Promise((resolve) => {
+            const {
+                title = 'Input',
+                defaultValue = '',
+                placeholder = '',
+                confirmText = 'OK',
+                cancelText = 'Cancel',
+                type = 'info',
+            } = options;
+
+            const backdrop = document.createElement('div');
+            backdrop.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 100001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                animation: fadeIn 0.2s ease-out;
+            `;
+
+            const dialog = document.createElement('div');
+            const config = this.getToastConfig(type);
+            dialog.style.cssText = `
+                background: var(--bg-content, #fff);
+                border: 1px solid var(--border-light, #e5e7eb);
+                border-radius: 12px;
+                padding: 24px;
+                min-width: 360px;
+                max-width: 520px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+                animation: slideInDown 0.3s ease-out;
+            `;
+
+            dialog.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px;">
+                    <div style="flex-shrink: 0;">${config.icon}</div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 18px; font-weight: 600; color: var(--text-primary, #333); margin-bottom: 8px;">
+                            ${this.escapeHtml(title)}
+                        </div>
+                        <div style="font-size: 14px; color: var(--text-secondary, #666); line-height: 1.5;">
+                            ${this.escapeHtml(message)}
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 18px;">
+                    <input id="toastPromptInput" type="text" style="
+                        width: 100%;
+                        padding: 10px 12px;
+                        border: 1px solid var(--border-light, #ddd);
+                        border-radius: 8px;
+                        font-size: 14px;
+                        background: var(--bg-content, #fff);
+                        color: var(--text-primary, #111827);
+                        outline: none;
+                        box-sizing: border-box;
+                    "/>
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button id="toastPromptCancelBtn" style="
+                        padding: 10px 20px;
+                        border: 1px solid var(--border-light, #ddd);
+                        background: var(--bg-content, #fff);
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        color: var(--text-secondary, #666);
+                        transition: all 0.2s;
+                    ">${this.escapeHtml(cancelText)}</button>
+                    <button id="toastPromptOkBtn" style="
+                        padding: 10px 20px;
+                        border: none;
+                        background: ${config.color};
+                        color: white;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        transition: all 0.2s;
+                    ">${this.escapeHtml(confirmText)}</button>
+                </div>
+            `;
+
+            backdrop.appendChild(dialog);
+
+            if (!document.getElementById('prompt-animations')) {
+                const style = document.createElement('style');
+                style.id = 'prompt-animations';
+                style.textContent = `
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+                    @keyframes slideInDown {
+                        from { transform: translateY(-50px); opacity: 0; }
+                        to { transform: translateY(0); opacity: 1; }
+                    }
+                    #toastPromptCancelBtn:hover {
+                        background: var(--hover-bg, #f5f5f5);
+                    }
+                    #toastPromptOkBtn:hover {
+                        opacity: 0.92;
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    }
+                    body.theme-dark #toastPromptInput {
+                        border-color: rgba(255, 255, 255, 0.12);
+                    }
+                    body.theme-dark #toastPromptCancelBtn:hover {
+                        background: rgba(255, 255, 255, 0.08);
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            document.body.appendChild(backdrop);
+
+            const input = dialog.querySelector('#toastPromptInput');
+            const okBtn = dialog.querySelector('#toastPromptOkBtn');
+            const cancelBtn = dialog.querySelector('#toastPromptCancelBtn');
+
+            if (input) {
+                input.value = String(defaultValue || '');
+                input.placeholder = String(placeholder || '');
+            }
+
+            const cleanup = () => {
+                backdrop.remove();
+                document.removeEventListener('keydown', handleEsc);
+            };
+
+            const onOk = () => {
+                const value = input ? input.value : '';
+                cleanup();
+                resolve(value);
+            };
+
+            const onCancel = () => {
+                cleanup();
+                resolve(null);
+            };
+
+            okBtn.addEventListener('click', onOk);
+            cancelBtn.addEventListener('click', onCancel);
+
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop) {
+                    onCancel();
+                }
+            });
+
+            const handleEsc = (e) => {
+                if (e.key === 'Escape') {
+                    onCancel();
+                }
+                if (e.key === 'Enter') {
+                    onOk();
+                }
+            };
+            document.addEventListener('keydown', handleEsc);
+
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        });
+    },
+
     /**
      * Show loading indicator
      * @param {string} message - Loading message
@@ -395,7 +572,7 @@ const Toast = {
             gap: 12px;
             min-width: 200px;
             padding: 16px 20px;
-            background: white;
+            background: var(--bg-content, #fff);
             border-left: 4px solid #2196f3;
             border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);

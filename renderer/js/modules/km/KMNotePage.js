@@ -188,7 +188,7 @@ const KMNotePage = {
                         </button>
                     </div>
                     <!-- Editor content -->
-                    <div class="km-editor-content" id="noteContent" contenteditable="true">
+                    <div class="km-editor-content" id="noteContent" contenteditable="true" spellcheck="false">
                         <p></p>
                     </div>
                 </div>

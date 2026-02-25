@@ -1089,6 +1089,7 @@ async def get_place_list(
                 place_name,
                 ST_X(place_position::geometry) AS lng,
                 ST_Y(place_position::geometry) AS lat,
+                url,
                 description,
                 ST_Distance(
                     ST_Transform(place_position::geometry, 3857),
@@ -1110,6 +1111,7 @@ async def get_place_list(
                 "place_id": row["place_id"],
                 "place_name": row["place_name"],
                 "place_position": [row["lng"], row["lat"]],
+                "url": row["url"],
                 "description": row["description"]
             })
         return JSONResponse(status_code=200, content=content)

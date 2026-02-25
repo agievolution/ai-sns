@@ -7,6 +7,81 @@ function normalizeHttpBaseUrl(raw) {
     return withScheme.endsWith('/') ? withScheme.slice(0, -1) : withScheme;
 }
 
+function postLocationUpdateToParent(lng, lat) {
+    try {
+        if (typeof window.parent !== 'undefined' && window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                type: 'locationUpdate',
+                data: {
+                    lng: lng,
+                    lat: lat,
+                    timestamp: Date.now()
+                }
+            }, '*');
+        }
+    } catch (e) {
+    }
+}
+
+function _coerceNumber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+async function _syncLocationOnce(lng, lat, maxDistanceM) {
+    const lngNum = _coerceNumber(lng);
+    const latNum = _coerceNumber(lat);
+    if (lngNum === null || latNum === null) return;
+
+    __lastLocationSyncAt = Date.now();
+    postLocationUpdateToParent(lngNum, latNum);
+
+    const resp = await jsonrpcRequest('update_location_and_get_nearest_place', {
+        lng: lngNum,
+        lat: latNum,
+        max_distance_m: _coerceNumber(maxDistanceM) || 1000
+    });
+
+    const url = resp && resp.success && resp.data ? String(resp.data.url || '').trim() : '';
+    if (url) {
+        try {
+            open_place_web_address(url);
+        } catch (e) {
+            console.warn('Failed to open nearest place url:', e);
+        }
+    }
+}
+
+function update_location_and_open_nearest_place(lng, lat, options = {}) {
+    const maxDistanceM = (options && options.maxDistanceM !== undefined) ? options.maxDistanceM : 1000;
+    const throttleMs = (options && options.throttleMs !== undefined) ? options.throttleMs : 1200;
+
+    const lngNum = _coerceNumber(lng);
+    const latNum = _coerceNumber(lat);
+    if (lngNum === null || latNum === null) return;
+
+    __pendingLocation = { lng: lngNum, lat: latNum, maxDistanceM: maxDistanceM };
+
+    const now = Date.now();
+    const sinceLast = now - (__lastLocationSyncAt || 0);
+    if (sinceLast >= throttleMs && !__locationSyncTimer) {
+        const payload = __pendingLocation;
+        __pendingLocation = null;
+        _syncLocationOnce(payload.lng, payload.lat, payload.maxDistanceM);
+        return;
+    }
+
+    if (__locationSyncTimer) return;
+    const delay = Math.max(50, throttleMs - sinceLast);
+    __locationSyncTimer = setTimeout(() => {
+        __locationSyncTimer = null;
+        const payload = __pendingLocation;
+        __pendingLocation = null;
+        if (!payload) return;
+        _syncLocationOnce(payload.lng, payload.lat, payload.maxDistanceM);
+    }, delay);
+}
+
 let API_BASE_URL = normalizeHttpBaseUrl((typeof window !== 'undefined' && window.__AGENT_SERVER__) ? window.__AGENT_SERVER__ : '');
 if (!API_BASE_URL) {
     try {
@@ -29,6 +104,10 @@ function toWebSocketBaseUrl(httpBaseUrl) {
 const WS_BASE_URL = toWebSocketBaseUrl(API_BASE_URL);
 let websocket = null;
 let requestIdCounter = 0;
+
+let __locationSyncTimer = null;
+let __pendingLocation = null;
+let __lastLocationSyncAt = 0;
 
 // JSON-RPC 2.0 request helper
 async function jsonrpcRequest(method, params = {}) {

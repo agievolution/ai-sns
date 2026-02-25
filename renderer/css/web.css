@@ -228,6 +228,9 @@
     padding: 0.75rem;
     flex: 1 1 auto;
     min-height: 0;
+    align-content: start;
+    align-items: start;
+    grid-auto-rows: max-content;
     overflow-y: auto;
 }
 
@@ -242,6 +245,8 @@
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s ease;
+    align-self: start;
+    height: auto;
 }
 
 .web-icon-item:hover {
@@ -294,6 +299,7 @@ body.theme-dark .web-icon-fallback {
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
 }

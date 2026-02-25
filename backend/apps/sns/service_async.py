@@ -791,40 +791,39 @@ class SNSService:
             except (TypeError, ValueError):
                 return {"success": False, "message": "current_position is invalid", "content": ""}
 
-            def _post_json(path: str, params: dict):
-                url = f"{base}{path}"
-                try:
-                    resp = requests.post(url, data=params, timeout=12)
-                    resp.raise_for_status()
-                    return resp.json()
-                except Exception as e:
-                    logger.warning("Resource overview request failed: %s (%s)", url, e)
-                    return None
+            try:
+                from backend.apps.sns.mixin.tools_mixin import ToolsMixin
+                from backend.apps.sns.mixin.data_query_mixin import DataQueryMixin
 
-            params = {"lng": lng, "lat": lat}
-            service_list = _post_json('/api/get_service_list/', params) or []
-            people_list = _post_json('/api/get_people_list/', params) or []
-            place_list = _post_json('/api/get_place_list/', params) or []
+                class _RemoteListAdapter(ToolsMixin, DataQueryMixin):
+                    def __init__(self, *, base_url: str, position: list, nationid: str):
+                        self._base_url = (base_url or '').strip().rstrip('/')
+                        self.user_map_setting = {
+                            "nationid": (nationid or '').strip(),
+                            "nation_id": (nationid or '').strip(),
+                        }
 
-            exclude_nation_id = (getattr(config, 'nationid', None) or '').strip()
-            if isinstance(people_list, list):
-                normalized_people = []
-                for person in people_list:
-                    if not isinstance(person, dict):
-                        continue
+                        class _Cfg:
+                            pass
 
-                    nation_id = (person.get('nation_id') or person.get('nationid') or '').strip()
-                    if exclude_nation_id and nation_id == exclude_nation_id:
-                        continue
+                        self.aichatcfg_record = _Cfg()
+                        self.aichatcfg_record.current_position = position
 
-                    if nation_id:
-                        if not (person.get('nation_id') or '').strip():
-                            person['nation_id'] = nation_id
-                        if not (person.get('nationid') or '').strip():
-                            person['nationid'] = nation_id
+                    def _get_ai_sns_server_base(self):
+                        return self._base_url
 
-                    normalized_people.append(person)
-                people_list = normalized_people
+                adapter = _RemoteListAdapter(
+                    base_url=base,
+                    position=[lng, lat],
+                    nationid=(getattr(config, 'nationid', None) or ''),
+                )
+
+                service_list = adapter.get_service_list() or []
+                people_list = adapter.get_people_list() or []
+                place_list = adapter.get_place_list() or []
+            except Exception as e:
+                logger.warning("Resource overview list fetch failed: %s", e)
+                service_list, people_list, place_list = [], [], []
 
             from backend.apps.sns.mixin.ui_display_mixin import UIDisplayMixin
 

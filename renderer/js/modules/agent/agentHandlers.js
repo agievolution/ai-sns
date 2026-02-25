@@ -110,6 +110,27 @@ const agentHandlers = {
 
         // Plugin-related events
         this.initPluginEvents();
+
+        if (!this._agentUpdatedListenerBound) {
+            this._agentUpdatedListenerBound = true;
+            window.addEventListener('agent-updated', (e) => {
+                const detail = e && e.detail ? e.detail : {};
+                const name = detail.name || detail.agent?.name;
+                if (!name) return;
+
+                const messagesContainer = document.getElementById('chatMessages');
+                if (!messagesContainer) return;
+
+                messagesContainer.querySelectorAll('.message-item.assistant-message .message-sender').forEach(el => {
+                    el.textContent = name;
+                });
+
+                const welcomeTitle = messagesContainer.querySelector('.welcome-message .welcome-title');
+                if (welcomeTitle) {
+                    welcomeTitle.textContent = name;
+                }
+            });
+        }
     },
 
     /**
@@ -825,13 +846,13 @@ const agentHandlers = {
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                 </svg>
-                <span>模型管理</span>
+                <span>LLM Setting</span>
             </div>
             <div class="agent-item agent-management" data-page="role-management">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
                     <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                 </svg>
-                <span>角色管理</span>
+                <span>Role Setting</span>
             </div>
             <div class="agent-item agent-management">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
@@ -1012,9 +1033,11 @@ const agentHandlers = {
      */
     createMessageElement(role, content, time) {
         const isUser = role === 'user';
+        const currentAgent = !isUser ? agentState.getCurrentAgent() : null;
+        const assistantName = !isUser ? (currentAgent?.name || 'AI Assistant') : null;
         const avatarSvg = isUser ?
             '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>' :
-            '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+            '<svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M160-360q-50 0-85-35t-35-85q0-50 35-85t85-35v-80q0-33 23.5-56.5T240-760h120q0-50 35-85t85-35q50 0 85 35t35 85h120q33 0 56.5 23.5T800-680v80q50 0 85 35t35 85q0 50-35 85t-85 35v160q0 33-23.5 56.5T720-120H240q-33 0-56.5-23.5T160-200v-160Zm242.5-97.5Q420-475 420-500t-17.5-42.5Q385-560 360-560t-42.5 17.5Q300-525 300-500t17.5 42.5Q335-440 360-440t42.5-17.5Zm240 0Q660-475 660-500t-17.5-42.5Q625-560 600-560t-42.5 17.5Q540-525 540-500t17.5 42.5Q575-440 600-440t42.5-17.5ZM320-280h320v-80H320v80Zm-80 80h480v-480H240v480Zm240-240Z"/></svg>';
 
         return `
             <div class="message-item ${isUser ? 'user-message' : 'assistant-message'}">
@@ -1022,7 +1045,7 @@ const agentHandlers = {
                     <div class="message-avatar ${isUser ? 'user-avatar' : 'assistant-avatar'}">
                         ${avatarSvg}
                     </div>
-                    <span class="message-sender">${isUser ? 'You' : 'AI Assistant'}</span>
+                    <span class="message-sender">${isUser ? 'You' : this.escapeHtml(assistantName)}</span>
                     <span class="message-time">${time}</span>
                 </div>
                 <div class="message-body">${this.renderMarkdown(content)}</div>
@@ -1155,7 +1178,7 @@ const agentHandlers = {
             <div class="message-item assistant-message streaming">
                 <div class="message-header">
                     <div class="message-avatar assistant-avatar">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        <svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M160-360q-50 0-85-35t-35-85q0-50 35-85t85-35v-80q0-33 23.5-56.5T240-760h120q0-50 35-85t85-35q50 0 85 35t35 85h120q33 0 56.5 23.5T800-680v80q50 0 85 35t35 85q0 50-35 85t-85 35v160q0 33-23.5 56.5T720-120H240q-33 0-56.5-23.5T160-200v-160Zm242.5-97.5Q420-475 420-500t-17.5-42.5Q385-560 360-560t-42.5 17.5Q300-525 300-500t17.5 42.5Q335-440 360-440t42.5-17.5Zm240 0Q660-475 660-500t-17.5-42.5Q625-560 600-560t-42.5 17.5Q540-525 540-500t17.5 42.5Q575-440 600-440t42.5-17.5ZM320-280h320v-80H320v80Zm-80 80h480v-480H240v480Zm240-240Z"/></svg>
                     </div>
                     <span class="message-sender">${this.escapeHtml(currentAgent.name)}</span>
                     <span class="message-time">${timeStr}</span>
@@ -1459,7 +1482,7 @@ if __name__ == "__main__":
         const codeElement = codeBlock.querySelector('code');
         const code = codeElement.dataset.rawCode || codeElement.textContent;
 
-        navigator.clipboard.writeText(code).then(() => {
+        const showCopiedState = () => {
             const originalText = btn.querySelector('span').textContent;
             btn.querySelector('span').textContent = '已复制!';
             btn.classList.add('copied');
@@ -1467,7 +1490,66 @@ if __name__ == "__main__":
                 btn.querySelector('span').textContent = originalText;
                 btn.classList.remove('copied');
             }, 2000);
-        });
+        };
+
+        const showFailedState = () => {
+            const originalText = btn.querySelector('span').textContent;
+            btn.querySelector('span').textContent = 'Copy failed';
+            setTimeout(() => {
+                btn.querySelector('span').textContent = originalText;
+            }, 2000);
+        };
+
+        const fallbackCopy = () => {
+            const textarea = document.createElement('textarea');
+            textarea.value = code;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-1000px';
+            textarea.style.left = '-1000px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            textarea.setSelectionRange(0, textarea.value.length);
+
+            let ok = false;
+            try {
+                ok = document.execCommand('copy');
+            } catch (e) {
+                ok = false;
+            }
+
+            document.body.removeChild(textarea);
+            return ok;
+        };
+
+        (async () => {
+            try {
+                if (window.electronAPI && typeof window.electronAPI.writeClipboardText === 'function') {
+                    const res = await window.electronAPI.writeClipboardText(code);
+                    if (res && res.success) {
+                        showCopiedState();
+                        return;
+                    }
+                }
+
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(code);
+                    showCopiedState();
+                    return;
+                }
+
+                const ok = fallbackCopy();
+                if (ok) {
+                    showCopiedState();
+                    return;
+                }
+
+                throw new Error('All copy methods failed');
+            } catch (err) {
+                console.warn('[AgentHandlers] Failed to copy code to clipboard:', err);
+                showFailedState();
+            }
+        })();
     },
 
     /**

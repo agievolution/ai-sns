@@ -45,43 +45,52 @@ const AgentPage = {
                     <!-- Top toolbar -->
                     <div class="agent-chat-toolbar">
                         <div class="toolbar-left">
-<svg viewBox="0 0 24 24" width="20" height="20" fill="none"
-     stroke="#1a73e8" stroke-width="1.4" stroke-linecap="round">
-
-  <!-- Input layer -->
-  <circle cx="5" cy="6" r="1.3" fill="#1a73e8"/>
-  <circle cx="5" cy="12" r="1.3" fill="#1a73e8"/>
-  <circle cx="5" cy="18" r="1.3" fill="#1a73e8"/>
-
-  <!-- Hidden layer -->
-  <circle cx="11.5" cy="7" r="1.3" fill="#1a73e8"/>
-  <circle cx="11.5" cy="12" r="1.5" fill="#1a73e8"/>
-  <circle cx="11.5" cy="17" r="1.3" fill="#1a73e8"/>
-
-  <!-- Output layer -->
-  <circle cx="18" cy="9" r="1.3" fill="#1a73e8"/>
-  <circle cx="18" cy="15" r="1.3" fill="#1a73e8"/>
-
-  <!-- Connections: Input → Hidden -->
-  <line x1="5" y1="6" x2="11.5" y2="7"/>
-  <line x1="5" y1="12" x2="11.5" y2="12"/>
-  <line x1="5" y1="18" x2="11.5" y2="17"/>
-
-  <!-- Connections: Hidden → Output -->
-  <line x1="11.5" y1="7" x2="18" y2="9"/>
-  <line x1="11.5" y1="12" x2="18" y2="9"/>
-  <line x1="11.5" y1="12" x2="18" y2="15"/>
-  <line x1="11.5" y1="17" x2="18" y2="15"/>
-</svg>
-
-
-
+                            <svg width="20" height="20" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <defs>
+                                <style>
+                                  .z-icon-stroke { stroke: #1a73e8; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+                                  .z-icon-circle { fill: none; stroke: #1a73e8; stroke-width: 8; }
+                                </style>
+                              </defs>
+                              <g class="z-icon-stroke">
+                                <!-- 中间水平长线 (左 -> 右) -->
+                                <path d="M18 50 H82" />
+                                
+                                <!-- "Z" 字形主骨架 (左上 -> 右上 -> 左下 -> 右下) -->
+                                <path d="M28 22 H72 L28 78 H72" />
+                                
+                                <!-- 左上角的短截线 (指向中心) -->
+                                <path d="M28 22 L42 36" />
+                                
+                                <!-- 右下角的短截线 (指向中心) -->
+                                <path d="M72 78 L58 64" />
+                              </g>
+                              <g class="z-icon-circle">
+                                <!-- 中心圆 -->
+                                <circle cx="50" cy="50" r="7" />
+                                
+                                <!-- 左侧圆 -->
+                                <circle cx="18" cy="50" r="7" />
+                                <!-- 右侧圆 -->
+                                <circle cx="82" cy="50" r="7" />
+                                
+                                <!-- 左上圆 -->
+                                <circle cx="28" cy="22" r="7" />
+                                <!-- 右上圆 -->
+                                <circle cx="72" cy="22" r="7" />
+                                
+                                <!-- 左下圆 -->
+                                <circle cx="28" cy="78" r="7" />
+                                <!-- 右下圆 -->
+                                <circle cx="72" cy="78" r="7" />
+                              </g>
+                            </svg>
                             <select class="model-selector" id="modelSelector-${agent.id}" data-agent-id="${agent.id}" ${isRemote ? 'disabled' : ''}>
                             </select>
                         </div>
 
                         <div class="toolbar-right">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="#5f6368">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="#1a73e8">
                                 <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                             </svg>
                             <select class="role-selector" id="roleSelector-${agent.id}" data-agent-id="${agent.id}" ${isRemote ? 'disabled' : ''}>
@@ -110,29 +119,15 @@ const AgentPage = {
                                 </svg>
                             </div>
                             <h2 class="welcome-title">${agent.name || 'AI Assistant'}</h2>
-                            <p class="welcome-subtitle">${agent.description || 'Powered by Azure OpenAI GPT'}</p>
-                            <div class="welcome-tips">
-                                <div class="tip-item">
-                                    <span class="tip-icon">💡</span>
-                                    <span>输入问题，按 Enter 发送</span>
-                                </div>
-                                <div class="tip-item">
-                                    <span class="tip-icon">📝</span>
-                                    <span>支持 Markdown 格式输出</span>
-                                </div>
-                                <div class="tip-item">
-                                    <span class="tip-icon">🔄</span>
-                                    <span>实时流式响应</span>
-                                </div>
-                            </div>
+                            <p class="welcome-subtitle">${agent.description || 'Powered by OpenAI GPT'}</p>
                         </div>
                     </div>
 
                     <!-- Input area -->
                     <div class="agent-chat-input-area">
-                        <div class="input-hint">Input @@ to load tools selector; Ctrl+i To load preset question; Ctrl+/ To insert chat template.</div>
+                        <div style="display: none;" class="input-hint">Input @@ to load tools selector; Ctrl+i To load preset question; Ctrl+/ To insert chat template.</div>
                         <div class="input-wrapper">
-                            <textarea class="agent-chat-input" id="chatInput-${agent.id}" data-agent-id="${agent.id}" placeholder="输入消息..."></textarea>
+                            <textarea class="agent-chat-input" id="chatInput-${agent.id}" data-agent-id="${agent.id}" placeholder="Type a message..."></textarea>
                         </div>
                         <div class="input-toolbar">
                             <div class="toolbar-buttons">

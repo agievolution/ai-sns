@@ -29,7 +29,7 @@ const WebSidebar = {
                             const posB = b.position !== null && b.position !== undefined ? b.position : 999;
                             return posA - posB;
                         });
-                    
+
                     // Filter and sort Tool data
                     this.toolData = response.data
                         .filter(item => item.type === 'Tool' && !item.is_delete)
@@ -38,7 +38,7 @@ const WebSidebar = {
                             const posB = b.position !== null && b.position !== undefined ? b.position : 999;
                             return posA - posB;
                         });
-                    
+
                     console.log('[WebSidebar] Loaded LLM items:', this.llmData.length);
                     console.log('[WebSidebar] Loaded Tool items:', this.toolData.length);
                 } else {
@@ -55,7 +55,7 @@ const WebSidebar = {
     getFilteredLLMData() {
         if (!this.llmSearchText) return this.llmData;
         const searchLower = this.llmSearchText.toLowerCase();
-        return this.llmData.filter(item => 
+        return this.llmData.filter(item =>
             item.name.toLowerCase().includes(searchLower) ||
             (item.title && item.title.toLowerCase().includes(searchLower)) ||
             (item.description && item.description.toLowerCase().includes(searchLower))
@@ -65,7 +65,7 @@ const WebSidebar = {
     getFilteredToolData() {
         if (!this.toolSearchText) return this.toolData;
         const searchLower = this.toolSearchText.toLowerCase();
-        return this.toolData.filter(item => 
+        return this.toolData.filter(item =>
             item.name.toLowerCase().includes(searchLower) ||
             (item.title && item.title.toLowerCase().includes(searchLower)) ||
             (item.description && item.description.toLowerCase().includes(searchLower))
@@ -196,15 +196,6 @@ const WebSidebar = {
     },
 
     getIcon(filename, name) {
-        if (filename && filename !== 'openai.png') {
-            // Use backend server URL for images
-            const path = `/resource/images/${filename}`;
-            const imageUrl = (typeof window !== 'undefined' && typeof window.resolveAgentServerUrl === 'function')
-                ? window.resolveAgentServerUrl(path)
-                : path;
-            return `<img src="${imageUrl}" alt="${name}" class="web-icon-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                    <div class="web-icon-fallback" style="display:none;">${name.charAt(0).toUpperCase()}</div>`;
-        }
         return `<div class="web-icon-fallback">${name.charAt(0).toUpperCase()}</div>`;
     },
 
@@ -237,12 +228,12 @@ const WebSidebar = {
     showManageDialog(type) {
         const data = type === 'LLM' ? this.llmData : this.toolData;
         const title = type === 'LLM' ? 'Manage LLM Services' : 'Manage AI Tools';
-        
+
         // Hide BrowserView to prevent it from covering the dialog
         if (window.electronAPI && window.electronAPI.hideBrowserView) {
             window.electronAPI.hideBrowserView();
         }
-        
+
         const dialogHTML = `
             <div class="web-manage-dialog-overlay" id="webManageDialog">
                 <div class="web-manage-dialog">
@@ -346,22 +337,22 @@ const WebSidebar = {
             // Get dialog type
             const list = dialog.querySelector('#webManageList');
             const type = list ? list.dataset.type : null;
-            
+
             // Remove dialog
             dialog.remove();
-            
+
             // Restore BrowserView
             if (window.electronAPI && window.electronAPI.showBrowserView) {
                 window.electronAPI.showBrowserView();
             }
-            
+
             // Refresh sidebar (using current in-memory data)
             if (type === 'LLM') {
                 this.refreshLLMIcons();
             } else if (type === 'Tool') {
                 this.refreshToolIcons();
             }
-            
+
             console.log('[WebSidebar] Dialog closed, sidebar refreshed');
         }
     },
@@ -373,7 +364,7 @@ const WebSidebar = {
         if (!item) return;
 
         // No need to hide BrowserView again; manage dialog already did it
-        
+
         const editHTML = `
             <div class="web-edit-dialog-overlay" id="webEditDialog">
                 <div class="web-edit-dialog">
@@ -477,7 +468,7 @@ const WebSidebar = {
 
             if (response && response.success) {
                 console.log('[WebSidebar] Item updated successfully');
-                
+
                 // Update in-memory data
                 const data = type === 'LLM' ? this.llmData : this.toolData;
                 const item = data.find(i => i.id === itemId);
@@ -488,16 +479,16 @@ const WebSidebar = {
                     item.description = description;
                     item.filename = filename;
                 }
-                
+
                 // Close edit dialog
                 this.closeEditDialog();
-                
+
                 // Re-render manage dialog to show updates
                 const list = document.getElementById('webManageList');
                 if (list) {
                     list.innerHTML = this.renderManageItems(data, type);
                 }
-                
+
                 console.log('[WebSidebar] Item updated in dialog');
             }
         } catch (error) {
@@ -517,7 +508,7 @@ const WebSidebar = {
 
             if (response && response.success) {
                 console.log('[WebSidebar] Item deleted successfully');
-                
+
                 // Remove item from in-memory data
                 if (type === 'LLM') {
                     const index = this.llmData.findIndex(i => i.id === itemId);
@@ -530,14 +521,14 @@ const WebSidebar = {
                         this.toolData.splice(index, 1);
                     }
                 }
-                
+
                 // Re-render manage dialog to show updates
                 const data = type === 'LLM' ? this.llmData : this.toolData;
                 const list = document.getElementById('webManageList');
                 if (list) {
                     list.innerHTML = this.renderManageItems(data, type);
                 }
-                
+
                 console.log('[WebSidebar] Item removed from dialog');
             }
         } catch (error) {
@@ -571,7 +562,7 @@ const WebSidebar = {
             e.preventDefault();
             const afterElement = this.getDragAfterElement(list, e.clientY);
             const dragging = document.querySelector('.dragging');
-            
+
             if (afterElement == null) {
                 list.appendChild(dragging);
             } else {
@@ -603,11 +594,11 @@ const WebSidebar = {
     async updatePositions(type) {
         const list = document.getElementById('webManageList');
         const items = [...list.querySelectorAll('.web-manage-item')];
-        
+
         // Use different position ranges to avoid conflicts
         // LLM: 0-999, Tool: 1000-1999
         const basePosition = type === 'LLM' ? 0 : 1000;
-        
+
         const updates = items.map((item, index) => ({
             id: parseInt(item.dataset.id),
             position: basePosition + index
@@ -621,7 +612,7 @@ const WebSidebar = {
 
             if (response && response.success) {
                 console.log('[WebSidebar] Positions updated successfully');
-                
+
                 // Update in-memory data only; do not reload
                 // Update positions for the corresponding type
                 if (type === 'LLM') {
@@ -651,7 +642,7 @@ const WebSidebar = {
                         return posA - posB;
                     });
                 }
-                
+
                 // Do not reload/refresh/reopen dialogs
                 // User can keep dragging to adjust
                 console.log('[WebSidebar] Local data updated, ready for next drag');
@@ -666,12 +657,12 @@ const WebSidebar = {
     // Add dialog
     showAddDialog(type) {
         const title = type === 'LLM' ? 'Add LLM Service' : 'Add AI Tool';
-        
+
         // Hide BrowserView to prevent it from covering the dialog
         if (window.electronAPI && window.electronAPI.hideBrowserView) {
             window.electronAPI.hideBrowserView();
         }
-        
+
         const dialogHTML = `
             <div class="web-manage-dialog-overlay" id="webAddDialog">
                 <div class="web-edit-dialog">
@@ -750,12 +741,12 @@ const WebSidebar = {
         const dialog = document.getElementById('webAddDialog');
         if (dialog) {
             dialog.remove();
-            
+
             // Restore BrowserView
             if (window.electronAPI && window.electronAPI.showBrowserView) {
                 window.electronAPI.showBrowserView();
             }
-            
+
             console.log('[WebSidebar] Add dialog closed, BrowserView restored');
         }
     },
@@ -782,19 +773,19 @@ const WebSidebar = {
 
             if (response && response.success) {
                 console.log('[WebSidebar] Item added successfully');
-                
+
                 // Reload data
                 await this.loadData();
-                
+
                 // Refresh sidebar
                 const sidebar = document.getElementById('sidebar-web');
                 if (sidebar) {
                     sidebar.innerHTML = this.render();
                 }
-                
+
                 // Close dialog (BrowserView will be restored automatically)
                 this.closeAddDialog();
-                
+
                 // Show success message
                 alert(`${type} service added successfully`);
             }

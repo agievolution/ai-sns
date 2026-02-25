@@ -340,7 +340,7 @@ function showHistory() {
     btn = document.getElementById("message_btn");
     btn.classList.remove('active');
     info_title = document.getElementById("info_title");
-    info_title.textContent = lt("All message", "全部信息");
+    info_title.textContent = lt("Information", "Information");
     document.getElementById("info").style.display = "block";
 }
 

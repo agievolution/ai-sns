@@ -214,7 +214,13 @@ const KMSidebar = {
                                 </button>
                             </div>
                         </div>
-                        <div id="kmNoteTagList-${kb.id}" style="padding: 8px 0; color: var(--text-muted, #999); font-size: 12px;">No tags</div>
+                        <div class="chat-list-container" id="kmNoteTagList-${kb.id}">
+                            <div class="chat-tree">
+                                <div class="tree-children">
+                                    <div class="empty-state">No tags</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -418,6 +424,10 @@ const KMSidebar = {
                 }
 
                 console.log('[KMSidebar] Switched tab:', tabType, 'for KB:', kbId);
+
+                if (tabType === 'tag' && window.kmHandlers && typeof window.kmHandlers.renderNoteTagList === 'function') {
+                    window.kmHandlers.renderNoteTagList(parseInt(kbId));
+                }
             });
         });
 

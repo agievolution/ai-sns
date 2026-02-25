@@ -4,7 +4,6 @@
 
 const HomePage = {
     render() {
-        const aiSnsUrl = (window.appConfig && window.appConfig.ai_sns_server) ? window.appConfig.ai_sns_server : '';
         return `
             <div class="home-page">
                 <div class="home-content-wrapper">
@@ -94,7 +93,7 @@ const HomePage = {
                     <div class="home-contact">
                         <h3 class="contact-title">Contact Us</h3>
                         <p class="contact-text">Welcome to visit our website for more information:</p>
-                        <a href="${aiSnsUrl}" target="_blank" class="contact-link">${aiSnsUrl}</a>
+                        <a href="https://www.ai-sns.org" target="_blank" class="contact-link">https://www.ai-sns.org</a>
                     </div>
                 </div>
             </div>

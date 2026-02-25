@@ -609,7 +609,7 @@ const PageRenderers = {
                                     <path d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4zm-4 30l-10-10 2.82-2.82L20 28.34l15.18-15.18L38 16l-18 18z" fill="url(#welcomeGrad)"/>
                                 </svg>
                             </div>
-                            <h2 class="welcome-title">AI Assistant</h2>
+                            <h2 class="welcome-title">${this.escapeHtml((window.agentState && typeof window.agentState.getCurrentAgent === 'function') ? (window.agentState.getCurrentAgent()?.name || 'AI Assistant') : 'AI Assistant')}</h2>
                             <p class="welcome-subtitle">Powered by Azure OpenAI GPT</p>
                             <div class="welcome-tips">
                                 <div class="tip-item">
@@ -632,7 +632,7 @@ const PageRenderers = {
                     <div class="agent-chat-input-area">
                         <div class="input-hint">Input @@ to load tools selector; Ctrl+i To load preset question; Ctrl+/ To insert chat template.</div>
                         <div class="input-wrapper">
-                            <textarea class="agent-chat-input" id="chatInput" placeholder="输入消息..."></textarea>
+                            <textarea class="agent-chat-input" id="chatInput" placeholder="Type a message..."></textarea>
                         </div>
                         <div class="input-toolbar">
                             <div class="toolbar-buttons">
@@ -2447,13 +2447,16 @@ const PageControllers = {
         });
 
         // Add AI response container (with thinking animation)
+        const currentAgentName = (window.agentState && typeof window.agentState.getCurrentAgent === 'function')
+            ? (window.agentState.getCurrentAgent()?.name || 'AI Assistant')
+            : 'AI Assistant';
         const assistantMessageHtml = `
             <div class="message-item assistant-message streaming">
                 <div class="message-header">
                     <div class="message-avatar assistant-avatar">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                     </div>
-                    <span class="message-sender">AI Assistant</span>
+                    <span class="message-sender">${this.escapeHtml(currentAgentName)}</span>
                     <span class="message-time">${timeStr}</span>
                 </div>
                 <div class="message-body">

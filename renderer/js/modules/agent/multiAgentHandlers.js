@@ -7,6 +7,7 @@ import agentState from './agentState.js';
 import agentApi from './agentApi.js';
 import AgentSidebar from './AgentSidebar.js';
 import AgentPage from './AgentPage.js';
+import Toast from '../../utils/toast.js';
 
 const multiAgentHandlers = {
     resolve(urlOrPath) {
@@ -328,6 +329,63 @@ const multiAgentHandlers = {
             // Handle new chat
             this.handleNewChatForAgent(agentId);
         });
+
+        window.addEventListener('agent-updated', (e) => {
+            const detail = e && e.detail ? e.detail : {};
+            const agentId = detail.agentId;
+            if (!agentId) return;
+
+            const name = detail.name || detail.agent?.name;
+            const description = detail.description || detail.agent?.description;
+
+            if (name) {
+                const agents = agentState.getAgents ? agentState.getAgents() : (agentState.agents || []);
+                const idx = agents.findIndex(a => a && a.id === agentId);
+                if (idx >= 0) {
+                    agents[idx] = { ...agents[idx], ...detail.agent, name, description };
+                } else {
+                    agents.push({ ...(detail.agent || {}), id: agentId, name, description });
+                }
+
+                if (agentState.setAgents) {
+                    agentState.setAgents(agents);
+                } else {
+                    agentState.agents = agents;
+                }
+
+                this.applyAgentNameToChatUI(agentId, name, description);
+            }
+        });
+    },
+
+    applyAgentNameToChatUI(agentId, name, description) {
+        const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
+        if (messagesContainer) {
+            messagesContainer.querySelectorAll('.message-item.assistant-message .message-sender').forEach(el => {
+                el.textContent = name;
+            });
+
+            const welcomeTitle = messagesContainer.querySelector('.welcome-message .welcome-title');
+            if (welcomeTitle) {
+                welcomeTitle.textContent = name;
+            }
+
+            const welcomeSubtitle = messagesContainer.querySelector('.welcome-message .welcome-subtitle');
+            if (welcomeSubtitle && typeof description === 'string' && description.trim()) {
+                welcomeSubtitle.textContent = description;
+            }
+        }
+
+        const singleMessagesContainer = document.getElementById('chatMessages');
+        if (singleMessagesContainer && singleMessagesContainer.classList.contains('agent-chat-messages')) {
+            singleMessagesContainer.querySelectorAll('.message-item.assistant-message .message-sender').forEach(el => {
+                el.textContent = name;
+            });
+            const welcomeTitle = singleMessagesContainer.querySelector('.welcome-message .welcome-title');
+            if (welcomeTitle) {
+                welcomeTitle.textContent = name;
+            }
+        }
     },
 
     /**
@@ -1110,7 +1168,7 @@ const multiAgentHandlers = {
     /**
      * Load chat list for a specific agent
      */
-    async loadChatListForAgent(agentId) {
+    async loadChatListForAgent(agentId, query = '') {
         console.log(`[MultiAgentHandlers] 开始加载Agent ${agentId} 的chat list`);
 
         const chatList = document.getElementById(`chatList-${agentId}`);
@@ -1137,6 +1195,16 @@ const multiAgentHandlers = {
                 console.log(`[MultiAgentHandlers] 过滤后剩余 ${conversations.length} 条对话`);
             }
 
+            const q = String(query || '').trim().toLowerCase();
+            if (q) {
+                conversations = conversations.filter(conv => {
+                    const title = String(conv && conv.title ? conv.title : '').toLowerCase();
+                    const first = String(conv && conv.first_message ? conv.first_message : '').toLowerCase();
+                    const tag = String(conv && conv.label ? conv.label : '').toLowerCase();
+                    return title.includes(q) || first.includes(q) || tag.includes(q);
+                });
+            }
+
             const treeChildren = chatList.querySelector('.tree-children');
             if (!treeChildren) {
                 console.warn(`[MultiAgentHandlers] 找不到 .tree-children 元素在 chatList-${agentId} 中`);
@@ -1144,13 +1212,14 @@ const multiAgentHandlers = {
             }
 
             if (conversations.length === 0) {
-                treeChildren.innerHTML = '<div class="empty-state">暂无对话</div>';
+                treeChildren.innerHTML = '<div class="empty-state">No conversations</div>';
                 return;
             }
 
             treeChildren.innerHTML = conversations.map((conv) => `
                 <div class="tree-item" data-conversation-id="${conv.conversation_id}" data-agent-id="${agentId}">
-                    <span class="item-text">${this.escapeHtml(conv.title || '新对话')}</span>
+                    <span class="tree-icon">💬</span>
+                    <span class="item-text">${this.escapeHtml(conv.title || 'New conversation')}${conv.stick_time ? ' <span style="color:#ff9800;">📌</span>' : ''}</span>
                 </div>
             `).join('');
 
@@ -1167,12 +1236,241 @@ const multiAgentHandlers = {
                     // Load conversation
                     this.loadConversationForAgent(conversationId, itemAgentId);
                 });
+
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const conversationId = item.dataset.conversationId;
+                    const itemAgentId = parseInt(item.dataset.agentId);
+                    const conv = (conversations || []).find(c => String(c.conversation_id) === String(conversationId)) || null;
+                    this.showChatContextMenu(e, itemAgentId, conversationId, conv);
+                });
             });
 
             console.log(`[MultiAgentHandlers] Agent ${agentId} 聊天列表已加载，共 ${conversations.length} 条`);
         } catch (error) {
             console.error(`[MultiAgentHandlers] Agent ${agentId} 加载聊天列表失败:`, error);
         }
+    },
+
+    async loadTagListForAgent(agentId, query = '') {
+        const container = document.getElementById(`tagListContainer-${agentId}`);
+        if (!container) return;
+
+        container.innerHTML = '<div class="chat-tree"><div class="tree-children"><div class="empty-state">Loading...</div></div></div>';
+
+        try {
+            const url = this.resolve(`/api/chat/conversations?limit=200&agent_id=${encodeURIComponent(agentId)}`);
+            const response = await fetch(url);
+            const result = await response.json();
+            let conversations = (result && result.data) ? result.data : [];
+
+            if (conversations.length > 0 && conversations[0].agent_id !== undefined) {
+                conversations = conversations.filter(conv => conv.agent_id == agentId);
+            }
+
+            const tagged = (conversations || []).filter(c => c && c.label && String(c.label).trim());
+            if (tagged.length === 0) {
+                container.innerHTML = '<div class="chat-tree"><div class="tree-children"><div class="empty-state">No tags</div></div></div>';
+                return;
+            }
+
+            const q = String(query || '').trim().toLowerCase();
+
+            const groups = {};
+            for (const conv of tagged) {
+                const tag = String(conv.label || '').trim();
+                if (!tag) continue;
+                if (!groups[tag]) groups[tag] = [];
+                groups[tag].push(conv);
+            }
+
+            if (q) {
+                for (const tag of Object.keys(groups)) {
+                    const items = (groups[tag] || []).filter(conv => {
+                        const t = String(tag).toLowerCase();
+                        const title = String(conv && conv.title ? conv.title : '').toLowerCase();
+                        return t.includes(q) || title.includes(q);
+                    });
+                    if (items.length === 0) {
+                        delete groups[tag];
+                    } else {
+                        groups[tag] = items;
+                    }
+                }
+            }
+
+            const groupTags = Object.keys(groups);
+            if (groupTags.length === 0) {
+                container.innerHTML = '<div class="chat-tree"><div class="tree-children"><div class="empty-state">No tags</div></div></div>';
+                return;
+            }
+
+            const tags = groupTags.sort((a, b) => a.localeCompare(b));
+            const html = tags.map(tag => {
+                const items = groups[tag] || [];
+                const itemHtml = items.map(conv => `
+                    <div class="tree-item tag-conversation-item" data-conversation-id="${this.escapeHtml(String(conv.conversation_id || ''))}" data-agent-id="${this.escapeHtml(String(agentId))}">
+                        <span class="tree-icon">💬</span>
+                        <span class="item-text">${this.escapeHtml(conv.title || 'New conversation')}${conv.stick_time ? ' <span style=\"color:#ff9800;\">📌</span>' : ''}</span>
+                    </div>
+                `).join('');
+
+                return `
+                    <div class="tag-group" style="padding: 6px 8px;">
+                        <div class="tag-group-header" style="font-weight: 600; color: var(--text-primary, #333); padding: 4px 0;">${this.escapeHtml(tag)}</div>
+                        <div class="tree-children">${itemHtml}</div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `<div class="chat-tree"><div class="tree-children">${html}</div></div>`;
+
+            container.querySelectorAll('.tag-conversation-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const conversationId = item.dataset.conversationId;
+                    const itemAgentId = parseInt(item.dataset.agentId);
+
+                    container.querySelectorAll('.tree-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+
+                    this.loadConversationForAgent(conversationId, itemAgentId);
+                });
+
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const conversationId = item.dataset.conversationId;
+                    const itemAgentId = parseInt(item.dataset.agentId);
+                    const conv = (conversations || []).find(c => String(c.conversation_id) === String(conversationId)) || null;
+                    this.showChatContextMenu(e, itemAgentId, conversationId, conv);
+                });
+            });
+        } catch (e) {
+            console.error('[MultiAgentHandlers] Failed to load tag list:', e);
+            container.textContent = 'Failed to load tags';
+        }
+    },
+
+    showChatContextMenu(event, agentId, conversationId, conversation) {
+        const existingMenu = document.querySelector('.chat-context-menu');
+        if (existingMenu) existingMenu.remove();
+
+        const title = (conversation && conversation.title) ? conversation.title : 'Conversation';
+        const isPinned = !!(conversation && conversation.stick_time);
+
+        const menu = document.createElement('div');
+        menu.className = 'status-context-menu chat-context-menu';
+        menu.style.left = `${event.clientX}px`;
+        menu.style.top = `${event.clientY}px`;
+        menu.style.display = 'block';
+        menu.style.zIndex = '10001';
+
+        menu.innerHTML = `
+            <button type="button" class="context-menu-item" data-action="rename"><span>Rename</span></button>
+            <button type="button" class="context-menu-item" data-action="pin"><span>${isPinned ? 'Unpin' : 'Pin'}</span></button>
+            <button type="button" class="context-menu-item" data-action="tag"><span>Tag</span></button>
+            <button type="button" class="context-menu-item" data-action="delete" style="color: var(--color-danger, #f44336);"><span>Delete</span></button>
+        `;
+
+        document.body.appendChild(menu);
+
+        const closeMenu = () => {
+            if (menu && menu.parentNode) menu.remove();
+            document.removeEventListener('click', closeMenu);
+        };
+
+        menu.addEventListener('click', async (e) => {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+
+            const action = item.dataset.action;
+            try {
+                if (action === 'delete') {
+                    const confirmed = await Toast.confirm(`Delete conversation "${title}"?`, {
+                        title: 'Delete Conversation',
+                        confirmText: 'Delete',
+                        cancelText: 'Cancel',
+                        type: 'warning'
+                    });
+                    if (!confirmed) return;
+
+                    const resp = await fetch(this.resolve(`/api/chat/conversations/${encodeURIComponent(conversationId)}`), {
+                        method: 'DELETE'
+                    });
+                    if (!resp.ok) throw new Error('Delete failed');
+                    Toast.success('Conversation deleted successfully');
+                    await this.loadChatListForAgent(agentId);
+                    await this.loadTagListForAgent(agentId);
+                }
+
+                if (action === 'rename') {
+                    const input = await Toast.prompt('Enter a new title:', {
+                        title: 'Rename Conversation',
+                        defaultValue: (conversation && conversation.title) ? conversation.title : '',
+                        confirmText: 'Save',
+                        cancelText: 'Cancel',
+                        type: 'info'
+                    });
+                    if (input === null) return;
+                    const newTitle = String(input).trim();
+                    if (!newTitle) {
+                        Toast.warning('Title cannot be empty');
+                        return;
+                    }
+
+                    const resp = await fetch(this.resolve(`/api/chat/conversations/${encodeURIComponent(conversationId)}/title`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: newTitle })
+                    });
+                    if (!resp.ok) throw new Error('Rename failed');
+                    Toast.success('Conversation renamed successfully');
+                    await this.loadChatListForAgent(agentId);
+                    await this.loadTagListForAgent(agentId);
+                }
+
+                if (action === 'pin') {
+                    const resp = await fetch(this.resolve(`/api/chat/conversations/${encodeURIComponent(conversationId)}/toggle-pin`), {
+                        method: 'POST'
+                    });
+                    if (!resp.ok) throw new Error('Pin toggle failed');
+                    Toast.success(isPinned ? 'Conversation unpinned' : 'Conversation pinned');
+                    await this.loadChatListForAgent(agentId);
+                    await this.loadTagListForAgent(agentId);
+                }
+
+                if (action === 'tag') {
+                    const currentTag = (conversation && conversation.label) ? String(conversation.label) : '';
+                    const input = await Toast.prompt('Enter tag name (leave blank to clear):', {
+                        title: 'Set Tag',
+                        defaultValue: currentTag,
+                        confirmText: 'Save',
+                        cancelText: 'Cancel',
+                        type: 'info'
+                    });
+                    if (input === null) return;
+                    const newTag = String(input).trim();
+
+                    const resp = await fetch(this.resolve(`/api/chat/conversations/${encodeURIComponent(conversationId)}/tag`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tag: newTag })
+                    });
+                    if (!resp.ok) throw new Error('Tag update failed');
+                    Toast.success(newTag ? 'Tag updated successfully' : 'Tag cleared successfully');
+                    await this.loadChatListForAgent(agentId);
+                    await this.loadTagListForAgent(agentId);
+                }
+            } catch (err) {
+                console.error('[MultiAgentHandlers] Context menu action failed:', err);
+                Toast.error((err && err.message) ? err.message : 'Action failed');
+            } finally {
+                closeMenu();
+            }
+        });
+
+        setTimeout(() => {
+            document.addEventListener('click', closeMenu);
+        }, 0);
     },
 
     /**
@@ -1274,8 +1572,8 @@ const multiAgentHandlers = {
         const assistantMessageHtml = `
             <div class="message-item assistant-message streaming">
                 <div class="message-header">
-                    <div class="message-avatar assistant-avatar">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    <div class="message-avatar assistant-avatar">                        
+                        <svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M160-360q-50 0-85-35t-35-85q0-50 35-85t85-35v-80q0-33 23.5-56.5T240-760h120q0-50 35-85t85-35q50 0 85 35t35 85h120q33 0 56.5 23.5T800-680v80q50 0 85 35t35 85q0 50-35 85t-85 35v160q0 33-23.5 56.5T720-120H240q-33 0-56.5-23.5T160-200v-160Zm242.5-97.5Q420-475 420-500t-17.5-42.5Q385-560 360-560t-42.5 17.5Q300-525 300-500t17.5 42.5Q335-440 360-440t42.5-17.5Zm240 0Q660-475 660-500t-17.5-42.5Q625-560 600-560t-42.5 17.5Q540-525 540-500t17.5 42.5Q575-440 600-440t42.5-17.5ZM320-280h320v-80H320v80Zm-80 80h480v-480H240v480Zm240-240Z"/></svg>
                     </div>
                     <span class="message-sender">${this.escapeHtml(currentAgent.name)}</span>
                     <span class="message-time">${timeStr}</span>
@@ -1528,6 +1826,14 @@ const multiAgentHandlers = {
             }
 
             this.clearAttachments(agentId);
+
+            this.highlightCodeBlocks(messagesContainer);
+
+            if (window.MindmapPlugin) {
+                messagesContainer.querySelectorAll('.message-body').forEach(body => {
+                    window.MindmapPlugin.renderInMessage(body);
+                });
+            }
 
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
 

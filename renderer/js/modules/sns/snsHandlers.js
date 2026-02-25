@@ -11,6 +11,8 @@ import { SNSSocialRoleDialog } from './SNSSocialRoleDialog.js';
 import { SNSMapConfigDialog } from './SNSMapConfigDialog.js';
 
 export default {
+    lastPlaceIntroUrl: '',
+
     resolve(urlOrPath) {
         try {
             if (typeof window !== 'undefined' && typeof window.resolveAgentServerUrl === 'function') {
@@ -595,6 +597,61 @@ export default {
         const appsDropdown = document.getElementById('appsDropdown');
         const mapDropdown = document.getElementById('mapDropdown');
 
+        const resetActionBarToDefault = () => {
+            try {
+                // Default mode is NOT Square
+                if (actionBar.dataset) {
+                    actionBar.dataset.squareMode = 'false';
+                }
+            } catch (e) {
+            }
+
+            // Restore default layout (state 1)
+            try {
+                if (state1 && state2) {
+                    state1.style.display = 'flex';
+                    state2.style.display = 'none';
+                }
+            } catch (e) {
+            }
+
+            // Close dropdowns
+            try {
+                if (appsDropdown) appsDropdown.style.display = 'none';
+                if (mapDropdown) mapDropdown.style.display = 'none';
+            } catch (e) {
+            }
+
+            // Reset control toggle buttons (AI active)
+            try {
+                const toggleBtns = actionBar.querySelectorAll('.toggle-btn');
+                toggleBtns.forEach(b => b.classList.remove('active'));
+                const aiToggle = actionBar.querySelector('.toggle-btn[data-mode="ai"]');
+                if (aiToggle) aiToggle.classList.add('active');
+            } catch (e) {
+            }
+
+            // Reset action buttons
+            try {
+                const moveBtn = actionBar.querySelector('.action-btn[data-action="move"]');
+                if (moveBtn) moveBtn.classList.remove('active');
+
+                // Default state: Info(board) is active
+                const boardBtn = actionBar.querySelector('.action-btn[data-action="board"]');
+                if (boardBtn) boardBtn.classList.add('active');
+            } catch (e) {
+            }
+
+            // Exit control mode in backend to keep UI and state aligned
+            try {
+                snsApi.setHumanControlState(false, null);
+            } catch (e) {
+            }
+        };
+
+        // Expose reset for map iframe reload hook
+        this.resetSNSActionBarToDefault = resetActionBarToDefault;
+
         // Toggle between state 1 and state 2
         const switchToState2 = () => {
             if (state1 && state2) {
@@ -702,12 +759,51 @@ export default {
             const action = btn.dataset.action;
             if (!action) return;
 
+            const inSquareMode = (() => {
+                try {
+                    return !!(actionBar.dataset && actionBar.dataset.squareMode === 'true');
+                } catch (e) {
+                    return false;
+                }
+            })();
+
+            const warnSquareModeUnavailable = () => {
+                const msg = 'Info is not available in Square mode. Please click AI to return to normal mode.';
+                try {
+                    if (window.Toast && typeof window.Toast.warning === 'function') {
+                        window.Toast.warning(msg);
+                        return;
+                    }
+                    if (window.Toast && typeof window.Toast.info === 'function') {
+                        window.Toast.info(msg);
+                        return;
+                    }
+                } catch (e) {
+                }
+                this.showToast(msg, 'info');
+            };
+
+            // Square mode guard: block Info(board) until AI is clicked again
+            if (action === 'board' && inSquareMode) {
+                warnSquareModeUnavailable();
+                return;
+            }
+
             if (action === 'help') {
                 // Close dropdowns after selection
                 if (appsDropdown) appsDropdown.style.display = 'none';
                 if (mapDropdown) mapDropdown.style.display = 'none';
                 this.showHelpModal();
                 return;
+            }
+
+            // Update UI mode state
+            try {
+                if (actionBar.dataset) {
+                    if (action === 'square') actionBar.dataset.squareMode = 'true';
+                    if (action === 'ai') actionBar.dataset.squareMode = 'false';
+                }
+            } catch (e) {
             }
 
             // Active style rules:
@@ -778,6 +874,9 @@ export default {
                 }
             }
         });
+
+        // Initialize default state
+        resetActionBarToDefault();
 
         // Start button
         const startBtn = document.getElementById('snsStartBtn');
@@ -1586,6 +1685,13 @@ export default {
         iframe.onload = () => {
             console.log('Map page loaded');
 
+            try {
+                if (typeof this.resetSNSActionBarToDefault === 'function') {
+                    this.resetSNSActionBarToDefault();
+                }
+            } catch (e) {
+            }
+
             let targetOrigin = '*';
             try {
                 targetOrigin = new URL(mapUrl).origin;
@@ -1637,7 +1743,7 @@ export default {
 
                 switch (data.type) {
                     case 'received':
-                        console.log('地图页面已确认收到消息:', data.data);
+                        console.log('Map page receive message:', data.data);
                         break;
                     case 'infoPanelState':
                         try {
@@ -2537,6 +2643,30 @@ export default {
         let placeTab = statusTabs.querySelector('.status-tab[data-tab="placeIntro"]');
         let placePane = statusTabContent.querySelector('.tab-pane[data-tab="placeIntro"]');
 
+        const tabStillOpen = !!(placeTab && placePane);
+        const urlUnchanged = (this.lastPlaceIntroUrl || '') === url;
+        if (tabStillOpen && urlUnchanged) {
+            // Only switch to the tab without reloading.
+            statusTabs.querySelectorAll('.status-tab').forEach(btn => {
+                btn.classList.toggle('active', btn === placeTab);
+            });
+
+            statusTabContent.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.classList.toggle('active', pane === placePane);
+            });
+
+            if (placeTab) {
+                placeTab.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest',
+                    inline: 'center'
+                });
+            }
+
+            console.log('Place intro tab already open with same URL, switched without reload:', url);
+            return;
+        }
+
         if (!placeTab) {
             // Create Place intro tab button
             placeTab = document.createElement('button');
@@ -2580,6 +2710,8 @@ export default {
                 iframe.src = url;
             }
         }
+
+        this.lastPlaceIntroUrl = url;
 
         // Switch to Place intro tab
         statusTabs.querySelectorAll('.status-tab').forEach(btn => {

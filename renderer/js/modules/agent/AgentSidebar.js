@@ -139,13 +139,13 @@ const AgentSidebar = {
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                 </svg>
-                <span>模型管理</span>
+                <span>LLM Setting</span>
             </div>
             <div class="agent-item agent-management" data-page="role-management">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
                     <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                 </svg>
-                <span>角色管理</span>
+                <span>Role Setting</span>
             </div>
             <div class="agent-item agent-management" data-page="agent-management">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
@@ -234,7 +234,13 @@ const AgentSidebar = {
                                 </button>
                             </div>
                         </div>
-                        <div id="tagListContainer-${agent.id}" style="padding: 8px 0; color: var(--text-muted, #999); font-size: 12px;">No tags</div>
+                        <div class="chat-list-container" id="tagListContainer-${agent.id}">
+                            <div class="chat-tree">
+                                <div class="tree-children">
+                                    <div class="empty-state">No tags</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -310,6 +316,32 @@ const AgentSidebar = {
                 }
 
                 console.log('[AgentSidebar] 切换tab:', tabType, 'for agent:', agentId);
+
+                if (window.multiAgentHandlers) {
+                    const aId = parseInt(agentId);
+                    if (tabType === 'tagList' && typeof window.multiAgentHandlers.loadTagListForAgent === 'function') {
+                        window.multiAgentHandlers.loadTagListForAgent(aId);
+                    }
+                    if (tabType === 'chatList' && typeof window.multiAgentHandlers.loadChatListForAgent === 'function') {
+                        window.multiAgentHandlers.loadChatListForAgent(aId);
+                    }
+                }
+            });
+        });
+
+        document.querySelectorAll('.sns-search-input[id^="agentChatSearchInput-"], .sns-search-input[id^="agentTagSearchInput-"]').forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key !== 'Enter') return;
+                const agentId = parseInt(input.dataset.agentId);
+                const query = input.value.trim();
+                if (!window.multiAgentHandlers) return;
+
+                if (input.id.startsWith('agentChatSearchInput-') && typeof window.multiAgentHandlers.loadChatListForAgent === 'function') {
+                    window.multiAgentHandlers.loadChatListForAgent(agentId, query);
+                }
+                if (input.id.startsWith('agentTagSearchInput-') && typeof window.multiAgentHandlers.loadTagListForAgent === 'function') {
+                    window.multiAgentHandlers.loadTagListForAgent(agentId, query);
+                }
             });
         });
 
@@ -465,15 +497,15 @@ const AgentSidebar = {
 
             if (page === 'model-management' && ModelManagementPage) {
                 await ModelManagementPage.init();
-                console.log('[AgentSidebar] 模型管理页面已初始化');
+                console.log('[AgentSidebar] LLM Setting page  has been initialized.');
             } else if (page === 'role-management' && RoleManagementPage) {
                 await RoleManagementPage.init();
-                console.log('[AgentSidebar] 角色管理页面已初始化');
+                console.log('[AgentSidebar] The role setting page has been initialized.');
             } else {
-                console.error('[AgentSidebar] 页面未找到:', page);
+                console.error('[AgentSidebar] Page not found:', page);
             }
         } catch (error) {
-            console.error('[AgentSidebar] 导航到管理页面失败:', error);
+            console.error('[AgentSidebar] Failed to navigate to the management page:', error);
         }
     },
 

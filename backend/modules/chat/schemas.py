@@ -40,3 +40,13 @@ class AiChatConfig(BaseModel):
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 2048
     is_delete: Optional[int] = 0
+
+
+class ConversationTitleUpdate(BaseModel):
+    """Conversation title update request."""
+    title: str
+
+
+class ConversationTagUpdate(BaseModel):
+    """Conversation tag update request. Blank tag clears the tag."""
+    tag: Optional[str] = None

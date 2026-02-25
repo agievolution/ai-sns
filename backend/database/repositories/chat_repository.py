@@ -1,7 +1,8 @@
 """Chat repository with specialized CRUD operations."""
 from typing import List, Optional
 from datetime import datetime
-from sqlalchemy import desc, asc, or_
+from sqlalchemy import desc, asc, or_, func
+from sqlalchemy.orm import aliased
 from .base import BaseRepository
 from ..models.chat import AIChatMessages, AIFriend, AIChatInform, AiChatCfg, HumanChatCfg
 from backend.config.database import get_db_session as get_session
@@ -35,6 +36,58 @@ class AIChatMessagesRepository(BaseRepository[AIChatMessages]):
             return query.filter_by(**kwargs).order_by(
                 desc(AIChatMessages.stick_time), desc(AIChatMessages.create_time)
             ).limit(20).all()
+        finally:
+            session.close()
+
+    def get_conversation_summaries(self, limit: int = 50, agent_id: Optional[int] = None) -> List[dict]:
+        session = get_session()
+        try:
+            last_message_sq = session.query(
+                AIChatMessages.conversation_id.label('conversation_id'),
+                func.max(AIChatMessages.create_time).label('last_message_time')
+            ).filter(
+                AIChatMessages.is_delete == False,
+            )
+            if agent_id is not None:
+                last_message_sq = last_message_sq.filter(AIChatMessages.agent_id == agent_id)
+            last_message_sq = last_message_sq.group_by(AIChatMessages.conversation_id).subquery()
+
+            first_msg = aliased(AIChatMessages)
+            q = session.query(
+                first_msg.conversation_id,
+                first_msg.agent_id,
+                first_msg.title,
+                first_msg.content,
+                first_msg.stick_time,
+                first_msg.label,
+                last_message_sq.c.last_message_time,
+            ).join(
+                last_message_sq,
+                last_message_sq.c.conversation_id == first_msg.conversation_id,
+            ).filter(
+                first_msg.is_first == True,
+                first_msg.is_delete == False,
+            )
+            if agent_id is not None:
+                q = q.filter(first_msg.agent_id == agent_id)
+
+            rows = q.order_by(
+                desc(first_msg.stick_time),
+                desc(last_message_sq.c.last_message_time),
+            ).limit(limit).all()
+
+            result = []
+            for r in rows:
+                result.append({
+                    'conversation_id': r[0],
+                    'agent_id': r[1],
+                    'title': r[2] or (r[3] or '')[:50],
+                    'first_message': (r[3] or '')[:100],
+                    'stick_time': r[4],
+                    'label': r[5],
+                    'last_message_time': r[6],
+                })
+            return result
         finally:
             session.close()
 
@@ -107,6 +160,109 @@ class AIChatMessagesRepository(BaseRepository[AIChatMessages]):
     def update_stick_time(self, id: int, value: Optional[datetime] = None):
         """Update stick time."""
         self.update(id, stick_time=value)
+
+    def get_first_by_conversation_id(self, conversation_id: str) -> Optional[AIChatMessages]:
+        session = get_session()
+        try:
+            return session.query(self.model).filter(
+                AIChatMessages.conversation_id == conversation_id,
+                AIChatMessages.is_first == True,
+                AIChatMessages.is_delete == False,
+            ).order_by(desc(AIChatMessages.create_time)).first()
+        finally:
+            session.close()
+
+    def soft_delete_conversation(self, conversation_id: str) -> int:
+        session = get_session()
+        try:
+            affected = session.query(self.model).filter(
+                AIChatMessages.conversation_id == conversation_id,
+                AIChatMessages.is_delete == False,
+            ).update({AIChatMessages.is_delete: True}, synchronize_session=False)
+            session.commit()
+            return int(affected or 0)
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def update_conversation_title(self, conversation_id: str, title: str) -> bool:
+        session = get_session()
+        try:
+            affected = session.query(self.model).filter(
+                AIChatMessages.conversation_id == conversation_id,
+                AIChatMessages.is_first == True,
+                AIChatMessages.is_delete == False,
+            ).update({AIChatMessages.title: title}, synchronize_session=False)
+            session.commit()
+            return bool(affected)
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def update_conversation_tag(self, conversation_id: str, tag: Optional[str]) -> bool:
+        session = get_session()
+        try:
+            clean_tag = None
+            if tag is not None:
+                t = str(tag).strip()
+                clean_tag = t if t else None
+
+            affected = session.query(self.model).filter(
+                AIChatMessages.conversation_id == conversation_id,
+                AIChatMessages.is_first == True,
+                AIChatMessages.is_delete == False,
+            ).update({AIChatMessages.label: clean_tag}, synchronize_session=False)
+            session.commit()
+            return bool(affected)
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def toggle_conversation_pin(self, conversation_id: str) -> tuple[bool, Optional[datetime]]:
+        session = get_session()
+        try:
+            first = session.query(self.model).filter(
+                AIChatMessages.conversation_id == conversation_id,
+                AIChatMessages.is_first == True,
+                AIChatMessages.is_delete == False,
+            ).order_by(desc(AIChatMessages.create_time)).first()
+
+            if not first:
+                return False, None
+
+            new_value = None if first.stick_time else datetime.now()
+            first.stick_time = new_value
+            session.commit()
+            return True, new_value
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_tag_stats(self, agent_id: Optional[int] = None) -> List[dict]:
+        session = get_session()
+        try:
+            q = session.query(AIChatMessages.label, func.count(AIChatMessages.id))
+            q = q.filter(
+                AIChatMessages.is_first == True,
+                AIChatMessages.is_delete == False,
+                AIChatMessages.label.isnot(None),
+                AIChatMessages.label != "",
+            )
+            if agent_id is not None:
+                q = q.filter(AIChatMessages.agent_id == agent_id)
+
+            rows = q.group_by(AIChatMessages.label).order_by(AIChatMessages.label.asc()).all()
+            return [{"tag": r[0], "count": int(r[1] or 0)} for r in rows]
+        finally:
+            session.close()
 
 
 class AIFriendRepository(BaseRepository[AIFriend]):

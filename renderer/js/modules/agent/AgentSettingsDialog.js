@@ -21,6 +21,12 @@ const AgentSettingsDialog = {
         return urlOrPath;
     },
 
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text === null || text === undefined ? '' : String(text);
+        return div.innerHTML;
+    },
+
     /**
      * Show Agent settings dialog
      * @param {object} agent - Agent object; if null, create a new Agent
@@ -774,6 +780,17 @@ const AgentSettingsDialog = {
                     await window.agentHandlers.loadAgentList();
                 }
 
+                if (agentId) {
+                    window.dispatchEvent(new CustomEvent('agent-updated', {
+                        detail: {
+                            agentId,
+                            name,
+                            description,
+                            agent: result.data
+                        }
+                    }));
+                }
+
                 // If creating a new agent, refresh management UI
                 if (!isEdit) {
                     console.log('[AgentSettingsDialog] Refreshing management UI to display the newly created Agent');
@@ -792,9 +809,9 @@ const AgentSettingsDialog = {
                 }
 
                 return true; // Close dialog
-            } else {
-                throw new Error(result.error || 'Failed to save');
             }
+
+            throw new Error(result.error || 'Failed to save');
         } catch (error) {
             console.error('Failed to save Agent:', error);
             if (typeof Notification !== 'undefined') {
@@ -803,15 +820,6 @@ const AgentSettingsDialog = {
             return false; // Keep dialog open
         }
     },
-
-    /**
-     * HTML escape
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text || '';
-        return div.innerHTML;
-    }
 };
 
 // Export to global

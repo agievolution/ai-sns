@@ -91,23 +91,25 @@ const RoleManagementPage = {
         return `
             <div class="page-header">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <button class="btn btn-secondary" id="closeRoleManagementBtn" title="返回">
-                        <span>←</span>
+                    <button class="btn btn-secondary" id="closeRoleManagementBtn" title="Back">
+                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M20 12H4M10 18L4 12L10 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> Back
                     </button>
-                    <h2>角色管理</h2>
+                    <h2>Roles</h2>
                 </div>
                 <div class="header-actions">
                     <button class="btn btn-secondary" id="importRolesBtn">
-                        <span>📥</span> 导入
+                        <span>📥</span> Import
                     </button>
                     <button class="btn btn-secondary" id="exportRolesBtn">
-                        <span>📤</span> 导出
+                        <span>📤</span> Export
                     </button>
-                    <button class="btn btn-secondary" id="fromPresetBtn">
-                        <span>📋</span> 从模板创建
+                    <button class="btn btn-secondary" id="fromPresetBtn" style="display:none">
+                        <span>📋</span> Template
                     </button>
                     <button class="btn btn-primary" id="addRoleBtn">
-                        <span>+</span> 添加角色
+                        <span>+</span> New Role
                     </button>
                 </div>
             </div>

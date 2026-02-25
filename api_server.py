@@ -642,6 +642,21 @@ async def jsonrpc_endpoint(request: Request):
                 "id": request_id
             }
 
+        elif method == "update_location_and_get_nearest_place":
+            lng = params.get("lng")
+            lat = params.get("lat")
+            max_distance_m = params.get("max_distance_m", 1000)
+            result = map_service.update_location_and_get_nearest_place(
+                lng=lng,
+                lat=lat,
+                max_distance_m=max_distance_m,
+            )
+            return {
+                "jsonrpc": "2.0",
+                "result": result,
+                "id": request_id
+            }
+
         elif method == "get_map_chat_history":
             # TODO: 实现聊天历史查询
             result = map_service.get_map_chat_history()

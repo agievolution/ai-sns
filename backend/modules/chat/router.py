@@ -10,7 +10,13 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
-from .schemas import ChatRequest, StreamChatRequest, AiChatConfig
+from .schemas import (
+    ChatRequest,
+    StreamChatRequest,
+    AiChatConfig,
+    ConversationTitleUpdate,
+    ConversationTagUpdate,
+)
 from .service import ChatService
 from .streaming import StreamingService
 from .dependencies import get_chat_service, get_streaming_service
@@ -135,6 +141,94 @@ async def get_conversations(
         return {"success": True, "data": conversations}
     except Exception as e:
         logger.error(f"Error getting conversations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/conversations/tags", response_model=dict)
+async def get_conversation_tags(
+    agent_id: Optional[int] = None,
+    service: ChatService = Depends(get_chat_service)
+):
+    """Get tag stats for conversation list grouping."""
+    try:
+        stats = service.get_conversation_tag_stats(agent_id=agent_id)
+        return {"success": True, "data": stats}
+    except Exception as e:
+        logger.error(f"Error getting conversation tags: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/conversations/{conversation_id}", response_model=dict)
+async def delete_conversation(
+    conversation_id: str,
+    service: ChatService = Depends(get_chat_service)
+):
+    """Soft delete all messages under the given conversation_id."""
+    try:
+        affected = service.delete_conversation(conversation_id)
+        if not affected:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"success": True, "data": {"affected": affected}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/conversations/{conversation_id}/title", response_model=dict)
+async def update_conversation_title(
+    conversation_id: str,
+    payload: ConversationTitleUpdate,
+    service: ChatService = Depends(get_chat_service)
+):
+    """Update title on the first message row of a conversation."""
+    try:
+        ok = service.update_conversation_title(conversation_id, payload.title)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"success": True, "data": {"conversation_id": conversation_id, "title": payload.title}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating conversation title: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/conversations/{conversation_id}/toggle-pin", response_model=dict)
+async def toggle_conversation_pin(
+    conversation_id: str,
+    service: ChatService = Depends(get_chat_service)
+):
+    """Toggle pinned state by setting stick_time (now or NULL)."""
+    try:
+        result = service.toggle_conversation_pin(conversation_id)
+        if not result.get('found'):
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"success": True, "data": {"conversation_id": conversation_id, "stick_time": result.get('stick_time')}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling conversation pin: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/conversations/{conversation_id}/tag", response_model=dict)
+async def update_conversation_tag(
+    conversation_id: str,
+    payload: ConversationTagUpdate,
+    service: ChatService = Depends(get_chat_service)
+):
+    """Update tag (label) on the first message row of a conversation."""
+    try:
+        ok = service.update_conversation_tag(conversation_id, payload.tag)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"success": True, "data": {"conversation_id": conversation_id, "tag": payload.tag}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating conversation tag: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

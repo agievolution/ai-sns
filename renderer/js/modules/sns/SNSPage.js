@@ -80,7 +80,7 @@ export default {
                                         <line x1="3" y1="6" x2="21" y2="6"/>
                                         <line x1="3" y1="18" x2="21" y2="18"/>
                                     </svg>
-                                    <span>Board</span>
+                                    <span>Info</span>
                                 </button>
                                 <button class="action-btn" data-action="help">
                                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -170,7 +170,7 @@ export default {
                                     </button>
                                     <div class="control-dropdown control-dropdown-right" id="mapDropdown" style="display: none;">
                                         <button class="dropdown-item" data-action="board">
-                                            <span>Board</span>
+                                            <span>Info</span>
                                             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                                                 <line x1="3" y1="12" x2="21" y2="12"/>
                                                 <line x1="3" y1="6" x2="21" y2="6"/>

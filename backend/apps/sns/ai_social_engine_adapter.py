@@ -435,7 +435,7 @@ class AISocialEngine(
         # prompt = prompt.replace(f"__current_action__", self.current_action)
         prompt = prompt.replace(f"__action_result__", self.action_result)
         prompt = prompt.replace(f"__current_status__", current_status)
-        prompt = prompt.replace(f"__tool_list__", json.dumps(self.get_service_list(), indent=4, ensure_ascii=False))
+        prompt = prompt.replace(f"__service_list__", json.dumps(self.get_service_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__people_list__", json.dumps(self.get_people_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__place_list__", json.dumps(self.get_place_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__question_to_llm__", question_to_llm)
@@ -616,7 +616,7 @@ class AISocialEngine(
     def compose_full_ask_content_human(self, task_description,  question_to_llm):
         prompt = get_prompt_by_title("__human_instruction_to_process_activity_content__")
         prompt = prompt.replace(f"__human_instruction__", question_to_llm)
-        prompt = prompt.replace(f"__tool_list__", json.dumps(self.get_service_list(), indent=4, ensure_ascii=False))
+        prompt = prompt.replace(f"__service_list__", json.dumps(self.get_service_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__people_list__", json.dumps(self.get_people_list(), indent=4, ensure_ascii=False))
         prompt = prompt.replace(f"__place_list__", json.dumps(self.get_place_list(), indent=4, ensure_ascii=False))
 

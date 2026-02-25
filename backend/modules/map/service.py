@@ -45,6 +45,111 @@ class MapService:
     """Service for managing map functionality"""
 
     @staticmethod
+    def _haversine_distance_m(lng1: float, lat1: float, lng2: float, lat2: float) -> float:
+        """Return great-circle distance in meters."""
+        r = 6371000.0
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lng2 - lng1)
+
+        a = (
+            math.sin(dphi / 2.0) ** 2
+            + math.cos(phi1) * math.cos(phi2) * (math.sin(dlambda / 2.0) ** 2)
+        )
+        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+        return r * c
+
+    @classmethod
+    def _fetch_place_list(cls, lng: float, lat: float) -> List[Dict[str, Any]]:
+        remote_base = cls._get_ai_sns_server_base()
+        if not remote_base:
+            return []
+
+        url = f"{remote_base}/api/get_place_list/"
+        try:
+            resp = requests.post(url, data={"lng": lng, "lat": lat}, timeout=12)
+            resp.raise_for_status()
+            data = resp.json()
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.warning("Failed to fetch place list from ai_sns_server: %s", e)
+            return []
+
+    @classmethod
+    def update_location_and_get_nearest_place(
+        cls,
+        *,
+        lng: float,
+        lat: float,
+        max_distance_m: int = 1000,
+    ) -> Dict[str, Any]:
+        """Persist the latest user location and return nearest place within max_distance_m."""
+        try:
+            lng_val = float(lng)
+            lat_val = float(lat)
+        except Exception:
+            return {"success": False, "message": "Invalid lng/lat", "data": {}}
+
+        if not (-180.0 <= lng_val <= 180.0 and -90.0 <= lat_val <= 90.0):
+            return {"success": False, "message": "lng/lat out of range", "data": {}}
+
+        try:
+            update_AiChatCfg_map(current_position=json.dumps({"lng": lng_val, "lat": lat_val}, ensure_ascii=False))
+        except Exception as e:
+            logger.warning("Failed to persist current_position: %s", e)
+
+        place_list = cls._fetch_place_list(lng_val, lat_val)
+        if not place_list:
+            return {"success": True, "data": {"url": "", "distance_m": None, "place": None}}
+
+        best = None
+        best_dist = None
+        for place in place_list:
+            if not isinstance(place, dict):
+                continue
+            pos = place.get("place_position")
+            if not (isinstance(pos, (list, tuple)) and len(pos) >= 2):
+                continue
+            try:
+                p_lng = float(pos[0])
+                p_lat = float(pos[1])
+            except Exception:
+                continue
+            dist_m = cls._haversine_distance_m(lng_val, lat_val, p_lng, p_lat)
+            if best_dist is None or dist_m < best_dist:
+                best_dist = dist_m
+                best = place
+
+        if best is None or best_dist is None:
+            return {"success": True, "data": {"url": "", "distance_m": None, "place": None}}
+
+        try:
+            max_distance_m = int(max_distance_m)
+        except Exception:
+            max_distance_m = 1000
+
+        if best_dist > max_distance_m:
+            return {
+                "success": True,
+                "data": {
+                    "url": "",
+                    "distance_m": round(float(best_dist), 2),
+                    "place": best,
+                },
+            }
+
+        url = (best.get("url") or "").strip()
+        return {
+            "success": True,
+            "data": {
+                "url": url,
+                "distance_m": round(float(best_dist), 2),
+                "place": best,
+            },
+        }
+
+    @staticmethod
     def _normalize_position(value: Any) -> Dict[str, float]:
         if not value:
             return {}

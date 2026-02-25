@@ -230,6 +230,30 @@ const KMNotePage = {
             this.saveSelection();
             this.updateToolbarState();
         });
+
+        noteContent.addEventListener('click', (e) => {
+            try {
+                if (!e) return;
+                if (e.altKey) return;
+                const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+                if (!a) return;
+
+                const href = a.getAttribute('href') || '';
+                if (!href) return;
+                const url = a.href || href;
+                if (!/^https?:\/\//i.test(url)) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
+                    window.electronAPI.openUrl(url);
+                    return;
+                }
+                window.open(url, '_blank', 'noopener,noreferrer');
+            } catch (err) {
+            }
+        });
     },
 
     // Save current selection (store by node references/offsets for better robustness)
@@ -471,6 +495,87 @@ const KMNotePage = {
         if (colorPicker && colorBtn) {
             let savedSelection = null;
 
+            const stripColorFromHtml = (html) => {
+                try {
+                    const container = document.createElement('div');
+                    container.innerHTML = html;
+                    container.querySelectorAll('*').forEach((el) => {
+                        try {
+                            if (el && el.style && el.style.color) {
+                                el.style.color = '';
+                                if (!el.getAttribute('style')) {
+                                    el.removeAttribute('style');
+                                }
+                            }
+                            if (el && el.hasAttribute && el.hasAttribute('color')) {
+                                el.removeAttribute('color');
+                            }
+                            const style = el && el.getAttribute ? el.getAttribute('style') : '';
+                            if (style) {
+                                const next = style
+                                    .split(';')
+                                    .map(s => s.trim())
+                                    .filter(Boolean)
+                                    .filter(s => !/^color\s*:/i.test(s))
+                                    .join('; ');
+                                if (next) {
+                                    el.setAttribute('style', next);
+                                } else {
+                                    el.removeAttribute('style');
+                                }
+                            }
+                        } catch (e) {
+                        }
+                    });
+                    return container.innerHTML;
+                } catch (e) {
+                    return html;
+                }
+            };
+
+            const clearSelectionColor = () => {
+                try {
+                    restoreSelection();
+                    const selection = window.getSelection();
+                    if (!selection || selection.rangeCount <= 0) return;
+                    const range = selection.getRangeAt(0);
+                    if (range.collapsed) {
+                        const node = selection.anchorNode;
+                        const el = node && node.nodeType === Node.ELEMENT_NODE ? node : (node ? node.parentElement : null);
+                        if (!el) return;
+                        const colored = el.closest && (el.closest('[style*="color"], font[color]'));
+                        if (colored) {
+                            try {
+                                if (colored.style) {
+                                    colored.style.color = '';
+                                }
+                                colored.removeAttribute('color');
+                                const style = colored.getAttribute('style');
+                                if (style) {
+                                    const next = style
+                                        .split(';')
+                                        .map(s => s.trim())
+                                        .filter(Boolean)
+                                        .filter(s => !/^color\s*:/i.test(s))
+                                        .join('; ');
+                                    if (next) colored.setAttribute('style', next);
+                                    else colored.removeAttribute('style');
+                                }
+                            } catch (e) {
+                            }
+                        }
+                        return;
+                    }
+
+                    const frag = range.cloneContents();
+                    const div = document.createElement('div');
+                    div.appendChild(frag);
+                    const cleaned = stripColorFromHtml(div.innerHTML);
+                    document.execCommand('insertHTML', false, cleaned);
+                } catch (e) {
+                }
+            };
+
             // Save selection
             const saveSelection = () => {
                 const selection = window.getSelection();
@@ -516,9 +621,16 @@ const KMNotePage = {
             });
 
             // On color button click, save selection and open color picker
-            colorBtn.addEventListener('click', () => {
+            colorBtn.addEventListener('click', (e) => {
+                if (e && e.shiftKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearSelectionColor();
+                    this.restoreFocus();
+                    return;
+                }
+
                 saveSelection();
-                // Use setTimeout to ensure selection has been saved
                 setTimeout(() => {
                     colorPicker.click();
                 }, 10);

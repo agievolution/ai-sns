@@ -6247,6 +6247,7 @@ body.theme-dark .km-editor-content table tr:hover {
     color: var(--color-primary);
     text-decoration: none;
     border-bottom: 1px dashed var(--color-primary);
+    cursor: pointer;
 }
 
 .km-editor-content a:hover {

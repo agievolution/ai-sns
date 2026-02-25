@@ -30,7 +30,7 @@ const overlayWorldRight = new THREE.Vector3();
 const overlayProjectedLeft = new THREE.Vector3();
 const overlayProjectedRight = new THREE.Vector3();
 const OVERLAY_SCALE_RANGE = { min: 0.6, max: 1.8 };
-const OVERLAY_VERTICAL_MARGIN = 8;
+const OVERLAY_VERTICAL_MARGIN = 28;
 
 // Performance config
 const PERFORMANCE_CONFIG = {
@@ -411,7 +411,9 @@ function createVideoOverlay() {
         lineHeight: '1.4',
         borderRadius: '6px',
         cursor: 'pointer',
-        zIndex: 9999,
+        zIndex: 2147483647,
+        pointerEvents: 'auto',
+        display: 'none',
         userSelect: 'none',
         whiteSpace: 'nowrap',
         boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)'
@@ -424,9 +426,40 @@ function createVideoOverlay() {
 
     document.body.appendChild(overlay);
     screenOverlayElement = overlay;
-    const rect = overlay.getBoundingClientRect();
-    screenOverlayBaseWidth = (rect.width && rect.width > 0) ? rect.width : (overlay.offsetWidth || 1);
-    screenOverlayBaseHeight = (rect.height && rect.height > 0) ? rect.height : (overlay.offsetHeight || 1);
+    ensureOverlayBaseSize();
+}
+
+function ensureOverlayBaseSize() {
+    if (!screenOverlayElement) return;
+    if (screenOverlayBaseWidth && screenOverlayBaseHeight && screenOverlayBaseWidth > 1 && screenOverlayBaseHeight > 1) return;
+
+    const el = screenOverlayElement;
+    const prevDisplay = el.style.display;
+    const prevVisibility = el.style.visibility;
+    const prevLeft = el.style.left;
+    const prevTop = el.style.top;
+    const prevTransform = el.style.transform;
+
+    try {
+        el.style.visibility = 'hidden';
+        el.style.display = 'block';
+        el.style.left = '-10000px';
+        el.style.top = '-10000px';
+        el.style.transform = 'scale(1)';
+
+        const rect = el.getBoundingClientRect();
+        const w = (rect.width && rect.width > 0) ? rect.width : (el.offsetWidth || 1);
+        const h = (rect.height && rect.height > 0) ? rect.height : (el.offsetHeight || 1);
+        screenOverlayBaseWidth = w;
+        screenOverlayBaseHeight = h;
+    } catch (e) {
+    } finally {
+        el.style.display = prevDisplay;
+        el.style.visibility = prevVisibility;
+        el.style.left = prevLeft;
+        el.style.top = prevTop;
+        el.style.transform = prevTransform;
+    }
 }
 
 function getActiveCamera() {
@@ -456,15 +489,7 @@ function updateVideoOverlayPosition() {
         return;
     }
 
-    if (!screenOverlayBaseWidth || !screenOverlayBaseHeight) {
-        const rect = screenOverlayElement.getBoundingClientRect();
-        screenOverlayBaseWidth = (!screenOverlayBaseWidth || screenOverlayBaseWidth <= 0)
-            ? ((rect.width && rect.width > 0) ? rect.width : (screenOverlayElement.offsetWidth || 1))
-            : screenOverlayBaseWidth;
-        screenOverlayBaseHeight = (!screenOverlayBaseHeight || screenOverlayBaseHeight <= 0)
-            ? ((rect.height && rect.height > 0) ? rect.height : (screenOverlayElement.offsetHeight || 1))
-            : screenOverlayBaseHeight;
-    }
+    ensureOverlayBaseSize();
 
     const box = new THREE.Box3().setFromObject(buildingBaseMesh);
     if (!box || (typeof box.isEmpty === 'function' && box.isEmpty())) {
@@ -483,53 +508,13 @@ function updateVideoOverlayPosition() {
     const canvasWidth = renderer.domElement.clientWidth;
     const canvasHeight = renderer.domElement.clientHeight;
 
-    const corners = [
-        [box.min.x, box.min.y, box.min.z],
-        [box.min.x, box.min.y, box.max.z],
-        [box.min.x, box.max.y, box.min.z],
-        [box.min.x, box.max.y, box.max.z],
-        [box.max.x, box.min.y, box.min.z],
-        [box.max.x, box.min.y, box.max.z],
-        [box.max.x, box.max.y, box.min.z],
-        [box.max.x, box.max.y, box.max.z]
-    ];
-
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let anyProjected = false;
-    for (const c of corners) {
-        overlayWorldLeft.set(c[0], c[1], c[2]);
-        overlayProjectedLeft.copy(overlayWorldLeft).project(activeCamera);
-        if (overlayProjectedLeft.z >= 1) continue;
-        anyProjected = true;
-        minX = Math.min(minX, overlayProjectedLeft.x);
-        maxX = Math.max(maxX, overlayProjectedLeft.x);
-    }
-
-    if (!anyProjected || !isFinite(minX) || !isFinite(maxX) || minX === maxX) {
-        screenOverlayElement.style.display = 'none';
-        return;
-    }
-
-    const pixelWidth = Math.abs(maxX - minX) * 0.5 * canvasWidth;
-    if (!pixelWidth || pixelWidth <= 0) {
-        screenOverlayElement.style.display = 'none';
-        return;
-    }
-
-    let scale = pixelWidth / screenOverlayBaseWidth;
-    scale = Math.max(OVERLAY_SCALE_RANGE.min, Math.min(OVERLAY_SCALE_RANGE.max, scale));
-
-    const scaledWidth = screenOverlayBaseWidth * scale;
-    const scaledHeight = screenOverlayBaseHeight * scale;
-
     const screenX = (overlayProjectedPosition.x * 0.5 + 0.5) * canvasWidth;
     const screenY = (-overlayProjectedPosition.y * 0.5 + 0.5) * canvasHeight;
 
     screenOverlayElement.style.display = 'block';
-    screenOverlayElement.style.transform = `scale(${scale})`;
-    screenOverlayElement.style.left = `${screenX - (scaledWidth / 2)}px`;
-    screenOverlayElement.style.top = `${screenY - scaledHeight - OVERLAY_VERTICAL_MARGIN}px`;
+    screenOverlayElement.style.transform = 'scale(1)';
+    screenOverlayElement.style.left = `${screenX - (screenOverlayBaseWidth / 2)}px`;
+    screenOverlayElement.style.top = `${screenY - screenOverlayBaseHeight - OVERLAY_VERTICAL_MARGIN}px`;
 
     if (screenMenuElement && screenMenuElement.style.display === 'block') {
         updateVideoMenuPosition();

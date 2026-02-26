@@ -112,7 +112,7 @@ function createVideoOverlay() {
     if (screenOverlayElement || document.getElementById(SCREEN_OVERLAY_ID)) return;
     const overlay = document.createElement('div');
     overlay.id = SCREEN_OVERLAY_ID;
-    overlay.textContent = 'Watch video details';
+    overlay.textContent = 'More about the video';
 
     Object.assign(overlay.style, {
         position: 'absolute',
@@ -214,7 +214,7 @@ function createVideoMenu() {
         return item;
     };
 
-    const about = mkItem('About the video');
+    const about = mkItem('Video details');
     about.addEventListener('click', (e) => {
         e.stopPropagation();
         const url = 'https://www.ai-sns.org';

@@ -469,7 +469,7 @@ class AISocialEngine(
             self.write_on_going_process_to_pane(action_str)
         # self.loading_tab.stop_loading()
 
-        if "附近逛逛" in action_str:
+        if "1_EXPLORE_NEARBY" in action_str:
 
             if self.move_by_route_flag:
                 action_result = self.move_by_route()
@@ -478,7 +478,7 @@ class AISocialEngine(
             else:
                 action_result = self.go_around()
 
-        elif "走路前往" in action_str:
+        elif "2_WALK_TO" in action_str:
 
             if self.move_by_route_flag:
                 action_result = self.move_by_route()
@@ -501,7 +501,33 @@ class AISocialEngine(
 
                 action_result = self.move_ahead(self.aichatcfg_record.current_position, target_position, place)
 
-        elif "叫车服务" in action_str:
+        elif "3_COMMUNICATE" in action_str:
+            self.communicate_with_a_people(action_str, instruction)
+            return
+
+        elif "4_PROMOTE" in action_str:
+            self.sell_to_a_people(action_str, instruction)
+            return
+
+        elif "5_PURCHASE" in action_str:
+            self.buy_from_a_people(action_str, instruction)
+            return
+
+        elif "6_WEB_SERVICE" in action_str:
+            self.use_service(action_str, instruction)
+            return
+
+        elif "7_NAVIGATION" in action_str:
+            if self.move_by_route_flag:
+                # If moving by route, navigation is not needed
+                action_result = self.move_by_route()
+            else:
+                action_result = self.get_guidance()
+
+        elif "8_FOOD_DELIVERY" in action_str:
+            action_result = self.set_food_order()
+
+        elif "9_CALL_TAXI" in action_str:
             if self.move_by_route_flag:
                 action_result = self.move_by_route()
             else:
@@ -520,35 +546,8 @@ class AISocialEngine(
                 target_position = position
                 action_result = self.set_taxi_order(self.aichatcfg_record.current_position, target_position, place)
 
-        elif "导航服务" in action_str:
-            if self.move_by_route_flag:
-                # If moving by route, navigation is not needed
-                action_result = self.move_by_route()
-            else:
-                action_result = self.get_guidance()
-
-        elif "Web Service" in action_str:
-            self.use_service(action_str, instruction)
-            return
-
-        elif "外卖服务" in action_str:
-            action_result = self.set_food_order()
-
-        elif "远程医疗" in action_str:
+        elif "10_REMOTE_MEDICAL" in action_str:
             action_result = self.call_a_doctor()
-
-        elif "推销" in action_str:
-            self.sell_to_a_people(action_str, instruction)
-            return
-
-        elif "求购" in action_str:
-            self.buy_from_a_people(action_str, instruction)
-            return
-
-        elif "沟通" in action_str:
-            self.communicate_with_a_people(action_str, instruction)
-            return
-
         else:
             action_result = f"'{action_str}'不在有效行动列表中。"
 
@@ -561,14 +560,14 @@ class AISocialEngine(
 
     def get_next_action(self, instruction):
         # Define delimiter markers
-        delimiter = "下一行动"
+        delimiter = "### Next Action"
 
         # Check whether delimiter exists
         if delimiter in instruction:
             # Split and take the last part (in case there are multiple identical markers)
             parts = instruction.split(delimiter, 1)
             return parts[1].strip() if len(parts) > 1 else ""
-        delimiter = "下一步行动"
+        delimiter = "Next Action"
         if delimiter in instruction:
             # Split and take the last part (in case there are multiple identical markers)
             parts = instruction.split(delimiter, 1)
@@ -577,8 +576,8 @@ class AISocialEngine(
         return ""
 
     def get_current_task_list(self, text):
-        start_marker = "### 当前任务清单"
-        end_marker = "### 下一行动"
+        start_marker = "### Current Task List"
+        end_marker = "### Next Action"
         try:
             # Find indices of markers (case-sensitive)
             start_idx = text.index(start_marker) + len(start_marker)

@@ -89,7 +89,7 @@ class SNSService:
         stmt = (
             select(AiChatCfg)
             .where(AiChatCfg.is_delete == False)
-            .order_by(AiChatCfg.id.asc())
+            .order_by(AiChatCfg.id.desc())
             .limit(1)
         )
         result = await self.db.execute(stmt)
@@ -575,12 +575,17 @@ class SNSService:
     async def get_ai_chat_config(self, user_id: str = None):
         """Get AI chat configuration"""
         try:
-            stmt = select(AiChatCfg).where(AiChatCfg.is_delete == False)
+            stmt = (
+                select(AiChatCfg)
+                .where(AiChatCfg.is_delete == False)
+                .order_by(AiChatCfg.id.desc())
+                .limit(1)
+            )
             if user_id:
                 stmt = stmt.where(AiChatCfg.user_id == user_id)
 
             result = await self.db.execute(stmt)
-            config = result.scalar_one_or_none()
+            config = result.scalars().first()
             if not config:
                 raise HTTPException(status_code=404, detail="Configuration not found")
 
@@ -592,12 +597,17 @@ class SNSService:
     async def update_ai_chat_config(self, user_id: str = None, data: dict = None):
         """Update AI chat configuration"""
         try:
-            stmt = select(AiChatCfg).where(AiChatCfg.is_delete == False)
+            stmt = (
+                select(AiChatCfg)
+                .where(AiChatCfg.is_delete == False)
+                .order_by(AiChatCfg.id.desc())
+                .limit(1)
+            )
             if user_id:
                 stmt = stmt.where(AiChatCfg.user_id == user_id)
 
             result = await self.db.execute(stmt)
-            config = result.scalar_one_or_none()
+            config = result.scalars().first()
             if not config:
                 config = AiChatCfg(user_id=user_id)
                 self.db.add(config)
@@ -629,15 +639,24 @@ class SNSService:
 
             avatar_data = f"data:image/{file_ext[1:]};base64,{base64.b64encode(content).decode()}"
 
-            stmt = select(AiChatCfg).where(AiChatCfg.is_delete == False)
+            stmt = (
+                select(AiChatCfg)
+                .where(AiChatCfg.is_delete == False)
+                .order_by(AiChatCfg.id.desc())
+                .limit(1)
+            )
             if user_id:
                 stmt = stmt.where(AiChatCfg.user_id == user_id)
 
             result = await self.db.execute(stmt)
-            config = result.scalar_one_or_none()
-            if config:
-                config.avatar = avatar_data
-                await self.db.commit()
+            config = result.scalars().first()
+            if not config:
+                config = AiChatCfg(user_id=user_id)
+                self.db.add(config)
+
+            config.avatar = avatar_data
+            await self.db.commit()
+            await self.db.refresh(config)
 
             return {
                 "success": True,
@@ -740,6 +759,7 @@ class SNSService:
             return {
                 "success": True,
                 "data": {
+                    "nationid": getattr(config, 'nationid', None),
                     "nickname": config.nickname,
                     "sign": config.sign,
                     "sns_url": config.sns_url,
@@ -747,6 +767,8 @@ class SNSService:
                     "profession": getattr(config, 'profession', None),
                     "handle_after_trade": getattr(config, 'handle_after_trade', None),
                     "handle_content": getattr(config, 'handle_content', None),
+                    "goods_or_service_description": getattr(config, 'goods_or_service_description', None),
+                    "goods_or_service_price": getattr(config, 'goods_or_service_price', None),
                     "money": getattr(config, 'money', None),
                     "current_position": getattr(config, 'current_position', None),
                     "current_place": getattr(config, 'current_place', None),
@@ -919,6 +941,11 @@ class SNSService:
                 config.handle_after_trade = data.get('handle_after_trade')
             if 'handle_content' in data and hasattr(config, 'handle_content'):
                 config.handle_content = data.get('handle_content')
+
+            if 'goods_or_service_description' in data and hasattr(config, 'goods_or_service_description'):
+                config.goods_or_service_description = data.get('goods_or_service_description')
+            if 'goods_or_service_price' in data and hasattr(config, 'goods_or_service_price'):
+                config.goods_or_service_price = data.get('goods_or_service_price')
 
             await self.db.commit()
             return {

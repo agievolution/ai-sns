@@ -140,8 +140,8 @@ const homeHandlers = {
                     </div>
                 </div>
             `,
-            confirmText: '保存',
-            cancelText: '取消',
+            confirmText: 'Save',
+            cancelText: 'Cancel',
             showCancel: true,
             width: '720px',
             onOpen: async (modal) => {

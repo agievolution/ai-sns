@@ -14,9 +14,13 @@
     // Override alert - use console.warn and Notification instead
     window.alert = function(message) {
         console.warn('[Alert]', message);
-        // If Notification component is available, use it to show message
-        if (typeof Notification !== 'undefined' && Notification.warning) {
-            Notification.warning(String(message));
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.warning === 'function') {
+                window.Toast.warning(String(message));
+            } else if (typeof Notification !== 'undefined' && Notification.warning) {
+                Notification.warning(String(message));
+            }
+        } catch (e) {
         }
         // Restore focus
         setTimeout(() => {
@@ -46,10 +50,10 @@ class Modal {
         this.content = options.content || '';
         this.onConfirm = options.onConfirm || null;
         this.onCancel = options.onCancel || null;
-        this.onOpen = options.onOpen || null;  // 添加onOpen支持
+        this.onOpen = options.onOpen || null;
         this.onClose = options.onClose || null;
-        this.confirmText = options.confirmText || '确认';
-        this.cancelText = options.cancelText || '取消';
+        this.confirmText = options.confirmText || 'Confirm';
+        this.cancelText = options.cancelText || 'Cancel';
         this.showCancel = options.showCancel !== false;
         this.closeOnClickOutside = options.closeOnClickOutside !== false;
         this.width = options.width || '500px';
@@ -223,6 +227,13 @@ class Notification {
     }
 
     static show(message, type = 'info', duration = this.timeout) {
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.show === 'function') {
+                return window.Toast.show(String(message), type, duration);
+            }
+        } catch (e) {
+        }
+
         if (!this.container) this.init();
 
         const notification = document.createElement('div');

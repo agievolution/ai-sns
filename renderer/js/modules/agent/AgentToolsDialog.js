@@ -122,8 +122,8 @@ const AgentToolsDialog = {
                     </div>
 
                     <div class="dialog-footer">
-                        <button class="btn-secondary" id="cancelAgentTools">取消</button>
-                        <button class="btn-primary" id="saveAgentTools">保存配置</button>
+                        <button class="btn-secondary" id="cancelAgentTools">Cancel</button>
+                        <button class="btn-primary" id="saveAgentTools">Save</button>
                     </div>
                 </div>
             </div>
@@ -498,6 +498,17 @@ const AgentToolsDialog = {
      */
     showSuccess(message) {
         // Simple implementation, can be improved later
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.success === 'function') {
+                window.Toast.success(message);
+                return;
+            }
+            if (typeof Notification !== 'undefined' && Notification.success) {
+                Notification.success(message);
+                return;
+            }
+        } catch (e) {
+        }
         alert('✓ ' + message);
     },
 
@@ -506,6 +517,17 @@ const AgentToolsDialog = {
      */
     showError(message) {
         // Simple implementation, can be improved later
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.error === 'function') {
+                window.Toast.error(message);
+                return;
+            }
+            if (typeof Notification !== 'undefined' && Notification.error) {
+                Notification.error(message);
+                return;
+            }
+        } catch (e) {
+        }
         alert('✗ ' + message);
     }
 };

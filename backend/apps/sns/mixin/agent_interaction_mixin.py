@@ -15,6 +15,35 @@ logger = logging.getLogger(__name__)
 
 class AgentInteractionMixin:
 
+    def _format_goods_or_service_and_price(self) -> str:
+        cfg = getattr(self, "aichatcfg_record", None)
+        description = (getattr(cfg, "goods_or_service_description", None) or "").strip()
+        price = (getattr(cfg, "goods_or_service_price", None) or "").strip()
+
+        if description and price:
+            return f"{description}. Price: {price}."
+        if description:
+            return description
+        if price:
+            return f"Price: {price}."
+        return ""
+
+    def _apply_sns_prompt_placeholders(self, text: str) -> str:
+        if not isinstance(text, str) or not text:
+            return text
+
+        cfg = getattr(self, "aichatcfg_record", None)
+        profession = (getattr(cfg, "profession", None) or "").strip()
+        goods_or_service_and_price = self._format_goods_or_service_and_price()
+
+        if "__user_profession_to_be_provided__" in text:
+            text = text.replace("__user_profession_to_be_provided__", profession)
+
+        if "__goods_or_service_and_price__" in text:
+            text = text.replace("__goods_or_service_and_price__", goods_or_service_and_price)
+
+        return text
+
     def get_agent_adapter(self) -> AgentAdapter:
         agent_adapter = getattr(self, "agent_adapter", None)
         if agent_adapter is None:
@@ -70,6 +99,9 @@ class AgentInteractionMixin:
         if self.stopping_ai_process_flag:
             self.stop_AI_process_finished()
             return
+
+        system_role_prompt = self._apply_sns_prompt_placeholders(system_role_prompt)
+        question = self._apply_sns_prompt_placeholders(question)
 
         command_status = self.command_status
         title_str = "Ask agent to get instruction"

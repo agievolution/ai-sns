@@ -435,6 +435,7 @@ class SNSService:
             return {
                 "success": True,
                 "data": {
+                    "nationid": getattr(config, 'nationid', None),
                     "nickname": config.nickname,
                     "sign": config.sign,
                     "sns_url": config.sns_url,

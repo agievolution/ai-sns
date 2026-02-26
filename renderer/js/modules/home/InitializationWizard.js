@@ -84,8 +84,8 @@ const InitializationWizard = {
             title: '初始化设置',
             content: this.renderStep(),
             showCancel: true,
-            cancelText: '取消',
-            confirmText: '下一步',
+            cancelText: 'Cancel',
+            confirmText: 'Next',
             width: '820px',
             closeOnClickOutside: false,
             onOpen: (modal) => {
@@ -473,11 +473,11 @@ const InitializationWizard = {
         const confirmBtn = this.modal.element.querySelector('[data-action="confirm"]');
 
         if (cancelBtn) {
-            cancelBtn.textContent = this.step === 0 ? '取消' : '上一步';
+            cancelBtn.textContent = this.step === 0 ? 'Cancel' : 'Previous';
         }
 
         if (confirmBtn) {
-            confirmBtn.textContent = this.step < 4 ? '下一步' : '提交';
+            confirmBtn.textContent = this.step < 4 ? 'Next' : 'Submit';
         }
 
         this.bindStepEvents();

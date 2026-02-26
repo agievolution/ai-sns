@@ -59,7 +59,7 @@ const AgentSettingsDialog = {
             content: content,
             confirmText: isEdit ? 'Save' : 'Create',
             showCancel: true,
-            width: '800px',
+            width: '600px',
             onOpen: (modalInstance) => {
                 // Bind events for current instance
                 this.bindEvents(modalInstance);
@@ -137,144 +137,167 @@ const AgentSettingsDialog = {
 
                 <!-- Basic Information tab -->
                 <div class="settings-tab-pane active" id="${basicTabId}" data-tab="basic">
-                    <div class="form-group">
-                        <label>Agent Name *</label>
-                        <input type="text" class="form-input" id="agentName" value="${this.escapeHtml(data.name)}" placeholder="e.g. GPT-4 Assistant">
+                    <div class="dialog-section">
+                        <h4>General</h4>
+                        <div class="form-group">
+                            <label>Agent Name *</label>
+                            <input type="text" class="form-input" id="agentName" value="${this.escapeHtml(data.name)}" placeholder="e.g. GPT-4 Assistant">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea class="form-input" id="agentDescription" rows="3" placeholder="Briefly describe the functionality and purpose of this Agent">${this.escapeHtml(data.description || '')}</textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Agent Type *</label>
+                            <select class="form-input" id="agentType" ${agentTypeLocked ? 'disabled' : ''}>
+                                <option value="local" ${agentType === 'local' ? 'selected' : ''}>Local Agent</option>
+                                <option value="remote" ${agentType === 'remote' ? 'selected' : ''}>Remote Agent</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Description</label>
-                        <textarea class="form-input" id="agentDescription" rows="3" placeholder="Briefly describe the functionality and purpose of this Agent">${this.escapeHtml(data.description || '')}</textarea>
-                    </div>
+                    <div class="dialog-section agent-local-only">
+                        <h4>Configuration</h4>
+                        <div class="form-group">
+                            <label>LLM Model *</label>
+                            <select class="form-input" id="agentModelConfig">
+                                <option value="">Select a model...</option>
+                                ${this.llmConfigs.map(config => `
+                                    <option value="${config.config_id}" ${data.model_config_id === config.config_id ? 'selected' : ''}>
+                                        ${config.name}${config.provider ? ` (${config.provider})` : ''}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
 
-                    <div class="form-group">
-                        <label>Agent Type *</label>
-                        <select class="form-input" id="agentType" ${agentTypeLocked ? 'disabled' : ''}>
-                            <option value="local" ${agentType === 'local' ? 'selected' : ''}>Local Agent</option>
-                            <option value="remote" ${agentType === 'remote' ? 'selected' : ''}>Remote Agent</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group agent-local-only">
-                        <label>LLM Model *</label>
-                        <select class="form-input" id="agentModelConfig">
-                            <option value="">Select a model...</option>
-                            ${this.llmConfigs.map(config => `
-                                <option value="${config.config_id}" ${data.model_config_id === config.config_id ? 'selected' : ''}>
-                                    ${config.name}${config.provider ? ` (${config.provider})` : ''}
-                                </option>
-                            `).join('')}
-                        </select>
-                    </div>
-
-                    <div class="form-group agent-local-only">
-                        <label>Role Configuration *</label>
-                        <select class="form-input" id="agentRoleConfig">
-                            <option value="">Select a role...</option>
-                            ${this.roleConfigs.map(role => `
-                                <option value="${role.role_id}" ${data.role_id === role.role_id ? 'selected' : ''}>
-                                    ${role.name}${role.category ? ` - ${role.category}` : ''}
-                                </option>
-                            `).join('')}
-                        </select>
+                        <div class="form-group">
+                            <label>Role Configuration *</label>
+                            <select class="form-input" id="agentRoleConfig">
+                                <option value="">Select a role...</option>
+                                ${this.roleConfigs.map(role => `
+                                    <option value="${role.role_id}" ${data.role_id === role.role_id ? 'selected' : ''}>
+                                        ${role.name}${role.category ? ` - ${role.category}` : ''}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
                     </div>
                 </div>
 
                 <!-- A2A Protocol tab -->
                 <div class="settings-tab-pane" id="${a2aTabId}" data-tab="a2a">
-                    <div class="form-group">
-                        <label>A2A Endpoint URL *</label>
-                        <input type="text" class="form-input" id="agentUrl" value="${this.escapeHtml(data.url)}" placeholder="">
-                        <small class="form-hint">A2A protocol access address for the Agent</small>
+                    <div class="dialog-section">
+                        <h4>Endpoint</h4>
+                        <div class="form-group">
+                            <label>A2A Endpoint URL *</label>
+                            <input type="text" class="form-input" id="agentUrl" value="${this.escapeHtml(data.url)}" placeholder="">
+                            <small class="form-hint">A2A protocol access address for the Agent</small>
+                        </div>
                     </div>
 
                     <div class="agent-local-only">
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 1;">
-                                <label>Agent Version</label>
-                                <input type="text" class="form-input" id="agentVersion" value="${this.escapeHtml(data.version)}" placeholder="1.0.0">
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label>Protocol Version</label>
-                                <input type="text" class="form-input" id="agentProtocolVersion" value="${this.escapeHtml(data.protocol_version)}" placeholder="0.3">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Capabilities</label>
-                            <div class="checkbox-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="capStreaming" ${data.capabilities?.streaming ? 'checked' : ''}>
-                                    <span>Streaming</span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="capPushNotifications" ${data.capabilities?.pushNotifications ? 'checked' : ''}>
-                                    <span>Push Notifications</span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="capStateHistory" ${data.capabilities?.stateTransitionHistory ? 'checked' : ''}>
-                                    <span>State Transition History</span>
-                                </label>
+                        <div class="dialog-section">
+                            <h4>Protocol Details</h4>
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 1;">
+                                    <label>Agent Version</label>
+                                    <input type="text" class="form-input" id="agentVersion" value="${this.escapeHtml(data.version)}" placeholder="1.0.0">
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label>Protocol Version</label>
+                                    <input type="text" class="form-input" id="agentProtocolVersion" value="${this.escapeHtml(data.protocol_version)}" placeholder="0.3">
+                                </div>
                             </div>
                         </div>
 
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 1;">
-                                <label>Input Modes</label>
-                                <select class="form-input" id="agentInputModes" multiple size="3">
-                                    <option value="text" ${data.default_input_modes?.includes('text') ? 'selected' : ''}>Text</option>
-                                    <option value="image" ${data.default_input_modes?.includes('image') ? 'selected' : ''}>Image</option>
-                                    <option value="audio" ${data.default_input_modes?.includes('audio') ? 'selected' : ''}>Audio</option>
-                                    <option value="video" ${data.default_input_modes?.includes('video') ? 'selected' : ''}>Video</option>
-                                    <option value="file" ${data.default_input_modes?.includes('file') ? 'selected' : ''}>File</option>
-                                </select>
-                                <small class="form-hint">Hold Ctrl to select multiple</small>
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label>Output Modes</label>
-                                <select class="form-input" id="agentOutputModes" multiple size="3">
-                                    <option value="text" ${data.default_output_modes?.includes('text') ? 'selected' : ''}>Text</option>
-                                    <option value="image" ${data.default_output_modes?.includes('image') ? 'selected' : ''}>Image</option>
-                                    <option value="audio" ${data.default_output_modes?.includes('audio') ? 'selected' : ''}>Audio</option>
-                                    <option value="video" ${data.default_output_modes?.includes('video') ? 'selected' : ''}>Video</option>
-                                    <option value="file" ${data.default_output_modes?.includes('file') ? 'selected' : ''}>File</option>
-                                </select>
-                                <small class="form-hint">Hold Ctrl to select multiple</small>
+                        <div class="dialog-section">
+                            <h4>Capabilities</h4>
+                            <div class="form-group">
+                                <div class="checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="capStreaming" ${data.capabilities?.streaming ? 'checked' : ''}>
+                                        <span>Streaming</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="capPushNotifications" ${data.capabilities?.pushNotifications ? 'checked' : ''}>
+                                        <span>Push Notifications</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="capStateHistory" ${data.capabilities?.stateTransitionHistory ? 'checked' : ''}>
+                                        <span>State Transition History</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label>Provider Organization</label>
-                            <input type="text" class="form-input" id="agentProviderOrg" value="${this.escapeHtml(data.provider_organization)}" placeholder="AI-SNS Platform">
+                        <div class="dialog-section">
+                            <h4>Interaction Modes</h4>
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 1;">
+                                    <label>Input Modes</label>
+                                    <select class="form-input" id="agentInputModes" multiple size="3">
+                                        <option value="text" ${data.default_input_modes?.includes('text') ? 'selected' : ''}>Text</option>
+                                        <option value="image" ${data.default_input_modes?.includes('image') ? 'selected' : ''}>Image</option>
+                                        <option value="audio" ${data.default_input_modes?.includes('audio') ? 'selected' : ''}>Audio</option>
+                                        <option value="video" ${data.default_input_modes?.includes('video') ? 'selected' : ''}>Video</option>
+                                        <option value="file" ${data.default_input_modes?.includes('file') ? 'selected' : ''}>File</option>
+                                    </select>
+                                    <small class="form-hint">Hold Ctrl to select multiple</small>
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label>Output Modes</label>
+                                    <select class="form-input" id="agentOutputModes" multiple size="3">
+                                        <option value="text" ${data.default_output_modes?.includes('text') ? 'selected' : ''}>Text</option>
+                                        <option value="image" ${data.default_output_modes?.includes('image') ? 'selected' : ''}>Image</option>
+                                        <option value="audio" ${data.default_output_modes?.includes('audio') ? 'selected' : ''}>Audio</option>
+                                        <option value="video" ${data.default_output_modes?.includes('video') ? 'selected' : ''}>Video</option>
+                                        <option value="file" ${data.default_output_modes?.includes('file') ? 'selected' : ''}>File</option>
+                                    </select>
+                                    <small class="form-hint">Hold Ctrl to select multiple</small>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label>Provider URL</label>
-                            <input type="text" class="form-input" id="agentProviderUrl" value="${this.escapeHtml(data.provider_url)}" placeholder="https://ai-sns.com">
-                        </div>
+                        <div class="dialog-section">
+                            <h4>Provider Info</h4>
+                            <div class="form-group">
+                                <label>Provider Organization</label>
+                                <input type="text" class="form-input" id="agentProviderOrg" value="${this.escapeHtml(data.provider_organization)}" placeholder="AI-SNS Platform">
+                            </div>
 
-                        <div class="form-group">
-                            <label>Documentation URL</label>
-                            <input type="text" class="form-input" id="agentDocUrl" value="${this.escapeHtml(data.documentation_url || '')}" placeholder="https://docs.ai-sns.com">
-                        </div>
+                            <div class="form-group">
+                                <label>Provider URL</label>
+                                <input type="text" class="form-input" id="agentProviderUrl" value="${this.escapeHtml(data.provider_url)}" placeholder="https://ai-sns.com">
+                            </div>
 
-                        <div class="form-group">
-                            <label>Icon URL</label>
-                            <input type="text" class="form-input" id="agentIconUrl" value="${this.escapeHtml(data.icon_url || '')}" placeholder="https://ai-sns.com/icon.png">
+                            <div class="form-group">
+                                <label>Documentation URL</label>
+                                <input type="text" class="form-input" id="agentDocUrl" value="${this.escapeHtml(data.documentation_url || '')}" placeholder="https://docs.ai-sns.com">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Icon URL</label>
+                                <input type="text" class="form-input" id="agentIconUrl" value="${this.escapeHtml(data.icon_url || '')}" placeholder="https://ai-sns.com/icon.png">
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Blockchain Wallet tab -->
                 <div class="settings-tab-pane agent-local-only" id="${walletTabId}" data-tab="wallet">
-                    <div class="form-group">
-                        <label>Wallet Address</label>
-                        <div class="input-with-buttons">
-                            <input type="text" class="form-input" id="agentWalletAddress" value="${this.escapeHtml(data.wallet_address || '')}" placeholder="0x..." readonly>
-                            <button type="button" class="btn-secondary" id="createWalletBtn">Create New Wallet</button>
-                            <button type="button" class="btn-secondary" id="importWalletBtn">Import Wallet</button>
+                    <div class="dialog-section">
+                        <h4>Wallet Management</h4>
+                        <div class="form-group">
+                            <label>Wallet Address</label>
+                            <div class="input-with-buttons">
+                                <input type="text" class="form-input" id="agentWalletAddress" value="${this.escapeHtml(data.wallet_address || '')}" placeholder="0x..." readonly>
+                                <button type="button" class="btn-secondary" id="createWalletBtn">Create New Wallet</button>
+                                <button type="button" class="btn-secondary" id="importWalletBtn">Import Wallet</button>
+                            </div>
+                            <small class="form-hint">Ethereum wallet address for blockchain transactions and identity verification</small>
                         </div>
-                        <small class="form-hint">Ethereum wallet address for blockchain transactions and identity verification</small>
                     </div>
 
                     <div id="walletInfo" class="wallet-info" style="display: none;">

@@ -17,6 +17,44 @@ export class SNSProfessionDialog {
         this._pendingMcpToolName = '';
         this.availableTools = [];
         this.autoCloseTimer = null;
+        this.goodsOrServiceDescription = '';
+        this.goodsOrServicePrice = '';
+        this.serviceFieldsDirty = false;
+        this.professionServiceDefaults = new Map();
+    }
+
+    applyServiceDefaultsIfNeeded() {
+        if (this.serviceFieldsDirty) {
+            return;
+        }
+
+        const defaults = this.professionServiceDefaults.get(this.selectedProfession);
+        if (!defaults) {
+            return;
+        }
+
+        const descInput = this._q('#goodsOrServiceDescription');
+        const priceInput = this._q('#goodsOrServicePrice');
+
+        const currentDesc = (this.goodsOrServiceDescription || '').trim();
+        const currentPrice = (this.goodsOrServicePrice || '').trim();
+
+        const nextDesc = (defaults.description || '').trim();
+        const nextPrice = (defaults.price || '').trim();
+
+        if (!currentDesc && nextDesc) {
+            this.goodsOrServiceDescription = nextDesc;
+            if (descInput) {
+                descInput.value = nextDesc;
+            }
+        }
+
+        if (!currentPrice && nextPrice) {
+            this.goodsOrServicePrice = nextPrice;
+            if (priceInput) {
+                priceInput.value = nextPrice;
+            }
+        }
     }
 
     updateOtherProfessionUI() {
@@ -145,15 +183,29 @@ export class SNSProfessionDialog {
                                 <div class="other-profession-helper" id="otherProfessionHelper" aria-live="polite"></div>
                             </div>
 
+                            <!-- Service Details -->
+                            <div class="profession-section">
+                                <h4>Service Details</h4>
+                                <div class="form-group">
+                                    <label for="goodsOrServiceDescription">Goods or service description</label>
+                                    <textarea id="goodsOrServiceDescription" class="form-control" placeholder="Describe the goods or service you provide..." rows="3"></textarea>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="goodsOrServicePrice">Goods or service price</label>
+                                    <input type="text" id="goodsOrServicePrice" class="form-control" placeholder="Enter a price" />
+                                </div>
+                            </div>
+
                             <!-- Trade Handling Section -->
-                            <div class="trade-section">
+                            <div class="profession-section">
                                 <h4>Sender in trade</h4>
                                 <div class="trade-options">
-                                    <label class="trade-option">
+                                    <label class="profession-label">
                                         <input type="radio" name="tradeOption" value="message">
                                         <span>Send message</span>
                                     </label>
-                                    <label class="trade-option">
+                                    <label class="profession-label">
                                         <input type="radio" name="tradeOption" value="tool">
                                         <span>Call tool</span>
                                     </label>
@@ -161,22 +213,28 @@ export class SNSProfessionDialog {
                                 
                                 <!-- Message Input (shown when 'send message' is selected) -->
                                 <div class="message-input-container" id="messageInputContainer" style="display: none;">
-                                    <label for="messageContent">Message content:</label>
-                                    <textarea id="messageContent" placeholder="Enter the message to send..." rows="3" style="width: 100%; margin-top: 5px;"></textarea>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="messageContent">Message content</label>
+                                        <textarea id="messageContent" class="form-control" placeholder="Enter the message to send..." rows="3"></textarea>
+                                    </div>
                                 </div>
                                 
                                 <!-- Tool Selection (shown when 'call tool' is selected) -->
                                 <div class="tool-selection-container" id="toolSelectionContainer" style="display: none;">
-                                    <label for="toolSelect">Select tool:</label>
-                                    <select id="toolSelect" style="width: 100%; margin-top: 5px; padding: 5px;">
-                                        <option value="">Select a tool...</option>
-                                    </select>
-
-                                    <div class="mcp-tool-selection-container" id="mcpToolSelectionContainer" style="display: none; margin-top: 10px;">
-                                        <label for="mcpToolSelect">Select MCP internal tool:</label>
-                                        <select id="mcpToolSelect" style="width: 100%; margin-top: 5px; padding: 5px;">
-                                            <option value="">Select an MCP tool...</option>
+                                    <div class="form-group">
+                                        <label for="toolSelect">Select tool</label>
+                                        <select id="toolSelect" class="form-control">
+                                            <option value="">Select a tool...</option>
                                         </select>
+                                    </div>
+
+                                    <div class="mcp-tool-selection-container" id="mcpToolSelectionContainer" style="display: none;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label for="mcpToolSelect">Select MCP internal tool</label>
+                                            <select id="mcpToolSelect" class="form-control">
+                                                <option value="">Select an MCP tool...</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -206,6 +264,9 @@ export class SNSProfessionDialog {
 
         if (!this._isDialogAlive()) return;
 
+        // Setup event listeners early so profession changes are responsive even if tools are still loading
+        this.setupEventListeners();
+
         // Load available tools
         await this.loadTools();
 
@@ -216,8 +277,8 @@ export class SNSProfessionDialog {
 
         if (!this._isDialogAlive()) return;
 
-        // Setup event listeners
-        this.setupEventListeners();
+        // Ensure defaults are applied after existing values are loaded
+        this.applyServiceDefaultsIfNeeded();
     }
 
     async loadCurrentConfig() {
@@ -246,6 +307,19 @@ export class SNSProfessionDialog {
 
             const data = result.data;
 
+            this.goodsOrServiceDescription = data.goods_or_service_description || '';
+            this.goodsOrServicePrice = data.goods_or_service_price || '';
+            this.serviceFieldsDirty = false;
+
+            const descInput = this._q('#goodsOrServiceDescription');
+            if (descInput) {
+                descInput.value = this.goodsOrServiceDescription;
+            }
+            const priceInput = this._q('#goodsOrServicePrice');
+            if (priceInput) {
+                priceInput.value = this.goodsOrServicePrice;
+            }
+
             if (typeof data.money === 'number') {
                 this.currentMoney = data.money;
                 const balanceEl = this._q('#currentBalance');
@@ -262,6 +336,7 @@ export class SNSProfessionDialog {
                     radio.checked = true;
                     this.otherProfession = '';
                     this.updateOtherProfessionUI();
+                    this.applyServiceDefaultsIfNeeded();
                 } else {
                     const otherRadio = this._q('input[name="profession"][value="Other"]');
                     if (otherRadio && !otherRadio.disabled) {
@@ -274,11 +349,13 @@ export class SNSProfessionDialog {
                         otherInput.value = this.otherProfession;
                     }
                     this.updateOtherProfessionUI();
+                    this.applyServiceDefaultsIfNeeded();
                 }
             } else {
                 this.selectedProfession = null;
                 this.otherProfession = '';
                 this.updateOtherProfessionUI();
+                this.applyServiceDefaultsIfNeeded();
             }
 
             if (data.handle_after_trade) {
@@ -356,6 +433,17 @@ export class SNSProfessionDialog {
             costList.innerHTML = '';
             freeList.innerHTML = '';
 
+            this.professionServiceDefaults.clear();
+            professions.forEach(profession => {
+                if (profession && profession.name) {
+                    const desc = profession.service_description ? String(profession.service_description) : '';
+                    const price = profession.service_price ? String(profession.service_price) : '';
+                    if (desc || price) {
+                        this.professionServiceDefaults.set(String(profession.name), { description: desc, price: price });
+                    }
+                }
+            });
+
             professions.forEach(profession => {
                 const item = document.createElement('div');
                 item.className = 'profession-item';
@@ -404,9 +492,28 @@ export class SNSProfessionDialog {
                     this.setOtherProfessionHelper();
                 }
                 this.updateOtherProfessionUI();
+                this.applyServiceDefaultsIfNeeded();
                 this.clearInlineMessage();
             });
         });
+
+        const goodsOrServiceDescription = this._q('#goodsOrServiceDescription');
+        if (goodsOrServiceDescription) {
+            goodsOrServiceDescription.addEventListener('input', (e) => {
+                this.goodsOrServiceDescription = e.target.value;
+                this.serviceFieldsDirty = true;
+                this.clearInlineMessage();
+            });
+        }
+
+        const goodsOrServicePrice = this._q('#goodsOrServicePrice');
+        if (goodsOrServicePrice) {
+            goodsOrServicePrice.addEventListener('input', (e) => {
+                this.goodsOrServicePrice = e.target.value;
+                this.serviceFieldsDirty = true;
+                this.clearInlineMessage();
+            });
+        }
 
         const otherProfessionInput = this._q('#otherProfessionInput');
         if (otherProfessionInput) {
@@ -617,7 +724,9 @@ export class SNSProfessionDialog {
             const configData = {
                 profession: professionToSave,
                 handle_after_trade: this.selectedTradeOption || '',
-                handle_content: this.selectedTradeOption === 'message' ? this.messageContent : this.selectedTool || ''
+                handle_content: this.selectedTradeOption === 'message' ? this.messageContent : this.selectedTool || '',
+                goods_or_service_description: (this.goodsOrServiceDescription || '').trim(),
+                goods_or_service_price: (this.goodsOrServicePrice || '').trim()
             };
 
             const response = await fetch(this.resolve('/api/sns/user-info'), {

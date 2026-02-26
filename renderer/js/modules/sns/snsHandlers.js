@@ -1955,6 +1955,14 @@ export default {
      * Show toast message
      */
     showToast(message, type = 'success') {
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.show === 'function') {
+                window.Toast.show(String(message), String(type || 'success'), 3000);
+                return;
+            }
+        } catch (e) {
+        }
+
         // Create toast element
         const toast = document.createElement('div');
         toast.className = `sns-toast sns-toast-${type}`;
@@ -1985,7 +1993,7 @@ export default {
             padding: 16px 24px;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10000;
+            z-index: 2000000;
             max-width: 400px;
             word-wrap: break-word;
             animation: slideIn 0.3s ease-out;

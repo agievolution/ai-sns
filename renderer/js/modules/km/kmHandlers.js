@@ -958,10 +958,10 @@ const kmHandlers = {
         const file = files.find(f => f.id === fileId);
         if (!file) return;
 
-        const confirmed = await Toast.confirm(`确定删除文件 "${file.filename}"?`, {
-            title: '删除文件',
-            confirmText: '删除',
-            cancelText: '取消',
+        const confirmed = await Toast.confirm(`Want to delete "${file.filename}"?`, {
+            title: 'Delete File',
+            confirmText: 'Confirm',
+            cancelText: 'Cancel',
             type: 'warning'
         });
 
@@ -970,15 +970,15 @@ const kmHandlers = {
                 const response = await fetch(this.resolve(`/api/km/${kbId}/files/${fileId}`), {
                     method: 'DELETE'
                 });
-                if (!response.ok) throw new Error('删除失败');
+                if (!response.ok) throw new Error('Failed to delete file');
 
                 this.files[kbId] = this.files[kbId].filter(f => f.id !== fileId);
                 this.renderFileList(kbId);
                 this.bindFileListEvents(kbId);
-                Toast.success('文件已删除');
+                Toast.success('File deleted successfully');
             } catch (error) {
                 console.error('Delete failed:', error);
-                Toast.error('删除失败: ' + error.message);
+                Toast.error('Failed to delete file: ' + error.message);
             }
         }
     },

@@ -95,6 +95,8 @@ class ProfessionItem(BaseModel):
     name: str
     cost: Optional[int] = None
     description: Optional[str] = None
+    service_description: Optional[str] = None
+    service_price: Optional[str] = None
 
 
 class SocialRoleItem(BaseModel):

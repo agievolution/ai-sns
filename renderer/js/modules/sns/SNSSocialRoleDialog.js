@@ -430,7 +430,6 @@ export class SNSSocialRoleDialog {
                 <h3 class="role-detail-title">${this.escapeHtml(role.caption)}</h3>
                 
                 <div class="role-field" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-                    <div class="role-field-label">Content</div>
                     <div class="role-field-value" data-field="content" style="flex: 1; overflow-y: auto;">${this.escapeHtml(role.content)}</div>
                 </div>
             </div>
@@ -449,12 +448,12 @@ export class SNSSocialRoleDialog {
             <div class="role-detail edit-mode">
                 <div class="role-field">
                     <label class="role-field-label" for="editCaption">Caption</label>
-                    <input id="editCaption" class="role-field-input" value="${this.escapeHtmlAttribute(role.caption)}" />
+                    <input id="editCaption" class="role-field-input" value="${this.escapeHtmlAttribute(role.caption)}" readonly spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" />
                 </div>
                 
                 <div class="role-field">
                     <label class="role-field-label" for="editContent">Content</label>
-                    <textarea id="editContent" class="role-field-textarea">${this.escapeHtml(role.content)}</textarea>
+                    <textarea id="editContent" class="role-field-textarea" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off">${this.escapeHtml(role.content)}</textarea>
                 </div>
             </div>
         `;
@@ -484,8 +483,7 @@ export class SNSSocialRoleDialog {
     async saveRole() {
         if (!this.selectedRole) return;
 
-        const captionEl = this._q('#editCaption');
-        const caption = captionEl ? captionEl.value.trim() : '';
+        const caption = (this.selectedRole && this.selectedRole.caption) ? String(this.selectedRole.caption).trim() : '';
         const editEl = this._q('#editContent');
         const content = editEl ? editEl.value.trim() : '';
 

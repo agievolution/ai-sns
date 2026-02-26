@@ -67,11 +67,11 @@ export class SNSMapConfigDialog {
                             <div class="map-section">
                                 <h4>Select a map to use</h4>
                                 <div class="map-selection">
-                                    <label class="radio-label">
+                                    <label class="profession-label">
                                         <input type="radio" name="mapType" value="0" id="googleMapRadio" checked>
                                         <span>Google Map</span>
                                     </label>
-                                    <label class="radio-label">
+                                    <label class="profession-label">
                                         <input type="radio" name="mapType" value="1" id="baiduMapRadio">
                                         <span>Baidu Map</span>
                                     </label>

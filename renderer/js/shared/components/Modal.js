@@ -10,8 +10,8 @@ class Modal {
         this.onCancel = options.onCancel || null;
         this.onOpen = options.onOpen || null;
         this.onClose = options.onClose || null;
-        this.confirmText = options.confirmText || '确认';
-        this.cancelText = options.cancelText || '取消';
+        this.confirmText = options.confirmText || 'Confirm';
+        this.cancelText = options.cancelText || 'Cancel';
         this.showCancel = options.showCancel !== false;
         this.closeOnClickOutside = options.closeOnClickOutside !== false; // Allow clicking outside to close by default
         this.width = options.width || '500px';

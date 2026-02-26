@@ -57,10 +57,10 @@ class ToolsEditDialog {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" onclick="toolsEditDialog.close()">
-                            取消
+                            Cancel
                         </button>
                         <button type="button" class="btn btn-primary" onclick="toolsEditDialog.save()">
-                            ${isEdit ? '保存' : '创建'}
+                            ${isEdit ? 'Save' : 'Create'}
                         </button>
                     </div>
                 </div>
@@ -84,24 +84,29 @@ class ToolsEditDialog {
 
     renderFormFields(category, tool) {
         const baseFields = `
-            <div class="form-group">
-                <label for="toolName">名称 *</label>
-                <input type="text" id="toolName" name="name" class="form-control" required placeholder="输入工具名称">
-            </div>
-            <div class="form-group">
-                <label for="toolDescription">描述</label>
-                <textarea id="toolDescription" name="description" class="form-control" rows="3" placeholder="输入工具描述"></textarea>
-            </div>
-            <div class="form-group">
-                <label for="toolInstruction">使用说明</label>
-                <textarea id="toolInstruction" name="instruction" class="form-control" rows="4" placeholder="输入使用说明，告诉AI如何使用这个工具"></textarea>
+            <div class="tool-edit-section">
+                <h4>基本信息</h4>
+                <div class="form-group">
+                    <label for="toolName">名称 *</label>
+                    <input type="text" id="toolName" name="name" class="form-control" required placeholder="输入工具名称">
+                </div>
+                <div class="form-group">
+                    <label for="toolDescription">描述</label>
+                    <textarea id="toolDescription" name="description" class="form-control" rows="2" placeholder="输入工具描述"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="toolInstruction">使用说明</label>
+                    <textarea id="toolInstruction" name="instruction" class="form-control" rows="3" placeholder="输入使用说明，告诉AI如何使用这个工具"></textarea>
+                </div>
             </div>
         `;
 
         let specificFields = '';
+        let configTitle = '配置详情';
 
         switch(category) {
             case 'tools-plugin':
+                configTitle = '插件配置';
                 specificFields = `
                     <div class="form-group">
                         <label for="pluginType">插件类型</label>
@@ -120,17 +125,18 @@ class ToolsEditDialog {
                     </div>
                     <div class="form-group">
                         <label for="runtimeMain">运行代码 (Python)</label>
-                        <textarea id="runtimeMain" name="runtime_main" class="form-control code-editor" rows="10" placeholder="import sys&#10;import json&#10;&#10;# 从stdin读取参数&#10;params = json.loads(sys.stdin.read())&#10;&#10;# 处理逻辑&#10;result = {'output': 'Hello'}&#10;&#10;# 输出结果&#10;print(json.dumps(result))"></textarea>
+                        <textarea id="runtimeMain" name="runtime_main" class="form-control code-editor" rows="8" placeholder="import sys&#10;import json&#10;&#10;# 从stdin读取参数&#10;params = json.loads(sys.stdin.read())&#10;&#10;# 处理逻辑&#10;result = {'output': 'Hello'}&#10;&#10;# 输出结果&#10;print(json.dumps(result))"></textarea>
                         <small class="form-text">留空则使用文件路径执行</small>
                     </div>
                     <div class="form-group">
                         <label for="parameter">参数配置 (JSON)</label>
-                        <textarea id="parameter" name="parameter" class="form-control code-editor" rows="5" placeholder='{"arg1": "value1", "arg2": "value2"}'></textarea>
+                        <textarea id="parameter" name="parameter" class="form-control code-editor" rows="4" placeholder='{"arg1": "value1", "arg2": "value2"}'></textarea>
                     </div>
                 `;
                 break;
 
             case 'mcp':
+                configTitle = 'MCP 服务器配置';
                 specificFields = `
                     <div class="form-group">
                         <label for="mcpType">MCP类型</label>
@@ -150,12 +156,13 @@ class ToolsEditDialog {
                     </div>
                     <div class="form-group">
                         <label for="requirement">依赖要求</label>
-                        <textarea id="requirement" name="requirement" class="form-control" rows="3" placeholder="mcp==1.0.0&#10;other-package==2.0.0"></textarea>
+                        <textarea id="requirement" name="requirement" class="form-control" rows="2" placeholder="mcp==1.0.0&#10;other-package==2.0.0"></textarea>
                     </div>
                 `;
                 break;
 
             case 'function':
+                configTitle = '函数配置';
                 specificFields = `
                     <div class="form-group">
                         <label for="functionType">函数类型</label>
@@ -178,6 +185,7 @@ class ToolsEditDialog {
                 break;
 
             case 'computer-use':
+                configTitle = '技能配置';
                 specificFields = `
                     <div class="form-group">
                         <label for="skillType">技能类型</label>
@@ -202,18 +210,28 @@ class ToolsEditDialog {
                 break;
         }
 
+        const configSection = `
+            <div class="tool-edit-section">
+                <h4>${configTitle}</h4>
+                ${specificFields}
+            </div>
+        `;
+
         const confirmField = `
-            <div class="form-group">
-                <div class="form-check">
-                    <input type="checkbox" id="confirmNeeded" name="confirm_needed" class="form-check-input" checked>
-                    <label for="confirmNeeded" class="form-check-label">
-                        执行前需要确认 <small class="text-muted">(建议开启以增加安全性)</small>
-                    </label>
+            <div class="tool-edit-section">
+                <h4>安全选项</h4>
+                <div class="form-group">
+                    <div class="form-check">
+                        <input type="checkbox" id="confirmNeeded" name="confirm_needed" class="form-check-input" checked>
+                        <label for="confirmNeeded" class="form-check-label">
+                            执行前需要确认 <small class="text-muted">(建议开启以增加安全性)</small>
+                        </label>
+                    </div>
                 </div>
             </div>
         `;
 
-        return baseFields + specificFields + confirmField;
+        return baseFields + configSection + confirmField;
     }
 
     fillFormData(tool) {
@@ -324,6 +342,14 @@ class ToolsEditDialog {
     showMessage(message, type = 'info') {
         console.log(`[${type}] ${message}`);
 
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.show === 'function') {
+                window.Toast.show(String(message), String(type || 'info'), 3000);
+                return;
+            }
+        } catch (e) {
+        }
+
         // Create temporary toast
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
@@ -337,7 +363,7 @@ class ToolsEditDialog {
             color: white;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10000;
+            z-index: 2000000;
             animation: slideIn 0.3s ease-out;
         `;
 
@@ -352,127 +378,5 @@ class ToolsEditDialog {
 
 // Create global instance
 window.toolsEditDialog = new ToolsEditDialog();
-
-// Add styles
-const style = document.createElement('style');
-style.textContent = `
-    .tool-edit-dialog {
-        max-width: 800px;
-        max-height: 90vh;
-        overflow-y: auto;
-    }
-
-    .tool-edit-form {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-    }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .form-group label {
-        font-weight: 600;
-        font-size: 14px;
-        color: #374151;
-    }
-
-    .form-control {
-        padding: 10px 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        font-size: 14px;
-        font-family: inherit;
-        transition: all 0.2s;
-    }
-
-    .form-control:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-
-    .form-control.code-editor {
-        font-family: 'Courier New', monospace;
-        font-size: 13px;
-        background: #f9fafb;
-    }
-
-    .form-text {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 4px;
-    }
-
-    .form-check {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .form-check-input {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-    }
-
-    .form-check-label {
-        cursor: pointer;
-        font-size: 14px;
-        color: #374151;
-    }
-
-    .text-muted {
-        color: #9ca3af;
-    }
-
-    @keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-
-    @keyframes slideOut {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-    }
-
-    body.theme-dark .form-group label {
-        color: #f3f4f6;
-    }
-
-    body.theme-dark .form-control {
-        background: #1f2937;
-        border-color: #374151;
-        color: #f3f4f6;
-    }
-
-    body.theme-dark .form-control.code-editor {
-        background: #111827;
-    }
-
-    body.theme-dark .form-text {
-        color: #9ca3af;
-    }
-
-    body.theme-dark .form-check-label {
-        color: #f3f4f6;
-    }
-`;
-document.head.appendChild(style);
 
 export default ToolsEditDialog;

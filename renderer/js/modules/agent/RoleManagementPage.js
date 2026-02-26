@@ -233,7 +233,7 @@ const RoleManagementPage = {
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" id="cancelPresetBtn">取消</button>
+                        <button class="btn btn-secondary" id="cancelPresetBtn">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -270,7 +270,7 @@ const RoleManagementPage = {
 
         const modalHtml = `
             <div class="modal-overlay" id="roleModal">
-                <div class="modal-dialog">
+                <div class="modal-dialog" style="max-width: 600px;">
                     <div class="modal-header">
                         <h3>${title}</h3>
                         <button class="modal-close" id="closeModal">×</button>
@@ -279,8 +279,8 @@ const RoleManagementPage = {
                         ${this.renderRoleForm(role)}
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" id="cancelBtn">取消</button>
-                        <button class="btn btn-primary" id="saveBtn">保存</button>
+                        <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                        <button class="btn btn-primary" id="saveBtn">Save</button>
                     </div>
                 </div>
             </div>
@@ -311,66 +311,70 @@ const RoleManagementPage = {
     renderRoleForm(role = null) {
         return `
             <form id="roleForm" class="role-form">
-                <div class="form-group">
-                    <label>角色名称 *</label>
-                    <input type="text" name="name" class="form-control"
-                           value="${role?.name || ''}" required>
+                <div class="dialog-section">
+                    <h4>基本信息</h4>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label>角色名称 (ID) *</label>
+                            <input type="text" name="name" class="form-control"
+                                   value="${role?.name || ''}" required placeholder="例如: python_expert">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>显示名称</label>
+                            <input type="text" name="display_name" class="form-control"
+                                   value="${role?.display_name || ''}" placeholder="例如: Python 专家">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>分类</label>
+                        <select name="category" class="form-control">
+                            ${this.state.categories.map(c => `
+                                <option value="${c.value}" ${role?.category === c.value ? 'selected' : ''}>
+                                    ${c.label}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>描述</label>
+                        <textarea name="description" class="form-control" rows="2" placeholder="简要描述角色的功能">${role?.description || ''}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>标签</label>
+                        <input type="text" name="tags" class="form-control"
+                               value="${role?.tags || ''}"
+                               placeholder="例如: 编程,Python,AI (用逗号分隔)">
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label>显示名称</label>
-                    <input type="text" name="display_name" class="form-control"
-                           value="${role?.display_name || ''}">
-                    <small class="form-text">留空则使用角色名称</small>
+                <div class="dialog-section">
+                    <h4>角色设定</h4>
+                    <div class="form-group">
+                        <label>系统提示词 (System Prompt) *</label>
+                        <textarea name="system_prompt" class="form-control" rows="8" required placeholder="定义角色的行为、性格和能力...">${role?.system_prompt || ''}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>欢迎消息</label>
+                        <textarea name="greeting_message" class="form-control" rows="2" placeholder="用户首次对话时显示的欢迎语">${role?.greeting_message || ''}</textarea>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label>分类</label>
-                    <select name="category" class="form-control">
-                        ${this.state.categories.map(c => `
-                            <option value="${c.value}" ${role?.category === c.value ? 'selected' : ''}>
-                                ${c.label}
-                            </option>
-                        `).join('')}
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>系统提示词 *</label>
-                    <textarea name="system_prompt" class="form-control" rows="6" required>${role?.system_prompt || ''}</textarea>
-                    <small class="form-text">定义角色的行为和特点</small>
-                </div>
-
-                <div class="form-group">
-                    <label>欢迎消息</label>
-                    <textarea name="greeting_message" class="form-control" rows="3">${role?.greeting_message || ''}</textarea>
-                    <small class="form-text">用户选择此角色时的欢迎语</small>
-                </div>
-
-                <div class="form-group">
-                    <label>描述</label>
-                    <textarea name="description" class="form-control" rows="3">${role?.description || ''}</textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>标签</label>
-                    <input type="text" name="tags" class="form-control"
-                           value="${role?.tags || ''}"
-                           placeholder="编程,Python,AI (用逗号分隔)">
-                </div>
-
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="is_default" ${role?.is_default ? 'checked' : ''}>
-                        设为默认角色
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="is_active" ${role?.is_active !== false ? 'checked' : ''}>
-                        启用此角色
-                    </label>
+                <div class="dialog-section">
+                    <h4>状态</h4>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="is_default" ${role?.is_default ? 'checked' : ''}>
+                            设为默认角色
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="is_active" ${role?.is_active !== false ? 'checked' : ''}>
+                            启用此角色
+                        </label>
+                    </div>
                 </div>
             </form>
         `;
@@ -515,8 +519,8 @@ const RoleManagementPage = {
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" id="cancelImportBtn">取消</button>
-                        <button class="btn btn-primary" id="confirmImportBtn">导入</button>
+                        <button class="btn btn-secondary" id="cancelImportBtn">Cancel</button>
+                        <button class="btn btn-primary" id="confirmImportBtn">Confirm</button>
                     </div>
                 </div>
             </div>

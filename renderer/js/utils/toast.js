@@ -19,7 +19,7 @@ const Toast = {
             position: fixed;
             top: 20px;
             right: 20px;
-            z-index: 100000;
+            z-index: 2000000;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -218,9 +218,9 @@ const Toast = {
     confirm(message, options = {}) {
         return new Promise((resolve) => {
             const {
-                title = '确认',
-                confirmText = '确定',
-                cancelText = '取消',
+                title = 'Confirmation',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
                 type = 'warning',
                 onConfirm = null,
                 onCancel = null
@@ -235,7 +235,7 @@ const Toast = {
                 right: 0;
                 bottom: 0;
                 background: rgba(0, 0, 0, 0.5);
-                z-index: 100001;
+                z-index: 2000001;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -389,7 +389,7 @@ const Toast = {
                 right: 0;
                 bottom: 0;
                 background: rgba(0, 0, 0, 0.5);
-                z-index: 100001;
+                z-index: 2000001;
                 display: flex;
                 align-items: center;
                 justify-content: center;

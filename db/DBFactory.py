@@ -1204,6 +1204,8 @@ class AiChatCfg(Base):
     profession = Column(String(200))
     handle_after_trade = Column(String(200))
     handle_content = Column(Text)
+    goods_or_service_description = Column(Text)
+    goods_or_service_price = Column(String(100))
     event_before_decistion = Column(String(200))
     event_after_decistion = Column(String(200))
     event_receive_msg = Column(String(200))

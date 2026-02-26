@@ -160,7 +160,7 @@ export default {
                 data: []
             };
         } catch (error) {
-            console.error('获取消息历史失败:', error);
+            console.error('Failed to fetch message history:', error);
             return {
                 success: false,
                 error: error.message

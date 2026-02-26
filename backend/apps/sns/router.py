@@ -185,8 +185,20 @@ async def get_avatars_3d():
 async def get_professions():
     """Get list of available professions"""
     professions = [
-        ProfessionItem(name="Doctor", cost=800, description="Setup fee: 800"),
-        ProfessionItem(name="Restaurateur", cost=800, description="Setup fee: 800"),
+        ProfessionItem(
+            name="Doctor",
+            cost=800,
+            description="Setup fee: 800",
+            service_description="Remote medical consultation",
+            service_price="200",
+        ),
+        ProfessionItem(
+            name="Restaurateur",
+            cost=800,
+            description="Setup fee: 800",
+            service_description="Meal delivery service",
+            service_price="20",
+        ),
         ProfessionItem(name="Singer", cost=None, description=""),
         ProfessionItem(name="Painter", cost=None, description=""),
         ProfessionItem(name="Designer", cost=None, description=""),

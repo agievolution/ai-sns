@@ -47,7 +47,7 @@ const toolsHandlers = {
         this.loadCategoryContent(this.currentCategory);
     },
 
-    showConfirmDialog({ title, message, confirmText = '确定', cancelText = '取消' }) {
+    showConfirmDialog({ title, message, confirmText = 'Confirm', cancelText = 'Cancel' }) {
         return new Promise((resolve) => {
             const dialogId = 'confirmDialog_' + Math.random().toString(16).slice(2);
             const html = `
@@ -132,8 +132,8 @@ const toolsHandlers = {
                         <textarea id="docSkillRunParamsEditor" style="width: 100%; min-height: 240px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.4; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px;"></textarea>
                     </div>
                     <div class="modal-footer" style="display:flex; justify-content:flex-end; gap: 8px; padding: 12px 16px;">
-                        <button type="button" class="btn btn-primary" id="docSkillRunBtn">运行</button>
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('docSkillRunDialog').remove()">取消</button>
+                        <button type="button" class="btn btn-primary" id="docSkillRunBtn">Run</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('docSkillRunDialog').remove()">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -644,10 +644,10 @@ const toolsHandlers = {
     async deleteTool(id, category) {
         if (category === 'doc-skill') {
             const ok = await this.showConfirmDialog({
-                title: '删除 Doc Skill',
-                message: '确定要删除这个 Doc Skill 吗？（仅支持删除 workspace 下 skills/ 目录中的技能）',
-                confirmText: '删除',
-                cancelText: '取消'
+                title: 'Delete Skill',
+                message: 'Want to delete this Skill? (Only skills in the workspace "skills/" directory can be deleted.)',
+                confirmText: 'Delete',
+                cancelText: 'Cancel'
             });
             if (!ok) return;
 
@@ -798,6 +798,14 @@ const toolsHandlers = {
     showMessage(message, type = 'info') {
         console.log(`[${type}] ${message}`);
 
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.show === 'function') {
+                window.Toast.show(String(message), String(type || 'info'), 3000);
+                return;
+            }
+        } catch (e) {
+        }
+
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.textContent = message;
@@ -810,7 +818,7 @@ const toolsHandlers = {
             color: white;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10000;
+            z-index: 2000000;
             animation: slideIn 0.3s ease-out;
         `;
 

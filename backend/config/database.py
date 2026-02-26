@@ -11,6 +11,7 @@ from sqlalchemy.pool import NullPool
 from typing import AsyncGenerator, Generator
 import logging
 import asyncio
+import sqlite3
 
 from .settings import get_settings
 
@@ -142,10 +143,39 @@ def init_db():
 
         # Create all tables
         Base.metadata.create_all(bind=sync_engine)
+
+        _ensure_aichat_cfg_goods_service_columns(settings.database.full_path)
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
+
+
+def _ensure_aichat_cfg_goods_service_columns(db_path: str) -> None:
+    try:
+        conn = sqlite3.connect(db_path, timeout=60)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(aichat_cfg)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        changed = False
+        if "goods_or_service_description" not in columns:
+            cursor.execute("ALTER TABLE aichat_cfg ADD COLUMN goods_or_service_description TEXT")
+            changed = True
+        if "goods_or_service_price" not in columns:
+            cursor.execute("ALTER TABLE aichat_cfg ADD COLUMN goods_or_service_price VARCHAR(100)")
+            changed = True
+
+        if changed:
+            conn.commit()
+            logger.info("Auto-migrated aichat_cfg: ensured goods/service columns")
+    except Exception as e:
+        logger.warning("Auto-migration for aichat_cfg goods/service columns failed: %s", e)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 async def close_db():

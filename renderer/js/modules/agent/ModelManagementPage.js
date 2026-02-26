@@ -196,7 +196,7 @@ const ModelManagementPage = {
 
         const modalHtml = `
             <div class="modal-overlay" id="modelModal">
-                <div class="modal-dialog">
+                <div class="modal-dialog" style="max-width: 600px;">
                     <div class="modal-header">
                         <h3>${title}</h3>
                         <button class="modal-close" id="closeModal">×</button>
@@ -205,8 +205,8 @@ const ModelManagementPage = {
                         ${this.renderModelForm(model)}
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" id="cancelBtn">取消</button>
-                        <button class="btn btn-primary" id="saveBtn">保存</button>
+                        <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                        <button class="btn btn-primary" id="saveBtn">Save</button>
                     </div>
                 </div>
             </div>
@@ -266,111 +266,128 @@ const ModelManagementPage = {
 
                 <!-- Basic Config -->
                 <div class="tab-content active" data-tab-content="basic">
-                    <div class="form-group">
-                        <label>显示名称 *</label>
-                        <input type="text" name="name" class="form-control"
-                               value="${model?.name || ''}" required>
+                    <div class="dialog-section">
+                        <h4>基本信息</h4>
+                        <div class="form-group">
+                            <label>显示名称 *</label>
+                            <input type="text" name="name" class="form-control"
+                                   value="${model?.name || ''}" required placeholder="例如: GPT-4o Production">
+                        </div>
+
+                        <div class="form-group">
+                            <label>接口类型 *</label>
+                            <select name="provider" class="form-control" required>
+                                ${this.state.providers.map(p => `
+                                    <option value="${p.value}" ${model?.provider === p.value ? 'selected' : ''}>
+                                        ${p.label}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>模型名称 (Model ID) *</label>
+                            <input type="text" name="model_name" class="form-control"
+                                   value="${model?.model_name || ''}"
+                                   placeholder="例如: gpt-4o, claude-3-5-sonnet-20240620" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>描述</label>
+                            <textarea name="description" class="form-control" rows="2" placeholder="可选: 描述此模型的用途或特点">${model?.description || ''}</textarea>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>接口类型 *</label>
-                        <select name="provider" class="form-control" required>
-                            ${this.state.providers.map(p => `
-                                <option value="${p.value}" ${model?.provider === p.value ? 'selected' : ''}>
-                                    ${p.label}
-                                </option>
-                            `).join('')}
-                        </select>
+                    <div class="dialog-section">
+                        <h4>连接设置</h4>
+                        <div class="form-group">
+                            <label>API 端点 (Base URL) *</label>
+                            <input type="url" name="api_endpoint" class="form-control"
+                                   value="${model?.api_endpoint || ''}"
+                                   placeholder="例如: https://api.openai.com/v1/chat/completions" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>API Key *</label>
+                            <div class="input-with-buttons">
+                                <input type="password" name="api_key" class="form-control"
+                                       value="${model?.api_key || ''}"
+                                       placeholder="sk-..." required>
+                                <button type="button" class="btn btn-secondary test-connection-btn">
+                                    测试连接
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>API 端点 *</label>
-                        <input type="url" name="api_endpoint" class="form-control"
-                               value="${model?.api_endpoint || ''}"
-                               placeholder="https://api.openai.com/v1/chat/completions" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label>API Key *</label>
-                        <input type="password" name="api_key" class="form-control"
-                               value="${model?.api_key || ''}"
-                               placeholder="sk-..." required>
-                        <button type="button" class="btn-link test-connection-btn">
-                            测试连接
-                        </button>
-                    </div>
-
-                    <div class="form-group">
-                        <label>模型名称 *</label>
-                        <input type="text" name="model_name" class="form-control"
-                               value="${model?.model_name || ''}"
-                               placeholder="gpt-4o" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label>描述</label>
-                        <textarea name="description" class="form-control" rows="3">${model?.description || ''}</textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="is_default" ${model?.is_default ? 'checked' : ''}>
-                            设为默认模型
-                        </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="is_active" ${model?.is_active !== false ? 'checked' : ''}>
-                            启用此配置
-                        </label>
+                    <div class="dialog-section">
+                        <h4>状态</h4>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="is_default" ${model?.is_default ? 'checked' : ''}>
+                                设为默认模型
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="is_active" ${model?.is_active !== false ? 'checked' : ''}>
+                                启用此配置
+                            </label>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Advanced Config -->
                 <div class="tab-content" data-tab-content="advanced">
-                    <div class="form-group">
-                        <label>Temperature (0-2)</label>
-                        <input type="number" name="temperature" class="form-control"
-                               value="${model?.temperature ?? 0.7}"
-                               min="0" max="2" step="0.1">
-                        <small class="form-text">控制输出的随机性，越高越随机</small>
+                    <div class="dialog-section">
+                        <h4>生成参数</h4>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Temperature (0-2)</label>
+                                <input type="number" name="temperature" class="form-control"
+                                       value="${model?.temperature ?? 0.7}"
+                                       min="0" max="2" step="0.1">
+                                <small class="form-hint">控制输出随机性</small>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Top P (0-1)</label>
+                                <input type="number" name="top_p" class="form-control"
+                                       value="${model?.top_p ?? 1.0}"
+                                       min="0" max="1" step="0.1">
+                                <small class="form-hint">核采样阈值</small>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Max Tokens</label>
+                            <input type="number" name="max_tokens" class="form-control"
+                                   value="${model?.max_tokens ?? 2048}"
+                                   min="1">
+                            <small class="form-hint">单次生成的最大令牌数</small>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Frequency Penalty</label>
+                                <input type="number" name="frequency_penalty" class="form-control"
+                                       value="${model?.frequency_penalty ?? 0}"
+                                       min="-2" max="2" step="0.1">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Presence Penalty</label>
+                                <input type="number" name="presence_penalty" class="form-control"
+                                       value="${model?.presence_penalty ?? 0}"
+                                       min="-2" max="2" step="0.1">
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Max Tokens</label>
-                        <input type="number" name="max_tokens" class="form-control"
-                               value="${model?.max_tokens ?? 2048}"
-                               min="1">
-                        <small class="form-text">最大生成令牌数</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Top P (0-1)</label>
-                        <input type="number" name="top_p" class="form-control"
-                               value="${model?.top_p ?? 1.0}"
-                               min="0" max="1" step="0.1">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Frequency Penalty (-2 to 2)</label>
-                        <input type="number" name="frequency_penalty" class="form-control"
-                               value="${model?.frequency_penalty ?? 0}"
-                               min="-2" max="2" step="0.1">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Presence Penalty (-2 to 2)</label>
-                        <input type="number" name="presence_penalty" class="form-control"
-                               value="${model?.presence_penalty ?? 0}"
-                               min="-2" max="2" step="0.1">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="stream" ${model?.stream !== false ? 'checked' : ''}>
-                            启用流式输出
-                        </label>
+                    <div class="dialog-section">
+                        <h4>其他选项</h4>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="stream" ${model?.stream !== false ? 'checked' : ''}>
+                                启用流式输出 (Stream)
+                            </label>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -550,8 +567,8 @@ const ModelManagementPage = {
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" id="cancelImportBtn">取消</button>
-                        <button class="btn btn-primary" id="confirmImportBtn">导入</button>
+                        <button class="btn btn-secondary" id="cancelImportBtn">Cancel</button>
+                        <button class="btn btn-primary" id="confirmImportBtn">Confirm</button>
                     </div>
                 </div>
             </div>

@@ -14,6 +14,13 @@ class Notification {
     }
 
     static show(message, type = 'info', duration = this.timeout) {
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.show === 'function') {
+                return window.Toast.show(String(message), type, duration);
+            }
+        } catch (e) {
+        }
+
         if (!this.container) this.init();
         if (!this.container) return null;
 

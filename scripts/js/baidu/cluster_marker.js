@@ -1,5 +1,31 @@
 var hiddenPoints = {}; // Store hidden point elements
 
+var hiddenPointNationIds = {};
+
+function setSinglePointHidden(nation_id, hidden) {
+    const nid = String(nation_id || '').trim();
+    if (!nid) return;
+    try {
+        if (hidden) {
+            hiddenPointNationIds[nid] = true;
+        } else {
+            delete hiddenPointNationIds[nid];
+        }
+    } catch (e) {
+    }
+
+    try {
+        const div = document.getElementById(nid);
+        if (div && div.style) {
+            div.style.display = hidden ? 'none' : 'block';
+            if (hidden) {
+                hiddenPoints[nid] = div;
+            }
+        }
+    } catch (e) {
+    }
+}
+
 var indexs = ['province', 'city', 'area'];
 
 function _aiSnsUrl(p) {
@@ -57,6 +83,14 @@ function getSinglePointHTML(context) {
     const div = document.createElement('div');
     div.className = 'single-point';
     div.id = context.nation_id;
+
+    try {
+        const nid = String(context.nation_id || '').trim();
+        if (nid && hiddenPointNationIds && hiddenPointNationIds[nid]) {
+            div.style.display = 'none';
+        }
+    } catch (e) {
+    }
 
     // Check point type and set style
     if (context.name.startsWith("北京")) {

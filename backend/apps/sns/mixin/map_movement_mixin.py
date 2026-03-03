@@ -248,12 +248,37 @@ class MapMovementMixin:
     def update_after_moving(self):
         lng = self.aichatcfg_record.current_position[0]
         lat = self.aichatcfg_record.current_position[1]
-        url = f"{self._get_ai_sns_server_base()}/api/update-location/"
-        params = {
-            "nation_id": "AI123451234567890ABCDEF7890",
-            "password": "securePassword123!",
-            "longitude": lng,
-            "latitude": lat,
-        }
-        response = requests.post(url, data=params)
-        print(response)
+
+        try:
+            update_AiChatCfg_map(current_position=json.dumps({"lng": float(lng), "lat": float(lat)}, ensure_ascii=False))
+        except Exception as e:
+            logger.warning("Failed to persist current_position after moving: %s", e)
+
+        try:
+            cfg = query_AiChatCfg_map()
+            if not cfg:
+                logger.warning("Remote location sync skipped: aichat_cfg not found")
+                return
+
+            base = self._get_ai_sns_server_base()
+            if not base:
+                logger.warning("Remote location sync skipped: ai_sns_server is not configured")
+                return
+
+            nation_id = (getattr(cfg, "nationid", None) or "").strip()
+            password = (getattr(cfg, "nationpassword", None) or "").strip()
+            if not nation_id or not password:
+                logger.warning("Remote location sync skipped: nationid/nationpassword is not configured")
+                return
+
+            url = f"{base}/api/update-location/"
+            params = {
+                "nation_id": nation_id,
+                "password": password,
+                "longitude": float(lng),
+                "latitude": float(lat),
+            }
+            resp = requests.post(url, data=params, timeout=8)
+            resp.raise_for_status()
+        except Exception as e:
+            logger.warning("Failed to sync location to remote ai_sns_server: %s", e)

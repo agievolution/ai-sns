@@ -217,6 +217,11 @@ export class SNSMapConfigDialog {
             if (result.success) {
                 alert('Map configuration saved successfully.');
 
+                try {
+                    localStorage.setItem('sns_map_type', String(mapType));
+                } catch (e) {
+                }
+
                 // Check if map type changed
                 if (String(this.originalMapType) !== String(mapType)) {
                     console.log('Map type changed from', this.originalMapType, 'to', mapType, '- reloading map iframe');

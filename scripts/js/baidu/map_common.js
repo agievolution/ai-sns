@@ -11,7 +11,6 @@ function initializeMapCenter() {
         centerPoint = new BMapGL.Point(116.28882, 39.71164);
         console.log("Initialize the map using the default location.");
     }
-
     map.centerAndZoom(centerPoint, 16);
 }
 
@@ -306,8 +305,188 @@ function isWebUrl(url) {
     return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//');
 }
 
+var person_model_loading_promises = {};
+var person_model_meshes_by_nation = {};
+
+function showPersonModelByNationId(nation_id) {
+    try {
+        const group = model_loaded_list && model_loaded_list[nation_id] ? model_loaded_list[nation_id] : null;
+        if (!group) return;
+        group.visible = true;
+
+        const modelMeshes = person_model_meshes_by_nation[nation_id] || [];
+        if (Array.isArray(modelMeshes) && modelMeshes.length) {
+            const existing = new Set(meshes || []);
+            for (const m of modelMeshes) {
+                if (!existing.has(m)) {
+                    meshes.push(m);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to show person model:', e);
+    }
+}
+
+function hidePersonModelByNationId(nation_id) {
+    try {
+        const group = model_loaded_list && model_loaded_list[nation_id] ? model_loaded_list[nation_id] : null;
+        if (!group) return;
+        group.visible = false;
+
+        const modelMeshes = person_model_meshes_by_nation[nation_id] || [];
+        if (Array.isArray(modelMeshes) && modelMeshes.length && Array.isArray(meshes)) {
+            const toRemove = new Set(modelMeshes);
+            meshes = meshes.filter(m => !toRemove.has(m));
+        }
+    } catch (e) {
+        console.warn('Failed to hide person model:', e);
+    }
+}
+
+function rotateMyModel180AfterTalkMove(targetNationId, options = {}) {
+    const meNationId = (typeof nation_id_me !== 'undefined' && nation_id_me) ? String(nation_id_me).trim() : '';
+    if (!meNationId) return;
+
+    const targetId = String(targetNationId || '').trim();
+    const maxRetries = (options && options.maxRetries !== undefined) ? Number(options.maxRetries) : 10;
+    const retryDelayMs = (options && options.retryDelayMs !== undefined) ? Number(options.retryDelayMs) : 200;
+
+    let group = null;
+    try {
+        group = (model_loaded_list && model_loaded_list[meNationId]) ? model_loaded_list[meNationId] : null;
+    } catch (e) {
+        group = null;
+    }
+
+    if (!group) {
+        try {
+            if (typeof threeLayer !== 'undefined' && threeLayer && threeLayer.scene && typeof threeLayer.scene.getObjectByName === 'function') {
+                group = threeLayer.scene.getObjectByName(meNationId);
+            }
+        } catch (e) {
+            group = null;
+        }
+    }
+
+    if (!group) {
+        if (maxRetries > 0) {
+            setTimeout(() => rotateMyModel180AfterTalkMove(targetId, { maxRetries: maxRetries - 1, retryDelayMs }), retryDelayMs);
+        }
+        return;
+    }
+
+    try {
+        if (!group.userData) group.userData = {};
+        if (group.userData.__talk_original_rotation_z === undefined || group.userData.__talk_original_rotation_z === null) {
+            group.userData.__talk_original_rotation_z = (group.rotation && typeof group.rotation.z === 'number') ? group.rotation.z : 0;
+        }
+        group.userData.__talk_face_target_last_nation_id = targetId;
+        group.userData.__talk_is_active = true;
+    } catch (e) {
+    }
+
+    try {
+        // Baidu map 3D: x/y are Mercator plane, z is altitude, so yaw is typically around Z.
+        const baseZ = (group.userData && typeof group.userData.__talk_original_rotation_z === 'number') ? group.userData.__talk_original_rotation_z : 0;
+        const desiredZ = baseZ + Math.PI;
+        const currentZ = (group.rotation && typeof group.rotation.z === 'number') ? group.rotation.z : 0;
+        if (Math.abs(currentZ - desiredZ) > 1e-6) {
+            group.rotation.z = desiredZ;
+        }
+    } catch (e) {
+        console.warn('Failed to rotate my model after talk move:', e);
+        return;
+    }
+
+    try {
+        if (typeof threeLayer !== 'undefined' && threeLayer && typeof threeLayer.render === 'function') {
+            threeLayer.render();
+        }
+    } catch (e) {
+    }
+}
+
+function resetMyModelRotationAfterTalk(options = {}) {
+    const meNationId = (typeof nation_id_me !== 'undefined' && nation_id_me) ? String(nation_id_me).trim() : '';
+    if (!meNationId) return;
+
+    const maxRetries = (options && options.maxRetries !== undefined) ? Number(options.maxRetries) : 10;
+    const retryDelayMs = (options && options.retryDelayMs !== undefined) ? Number(options.retryDelayMs) : 200;
+
+    let group = null;
+    try {
+        group = (model_loaded_list && model_loaded_list[meNationId]) ? model_loaded_list[meNationId] : null;
+    } catch (e) {
+        group = null;
+    }
+
+    if (!group) {
+        try {
+            if (typeof threeLayer !== 'undefined' && threeLayer && threeLayer.scene && typeof threeLayer.scene.getObjectByName === 'function') {
+                group = threeLayer.scene.getObjectByName(meNationId);
+            }
+        } catch (e) {
+            group = null;
+        }
+    }
+
+    if (!group) {
+        if (maxRetries > 0) {
+            setTimeout(() => resetMyModelRotationAfterTalk({ maxRetries: maxRetries - 1, retryDelayMs }), retryDelayMs);
+        }
+        return;
+    }
+
+    try {
+        const baseZ = (group.userData && typeof group.userData.__talk_original_rotation_z === 'number') ? group.userData.__talk_original_rotation_z : null;
+        if (baseZ !== null) {
+            const currentZ = (group.rotation && typeof group.rotation.z === 'number') ? group.rotation.z : 0;
+            if (Math.abs(currentZ - baseZ) > 1e-6) {
+                group.rotation.z = baseZ;
+            }
+        }
+        if (group.userData) {
+            group.userData.__talk_is_active = false;
+            group.userData.__talk_face_target_last_nation_id = '';
+        }
+    } catch (e) {
+        console.warn('Failed to reset my model rotation after talk:', e);
+        return;
+    }
+
+    try {
+        if (typeof threeLayer !== 'undefined' && threeLayer && typeof threeLayer.render === 'function') {
+            threeLayer.render();
+        }
+    } catch (e) {
+    }
+}
+
 // GLTF model loader
 function loadModel(persondata) {
+    const nationId = (persondata && persondata["nation_id"]) ? String(persondata["nation_id"]).trim() : '';
+    if (!nationId) {
+        console.warn('loadModel skipped: missing nation_id');
+        return;
+    }
+
+    if (model_loaded_list && model_loaded_list[nationId]) {
+        try {
+            showPersonModelByNationId(nationId);
+            if (typeof setPersonModelPointByNationId === 'function' && typeof getPersonPointByNationId === 'function') {
+                setPersonModelPointByNationId(nationId, getPersonPointByNationId(nationId));
+            }
+        } catch (e) {
+            console.warn('Failed to reuse loaded model:', e);
+        }
+        return;
+    }
+
+    if (person_model_loading_promises[nationId]) {
+        return;
+    }
+
     let url = persondata["avatar_3d"];
     let pos = persondata["location"];
     let llPoint = new BMapGL.Point(pos[0], pos[1]);
@@ -330,7 +509,10 @@ function loadModel(persondata) {
         console.log(`Full model path: ${url}`);
     }
 
-    person_gltfLoader.load(url, function (obj) {
+    const loader = new mapvgl.THREELoader.GLTFLoader();
+    person_model_loading_promises[nationId] = true;
+
+    loader.load(url, function (obj) {
         let model = obj.scene;
         model.rotateX(90 / 180 * Math.PI); // Rotate model
 
@@ -392,6 +574,7 @@ function loadModel(persondata) {
         geoGroup.userData = persondata;
         threeLayer.add(geoGroup);
         geoGroups.push(geoGroup); // Add geoGroup to array
+        model_loaded_list[nationId] = geoGroup;
 
         // Process animations
         if (obj.animations && obj.animations.length > 0) {
@@ -417,10 +600,22 @@ function loadModel(persondata) {
         }
 
         let modelMeshes = findMeshes(model); // Find all Mesh
+        person_model_meshes_by_nation[nationId] = modelMeshes;
         modelMeshes.forEach(mesh => {
             mesh.userData = persondata; // Bind dataset to each Mesh.userData
         });
-        meshes.push(...modelMeshes); // Add to global meshes array
+        showPersonModelByNationId(nationId);
+
+        try {
+            delete person_model_loading_promises[nationId];
+        } catch (e) {
+        }
+    }, undefined, function (error) {
+        console.warn('Failed to load person model:', error);
+        try {
+            delete person_model_loading_promises[nationId];
+        } catch (e) {
+        }
     });
 }
 
@@ -432,6 +627,24 @@ function removeModel(nation_id) {
         threeLayer.remove(geoGroups[groupIndex]);
         // Remove geoGroup from geoGroups array
         geoGroups.splice(groupIndex, 1);
+    }
+
+    try {
+        if (model_loaded_list && model_loaded_list[nation_id]) {
+            delete model_loaded_list[nation_id];
+        }
+    } catch (e) {
+    }
+
+    try {
+        const modelMeshes = person_model_meshes_by_nation[nation_id] || [];
+        if (Array.isArray(modelMeshes) && modelMeshes.length && Array.isArray(meshes)) {
+            const toRemove = new Set(modelMeshes);
+            meshes = meshes.filter(m => !toRemove.has(m));
+        }
+        delete person_model_meshes_by_nation[nation_id];
+        delete person_model_loading_promises[nation_id];
+    } catch (e) {
     }
 
     //  currentModel = threeLayer.scene.getObjectByName(nation_id);
@@ -469,12 +682,17 @@ map.addEventListener('click', function (e) {
 
     if (intersects.length > 0) {
         const intersectedObject = intersects[0].object;
-        alert(intersectedObject.userData.nation_id);
-        alert(intersectedObject.userData["nation_id"]);
+        // alert(intersectedObject.userData.nation_id);
+        // alert(intersectedObject.userData["nation_id"]);
         nation_id = intersectedObject.userData.nation_id;
         currentModel = threeLayer.scene.getObjectByName(nation_id);
+        // showprofile3d(currentModel);
+// map.closeInfoWindow();
+        //use setTimeout to  wait for the next macrotask
+        setTimeout(function () {
         showprofile3d(currentModel);
-
+    }, 0);
+// showprofile3d(currentModel);
 
     } else {
 
@@ -548,7 +766,13 @@ map.addEventListener('click', function (e) {
 
         // map.setDefaultCursor("url(http://webmap0.bdimg.com/image/api/openhand.cur) 8 8,default");
         // instruct_to_move_flag = false;
-        map.cancelViewAnimation(animation);
+        try {
+            if (typeof view_animation !== 'undefined' && view_animation) {
+                map.cancelViewAnimation(view_animation);
+            }
+        } catch (err) {
+            console.warn('Failed to cancel view animation:', err);
+        }
 
     }
 });
@@ -764,19 +988,47 @@ function start_talk_to_it(nation_id, content) {
     setPersonModelPointByNationId(nation_id_me, my_new_point);
     setPersonPointByNationId(nation_id_me,my_new_point.lng,my_new_point.lat);
 
-    div = document.getElementById(nation_id);
+    try {
+        if (typeof sync_current_position === 'function') {
+            sync_current_position(my_new_point.lng, my_new_point.lat, { throttleMs: 0 });
+        } else if (typeof update_location_and_open_nearest_place === 'function') {
+            update_location_and_open_nearest_place(my_new_point.lng, my_new_point.lat, { maxDistanceM: 1000, throttleMs: 0 });
+        }
+    } catch (e) {
+        console.warn('Failed to sync current position after talk movement:', e);
+    }
+
+    rotateMyModel180AfterTalkMove(nation_id);
+
+    try {
+        if (typeof setSinglePointHidden === 'function') {
+            setSinglePointHidden(nation_id, true);
+        } else {
+            div = document.getElementById(nation_id);
             if (!div) {
                 console.warn(`Element with ID ${nation_id} not found on map`);
                 return;
             }
-            hiddenPoints[param_1] = div;
-div = hiddenPoints[nation_id];
-    div.style.display = 'none';
+            hiddenPoints[nation_id] = div;
+            div = hiddenPoints[nation_id];
+            div.style.display = 'none';
+        }
+    } catch (e) {
+    }
 }
 
 function talk_to_it(nation_id, content) {
-    div = hiddenPoints[nation_id];
-    div.style.display = 'none';
+    try {
+        if (typeof setSinglePointHidden === 'function') {
+            setSinglePointHidden(nation_id, true);
+        } else {
+            div = hiddenPoints[nation_id];
+            if (div && div.style) {
+                div.style.display = 'none';
+            }
+        }
+    } catch (e) {
+    }
     alert(nation_id);
     alert(map.getZoom());
     person_target_point = getPersonPointByNationId(nation_id);
@@ -802,6 +1054,19 @@ function talk_to_it(nation_id, content) {
     my_new_point = new BMapGL.Point(person_target_point.lng, person_target_point.lat - 0.01);
 
     setPersonModelPointByNationId(nation_id_me, my_new_point);
+    setPersonPointByNationId(nation_id_me, my_new_point.lng, my_new_point.lat);
+
+    try {
+        if (typeof sync_current_position === 'function') {
+            sync_current_position(my_new_point.lng, my_new_point.lat, { throttleMs: 0 });
+        } else if (typeof update_location_and_open_nearest_place === 'function') {
+            update_location_and_open_nearest_place(my_new_point.lng, my_new_point.lat, { maxDistanceM: 1000, throttleMs: 0 });
+        }
+    } catch (e) {
+        console.warn('Failed to sync current position after talk movement:', e);
+    }
+
+    rotateMyModel180AfterTalkMove(nation_id);
     // var point = new BMapGL.Point(116.28882, 39.72164);
     let point = my_new_point;
 
@@ -847,23 +1112,32 @@ function talk_to_it(nation_id, content) {
 
 function stop_talk_to_it(nation_id) {
     try {
-        if (typeof removeModel === 'function') {
-            removeModel(nation_id);
+        resetMyModelRotationAfterTalk();
+    } catch (e) {
+    }
+
+    try {
+        if (typeof hidePersonModelByNationId === 'function') {
+            hidePersonModelByNationId(nation_id);
         }
     } catch (e) {
     }
 
     try {
-        if (typeof hiddenPoints === 'undefined' || !hiddenPoints) {
-            console.warn('stop_talk_to_it skipped: hiddenPoints not ready');
-            return;
+        if (typeof setSinglePointHidden === 'function') {
+            setSinglePointHidden(nation_id, false);
+        } else {
+            if (typeof hiddenPoints === 'undefined' || !hiddenPoints) {
+                console.warn('stop_talk_to_it skipped: hiddenPoints not ready');
+                return;
+            }
+            const div = hiddenPoints[nation_id];
+            if (!div || !div.style) {
+                console.warn('stop_talk_to_it skipped: hidden point not ready');
+                return;
+            }
+            div.style.display = 'block';
         }
-        const div = hiddenPoints[nation_id];
-        if (!div || !div.style) {
-            console.warn('stop_talk_to_it skipped: hidden point not ready');
-            return;
-        }
-        div.style.display = 'block';
     } catch (e) {
         console.warn('stop_talk_to_it restore failed:', e);
     }
@@ -871,6 +1145,7 @@ function stop_talk_to_it(nation_id) {
     try {
         if (typeof map !== 'undefined' && map && typeof map.closeInfoWindow === 'function') {
             map.closeInfoWindow();
+            close_sns_profile();
         }
     } catch (e) {
     }
@@ -973,7 +1248,20 @@ function closeprofile(){
 }
 
 function showprofile3d(geoGroup) {
-    nation_id = geoGroup.userData.nation_id;
+
+    //     setTimeout(function () {
+    //     showprofile("AI123451234567890ABCDEF7892");
+    // }, 3000);
+
+    //
+    // return;
+    // alert("showing profile3d2");
+    // nation_id = geoGroup.userData.nation_id;
+    // console.log(nation_id);
+    // showprofile(nation_id);
+    //
+    // return;
+
     let person = geoGroup.userData;
     var sContent = `<h4 style='margin:0 0 5px 0;'>${person["nick_name"]}</h4>
     <p style='margin:0;line-height:1.5;font-size:13px;text-indent:2em'>
@@ -981,13 +1269,13 @@ function showprofile3d(geoGroup) {
     <a href="#" onclick="stop_talk_to_it('${nation_id}');return false;">End chat</a>
     </p></div>`;
 
-    var opts = {
+    let opts_3d = {
         width: 200,     // Info window width 200
         height: 100,     // Info window height 100
         title: "", // Info window title
         offset: new BMapGL.Size(30, -50),
     }
-    var infoWindow3 = new BMapGL.InfoWindow(sContent, opts);
+    let infoWindow_3d = new BMapGL.InfoWindow(sContent, opts_3d);
 
 
     // Assume geoGroup.position x/y are Mercator coordinates
@@ -1006,9 +1294,11 @@ function showprofile3d(geoGroup) {
     console.log('Latitude:', geoCoord2.lat); // Output latitude
     let point = geoCoord2;
 
+    console.log("infowindow pointsnew002:",point)
+    map.openInfoWindow(infoWindow_3d, point); // Open InfoWindow
 
-    map.openInfoWindow(infoWindow3, point); // Open InfoWindow
 
+    alert("infowindow shown2new6");
 
     // Get all THREE.Group instances in threeLayer
     const allGroups = getAllGroups(threeLayer.scene);

@@ -44,6 +44,33 @@ logger = logging.getLogger(__name__)
 class MapService:
     """Service for managing map functionality"""
 
+    @classmethod
+    def _sync_location_to_remote_ai_sns(cls, *, cfg: Any, lng: float, lat: float) -> None:
+        """Best-effort sync of the latest location to the configured ai_sns_server."""
+        base = cls._get_ai_sns_server_base()
+        if not base:
+            return
+
+        nation_id = (getattr(cfg, "nationid", None) or "").strip()
+        password = (getattr(cfg, "nationpassword", None) or "").strip()
+        if not nation_id or not password:
+            logger.warning("Remote location sync skipped: nationid/nationpassword is not configured")
+            return
+
+        url = f"{base}/api/update-location/"
+        payload = {
+            "nation_id": nation_id,
+            "password": password,
+            "longitude": lng,
+            "latitude": lat,
+        }
+
+        try:
+            resp = requests.post(url, data=payload, timeout=8)
+            resp.raise_for_status()
+        except Exception as e:
+            logger.warning("Failed to sync location to remote ai_sns_server: %s", e)
+
     @staticmethod
     def _haversine_distance_m(lng1: float, lat1: float, lng2: float, lat2: float) -> float:
         """Return great-circle distance in meters."""
@@ -98,6 +125,13 @@ class MapService:
             update_AiChatCfg_map(current_position=json.dumps({"lng": lng_val, "lat": lat_val}, ensure_ascii=False))
         except Exception as e:
             logger.warning("Failed to persist current_position: %s", e)
+
+        try:
+            cfg = query_AiChatCfg_map()
+            if cfg:
+                cls._sync_location_to_remote_ai_sns(cfg=cfg, lng=lng_val, lat=lat_val)
+        except Exception as e:
+            logger.warning("Remote location sync failed: %s", e)
 
         place_list = cls._fetch_place_list(lng_val, lat_val)
         if not place_list:
@@ -358,6 +392,15 @@ class MapService:
 
         if updates:
             update_AiChatCfg_map(**updates)
+
+        try:
+            if "current_position" in payload:
+                pos = MapService._normalize_position(payload.get("current_position"))
+                if MapService._has_valid_lng_lat(pos):
+                    MapService._sync_location_to_remote_ai_sns(cfg=cfg, lng=float(pos["lng"]), lat=float(pos["lat"]))
+        except Exception as e:
+            logger.warning("Remote location sync failed: %s", e)
+
         return {"success": True}
 
     @staticmethod

@@ -7,6 +7,53 @@ function normalizeHttpBaseUrl(raw) {
     return withScheme.endsWith('/') ? withScheme.slice(0, -1) : withScheme;
 }
 
+async function _syncCurrentPositionOnce(lng, lat) {
+    const lngNum = _coerceNumber(lng);
+    const latNum = _coerceNumber(lat);
+    if (lngNum === null || latNum === null) return;
+
+    __lastPositionSyncAt = Date.now();
+    postLocationUpdateToParent(lngNum, latNum);
+
+    try {
+        if (typeof window !== 'undefined') {
+            window.current_position = { lng: lngNum, lat: latNum };
+        }
+    } catch (e) {
+    }
+
+    await jsonrpcRequest('update_map_settings', { current_position: { lng: lngNum, lat: latNum } });
+}
+
+function sync_current_position(lng, lat, options = {}) {
+    const throttleMs = (options && options.throttleMs !== undefined) ? options.throttleMs : 800;
+
+    const lngNum = _coerceNumber(lng);
+    const latNum = _coerceNumber(lat);
+    if (lngNum === null || latNum === null) return;
+
+    __pendingPositionSync = { lng: lngNum, lat: latNum };
+
+    const now = Date.now();
+    const sinceLast = now - (__lastPositionSyncAt || 0);
+    if (sinceLast >= throttleMs && !__positionSyncTimer) {
+        const payload = __pendingPositionSync;
+        __pendingPositionSync = null;
+        _syncCurrentPositionOnce(payload.lng, payload.lat);
+        return;
+    }
+
+    if (__positionSyncTimer) return;
+    const delay = Math.max(50, throttleMs - sinceLast);
+    __positionSyncTimer = setTimeout(() => {
+        __positionSyncTimer = null;
+        const payload = __pendingPositionSync;
+        __pendingPositionSync = null;
+        if (!payload) return;
+        _syncCurrentPositionOnce(payload.lng, payload.lat);
+    }, delay);
+}
+
 function postLocationUpdateToParent(lng, lat) {
     try {
         if (typeof window.parent !== 'undefined' && window.parent && window.parent !== window) {
@@ -108,6 +155,10 @@ let requestIdCounter = 0;
 let __locationSyncTimer = null;
 let __pendingLocation = null;
 let __lastLocationSyncAt = 0;
+
+let __positionSyncTimer = null;
+let __pendingPositionSync = null;
+let __lastPositionSyncAt = 0;
 
 // JSON-RPC 2.0 request helper
 async function jsonrpcRequest(method, params = {}) {
@@ -450,6 +501,14 @@ var handle_command = function (command, param_1, param_2) {
             setPersonModelPointByNationId(nation_id_me, new BMapGL.Point(parseFloat(param_1), parseFloat(param_2)));
         }
         setPersonPointByNationId(nation_id_me, parseFloat(param_1), parseFloat(param_2));
+
+        try {
+            if (typeof sync_current_position === 'function') {
+                sync_current_position(parseFloat(param_1), parseFloat(param_2), { throttleMs: 0 });
+            }
+        } catch (e) {
+            console.warn('Failed to persist current position for move_to_a_place:', e);
+        }
         findHim();
     } else if (command == "route_move_action") {
         route_move_action_from_python();

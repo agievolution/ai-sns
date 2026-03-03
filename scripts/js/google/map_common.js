@@ -292,23 +292,33 @@ function initMap() {
             // overlay.setAnchor(tmpcenter);
             const coordinates = getLastClickPoint();
             // overlay.setAnchor(coordinates);
-            const position = overlay.latLngAltitudeToVector3(coordinates);
-            console.log("model.positiona24", model.position)
-            console.log("model.positionxa24", model.position.x)
-            console.log("model.positionza24", model.position.z)
-            console.log("position", position)
-            const position2 = overlay.latLngAltitudeToVector3(coordinates, model.position);
-            console.log("position2", position2)
-            console.log("model.position", model.position)
-            console.log("model.positionx", model.position.x)
-            console.log("model.positionz", model.position.z)
+            try {
+                if (typeof setPersonModelPointByNationId === 'function') {
+                    setPersonModelPointByNationId(nation_id_me, coordinates);
+                }
+            } catch (err) {
+                console.warn('Failed to move person model:', err);
+            }
+
+            try {
+                if (typeof setPersonPointByNationId === 'function') {
+                    const lngVal = (coordinates && typeof coordinates.lng === 'function') ? coordinates.lng() : null;
+                    const latVal = (coordinates && typeof coordinates.lat === 'function') ? coordinates.lat() : null;
+                    if (lngVal !== null && latVal !== null) {
+                        setPersonPointByNationId(nation_id_me, lngVal, latVal);
+                        window.current_position = { lng: lngVal, lat: latVal };
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to update person location:', err);
+            }
 
             try {
                 if (typeof update_location_and_open_nearest_place === 'function') {
-                    const clickLng = (coordinates && typeof coordinates.lng === 'function') ? coordinates.lng() : null;
-                    const clickLat = (coordinates && typeof coordinates.lat === 'function') ? coordinates.lat() : null;
-                    if (clickLng !== null && clickLat !== null) {
-                        update_location_and_open_nearest_place(clickLng, clickLat, { maxDistanceM: 1000, throttleMs: 800 });
+                    const lngVal = (coordinates && typeof coordinates.lng === 'function') ? coordinates.lng() : null;
+                    const latVal = (coordinates && typeof coordinates.lat === 'function') ? coordinates.lat() : null;
+                    if (lngVal !== null && latVal !== null) {
+                        update_location_and_open_nearest_place(lngVal, latVal, { maxDistanceM: 1000, throttleMs: 800 });
                     }
                 }
             } catch (err) {
@@ -731,7 +741,186 @@ function isWebUrl(url) {
     return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//');
 }
 
+var person_model_loading_promises = {};
+var person_model_meshes_by_nation = {};
+
+function showPersonModelByNationId(nation_id) {
+    try {
+        const model = model_loaded_list && model_loaded_list[nation_id] ? model_loaded_list[nation_id] : null;
+        if (!model) return;
+        model.visible = true;
+
+        const meshes = person_model_meshes_by_nation[nation_id] || [];
+        if (Array.isArray(meshes) && meshes.length) {
+            const existing = new Set(all_model_meshes || []);
+            for (const m of meshes) {
+                if (!existing.has(m)) {
+                    all_model_meshes.push(m);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to show person model:', e);
+    }
+}
+
+function hidePersonModelByNationId(nation_id) {
+    try {
+        const model = model_loaded_list && model_loaded_list[nation_id] ? model_loaded_list[nation_id] : null;
+        if (!model) return;
+        model.visible = false;
+
+        const meshes = person_model_meshes_by_nation[nation_id] || [];
+        if (Array.isArray(meshes) && meshes.length && Array.isArray(all_model_meshes)) {
+            const toRemove = new Set(meshes);
+            all_model_meshes = all_model_meshes.filter(m => !toRemove.has(m));
+        }
+    } catch (e) {
+        console.warn('Failed to hide person model:', e);
+    }
+}
+
+function rotateMyModel180AfterTalkMove(targetNationId, options = {}) {
+    const meNationId = (typeof nation_id_me !== 'undefined' && nation_id_me) ? String(nation_id_me).trim() : '';
+    if (!meNationId) return;
+
+    const targetId = String(targetNationId || '').trim();
+    const maxRetries = (options && options.maxRetries !== undefined) ? Number(options.maxRetries) : 40;
+    const retryDelayMs = (options && options.retryDelayMs !== undefined) ? Number(options.retryDelayMs) : 200;
+
+    let model = null;
+    try {
+        model = (model_loaded_list && model_loaded_list[meNationId]) ? model_loaded_list[meNationId] : null;
+    } catch (e) {
+        model = null;
+    }
+
+    if (!model) {
+        try {
+            if (typeof overlay !== 'undefined' && overlay && overlay.scene && typeof overlay.scene.getObjectByName === 'function') {
+                model = overlay.scene.getObjectByName(meNationId);
+            }
+        } catch (e) {
+            model = null;
+        }
+    }
+
+    if (!model) {
+        if (maxRetries > 0) {
+            setTimeout(() => rotateMyModel180AfterTalkMove(targetId, { maxRetries: maxRetries - 1, retryDelayMs }), retryDelayMs);
+        }
+        return;
+    }
+
+    try {
+        if (!model.userData) model.userData = {};
+        if (model.userData.__talk_original_rotation_y === undefined || model.userData.__talk_original_rotation_y === null) {
+            model.userData.__talk_original_rotation_y = (model.rotation && typeof model.rotation.y === 'number') ? model.rotation.y : 0;
+        }
+        model.userData.__talk_face_target_last_nation_id = targetId;
+        model.userData.__talk_is_active = true;
+    } catch (e) {
+    }
+
+    try {
+        const baseY = (model.userData && typeof model.userData.__talk_original_rotation_y === 'number') ? model.userData.__talk_original_rotation_y : 0;
+        const desiredY = baseY + THREE.MathUtils.degToRad(180);
+        const currentY = (model.rotation && typeof model.rotation.y === 'number') ? model.rotation.y : 0;
+        if (Math.abs(currentY - desiredY) > 1e-6) {
+            model.rotation.y = desiredY;
+        }
+    } catch (e) {
+        console.warn('Failed to rotate my model after talk move:', e);
+        return;
+    }
+
+    try {
+        if (typeof overlay !== 'undefined' && overlay && typeof overlay.requestRedraw === 'function') {
+            overlay.requestRedraw();
+        }
+    } catch (e) {
+    }
+}
+
+function resetMyModelRotationAfterTalk(options = {}) {
+    const meNationId = (typeof nation_id_me !== 'undefined' && nation_id_me) ? String(nation_id_me).trim() : '';
+    if (!meNationId) return;
+
+    const maxRetries = (options && options.maxRetries !== undefined) ? Number(options.maxRetries) : 40;
+    const retryDelayMs = (options && options.retryDelayMs !== undefined) ? Number(options.retryDelayMs) : 200;
+
+    let model = null;
+    try {
+        model = (model_loaded_list && model_loaded_list[meNationId]) ? model_loaded_list[meNationId] : null;
+    } catch (e) {
+        model = null;
+    }
+
+    if (!model) {
+        try {
+            if (typeof overlay !== 'undefined' && overlay && overlay.scene && typeof overlay.scene.getObjectByName === 'function') {
+                model = overlay.scene.getObjectByName(meNationId);
+            }
+        } catch (e) {
+            model = null;
+        }
+    }
+
+    if (!model) {
+        if (maxRetries > 0) {
+            setTimeout(() => resetMyModelRotationAfterTalk({ maxRetries: maxRetries - 1, retryDelayMs }), retryDelayMs);
+        }
+        return;
+    }
+
+    try {
+        const baseY = (model.userData && typeof model.userData.__talk_original_rotation_y === 'number') ? model.userData.__talk_original_rotation_y : null;
+        if (baseY !== null) {
+            const currentY = (model.rotation && typeof model.rotation.y === 'number') ? model.rotation.y : 0;
+            if (Math.abs(currentY - baseY) > 1e-6) {
+                model.rotation.y = baseY;
+            }
+        }
+        if (model.userData) {
+            model.userData.__talk_is_active = false;
+            model.userData.__talk_face_target_last_nation_id = '';
+        }
+    } catch (e) {
+        console.warn('Failed to reset my model rotation after talk:', e);
+        return;
+    }
+
+    try {
+        if (typeof overlay !== 'undefined' && overlay && typeof overlay.requestRedraw === 'function') {
+            overlay.requestRedraw();
+        }
+    } catch (e) {
+    }
+}
+
 function loadModel(persondata) {
+    const nationId = (persondata && persondata["nation_id"]) ? String(persondata["nation_id"]).trim() : '';
+    if (!nationId) {
+        console.warn('loadModel skipped: missing nation_id');
+        return;
+    }
+
+    if (model_loaded_list && model_loaded_list[nationId]) {
+        try {
+            showPersonModelByNationId(nationId);
+            if (typeof setPersonModelPointByNationId === 'function' && typeof getPersonPointByNationId === 'function') {
+                setPersonModelPointByNationId(nationId, getPersonPointByNationId(nationId));
+            }
+        } catch (e) {
+            console.warn('Failed to reuse loaded model:', e);
+        }
+        return;
+    }
+
+    if (person_model_loading_promises[nationId]) {
+        return;
+    }
+
     let url = persondata["avatar_3d"];
     let pos = persondata["location"];
     const coordinates = {
@@ -824,6 +1013,7 @@ alert(height);
 
             // Process meshes
             let modelMeshes = findMeshes(gltf.scene);
+            person_model_meshes_by_nation[nationId] = modelMeshes;
             model.traverse((child) => {
                 if (child.isMesh) {
                     child.cursor = 'pointer';
@@ -836,6 +1026,8 @@ alert(height);
             });
 
             all_model_meshes.push(...modelMeshes);
+
+            showPersonModelByNationId(nationId);
 
             // Process animations
             if (gltf.animations && gltf.animations.length > 0) {
@@ -863,11 +1055,15 @@ alert(height);
             console.log(`Person model loaded successfully: ${persondata.name}`);
         } catch (error) {
             console.error(`Failed to load person model (${persondata.name}):`, error);
+        } finally {
+            try {
+                delete person_model_loading_promises[nationId];
+            } catch (e) {
+            }
         }
     };
 
-    // Execute loading
-    loadPersonalModel();
+    person_model_loading_promises[nationId] = loadPersonalModel();
 }
 
 function removeModel(nation_id) {
@@ -875,6 +1071,15 @@ function removeModel(nation_id) {
         model = model_loaded_list[nation_id];
         overlay.scene.remove(model);
         delete model_loaded_list[nation_id];
+
+        const meshes = person_model_meshes_by_nation[nation_id] || [];
+        if (Array.isArray(meshes) && meshes.length && Array.isArray(all_model_meshes)) {
+            const toRemove = new Set(meshes);
+            all_model_meshes = all_model_meshes.filter(m => !toRemove.has(m));
+        }
+        delete person_model_meshes_by_nation[nation_id];
+        delete person_model_loading_promises[nation_id];
+
         console.log(`Model removed: ${nation_id}`);
     } else {
         console.warn(`Tried to remove a non-existent model: ${nation_id}`);
@@ -1029,6 +1234,18 @@ function start_talk_to_it(nation_id, content) {
 
     setPersonModelPointByNationId(nation_id_me, my_new_point);
     setPersonPointByNationId(nation_id_me, my_new_point.lng(), my_new_point.lat());
+
+    try {
+        if (typeof sync_current_position === 'function') {
+            sync_current_position(my_new_point.lng(), my_new_point.lat(), { throttleMs: 0 });
+        } else if (typeof update_location_and_open_nearest_place === 'function') {
+            update_location_and_open_nearest_place(my_new_point.lng(), my_new_point.lat(), { maxDistanceM: 1000, throttleMs: 0 });
+        }
+    } catch (e) {
+        console.warn('Failed to sync current position after talk movement:', e);
+    }
+
+    rotateMyModel180AfterTalkMove(nation_id);
     // return true;
     // var point = new BMapGL.Point(116.28882, 39.72164);
     let person_point = my_new_point;
@@ -1155,6 +1372,19 @@ function talk_to_it(nation_id, content) {
 
 
     setPersonModelPointByNationId(nation_id_me, my_new_point);
+    setPersonPointByNationId(nation_id_me, my_new_point.lng(), my_new_point.lat());
+
+    try {
+        if (typeof sync_current_position === 'function') {
+            sync_current_position(my_new_point.lng(), my_new_point.lat(), { throttleMs: 0 });
+        } else if (typeof update_location_and_open_nearest_place === 'function') {
+            update_location_and_open_nearest_place(my_new_point.lng(), my_new_point.lat(), { maxDistanceM: 1000, throttleMs: 0 });
+        }
+    } catch (e) {
+        console.warn('Failed to sync current position after talk movement:', e);
+    }
+
+    rotateMyModel180AfterTalkMove(nation_id);
     // return true;
     // var point = new BMapGL.Point(116.28882, 39.72164);
     let person_point = my_new_point;
@@ -1245,8 +1475,13 @@ function talk_to_it(nation_id, content) {
 
 function stop_talk_to_it(nation_id) {
     try {
-        if (typeof removeModel === 'function') {
-            removeModel(nation_id);
+        resetMyModelRotationAfterTalk();
+    } catch (e) {
+    }
+
+    try {
+        if (typeof hidePersonModelByNationId === 'function') {
+            hidePersonModelByNationId(nation_id);
         }
     } catch (e) {
     }
@@ -1268,7 +1503,9 @@ function stop_talk_to_it(nation_id) {
 
     try {
         if (typeof infowindow !== 'undefined' && infowindow && typeof infowindow.close === 'function') {
-            infowindow.close();
+            //infowindow.close();
+            closeprofile();
+
         }
     } catch (e) {
     }
@@ -1351,11 +1588,12 @@ function showprofile(nation_id) {
     console.log(person_point);
     let person = getPersonDataByNationId(nation_id);
     var contentString = `
+<div>
 <div style="display: flex; justify-content: space-between; align-items: center; margin: 0; line-height: 1.5; font-size: 13px; color: black;">
     <span style="font-weight: bold;corlor:black; cursor: pointer;" >${person['nick_name']}</span>
     <span style="cursor: pointer;color:black;"  onclick="closeprofile()">X</span>
 </div>
-
+    <p style='margin:0;line-height:1.5;font-size:13px;text-indent:2em'>
     ${person["profile"]}
     <a href="#" onclick="talk_to_it('${nation_id}','');return false;">Chat</a>
     </p></div>`;
@@ -1367,7 +1605,7 @@ function showprofile(nation_id) {
     h4Element.style.margin = '0 0 5px 0';
 
     // Set text content
-    h4Element.textContent = person['nick_name'];
+    h4Element.textContent = person['nick_name'];//can be disabled
 
 
     const offsetpoint = new google.maps.Size(20, -50);
@@ -1399,6 +1637,11 @@ function showprofile3d(geoGroup) {
     let person_point = getPersonPointByNationId(nation_id);
     let person = geoGroup.userData;
     var contentString = `
+<div>
+<div style="display: flex; justify-content: space-between; align-items: center; margin: 0; line-height: 1.5; font-size: 13px; color: black;">
+    <span style="font-weight: bold;corlor:black; cursor: pointer;" >${person['nick_name']}</span>
+    <span style="cursor: pointer;color:black;"  onclick="closeprofile()">X</span>
+</div>
     <p style='margin:0;line-height:1.5;font-size:13px;text-indent:2em'>
     ${person["profile"]}
     <a href="#" onclick="stop_talk_to_it('${nation_id}');return false;">End chat</a>
@@ -1410,7 +1653,7 @@ function showprofile3d(geoGroup) {
     h4Element.style.margin = '0 0 5px 0';
 
     // Set text content
-    h4Element.textContent = person['nick_name'];
+    h4Element.textContent = person['nick_name'];//can be disabled
 
 
     const offsetpoint = new google.maps.Size(20, -50);
@@ -1418,7 +1661,7 @@ function showprofile3d(geoGroup) {
         content: contentString,
         ariaLabel: "Profile",
         headerContent: h4Element,
-        // headerDisabled: true,
+        headerDisabled: true,
         position: person_point,
         pixelOffset: offsetpoint,
     });

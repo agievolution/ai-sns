@@ -492,20 +492,25 @@ class UIDisplayMixin:
         bar_values = [100, self.aichatcfg_record.credit, self.aichatcfg_record.level * 10]
         bar_colors = ['#ffb676', '#c3f1d7', '#99d4ff']
 
-        # Build user stats object
+        # Build user stats object (use explicit None checks to avoid 0 being treated as falsy)
         user_stats = {
-            "level": self.aichatcfg_record.level or 1,
-            "credit": self.aichatcfg_record.credit or 100,
-            "money": float(self.aichatcfg_record.money or 0),
-            "life": self.aichatcfg_record.life_point or 100,
-            "iq": self.aichatcfg_record.iq_point or 60,
-            "energy": self.aichatcfg_record.energy_point or 100,
-            "move": self.aichatcfg_record.move_point or 100,
-            "exp": self.aichatcfg_record.exp_point or 0
+            "level": int(self.aichatcfg_record.level) if self.aichatcfg_record.level is not None else 3,
+            "credit": int(self.aichatcfg_record.credit) if self.aichatcfg_record.credit is not None else 0,
+            "money": float(self.aichatcfg_record.money) if self.aichatcfg_record.money is not None else 0.0,
+            "life": int(self.aichatcfg_record.life_point) if self.aichatcfg_record.life_point is not None else 100,
+            "iq": int(self.aichatcfg_record.iq_point) if self.aichatcfg_record.iq_point is not None else 100,
+            "energy": int(self.aichatcfg_record.energy_point) if self.aichatcfg_record.energy_point is not None else 100,
+            "move": float(self.aichatcfg_record.move_point) if self.aichatcfg_record.move_point is not None else 100.0,
+            "exp": int(self.aichatcfg_record.exp_point) if self.aichatcfg_record.exp_point is not None else 0
         }
 
         # Send updates to frontend via WebSocket
-        asyncio.create_task(self._send_chart_update(user_stats))
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._send_chart_update(user_stats))
+        except RuntimeError:
+            # Called from a sync context without a running event loop
+            asyncio.run(self._send_chart_update(user_stats))
 
         logger.info(f"Chart data updated and sent to frontend: {user_stats}")
 

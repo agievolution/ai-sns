@@ -158,6 +158,10 @@ class AISocialEngine(
         self.skill_list = []
         self.started_flag = False
 
+        # In-memory IQ tracking counters (not persisted)
+        self._instruction_total_count = 0
+        self._instruction_invalid_count = 0
+
     async def async_init(self):
         """
         Async initialization method.
@@ -558,6 +562,14 @@ class AISocialEngine(
     def parse_agent_instruction_for_process_activity(self, instruction):
         self.handle_parse_agent_instruction_for_process_activity(instruction)
 
+    def _update_iq_point_from_counters(self):
+        if self._instruction_total_count > 0:
+            self.aichatcfg_record.iq_point = round(
+                (1 - self._instruction_invalid_count / self._instruction_total_count) * 100
+            )
+        else:
+            self.aichatcfg_record.iq_point = 100
+
     def handle_parse_agent_instruction_for_process_activity(self, instruction):
         print("llm return instruction:", instruction)
         instruction = instruction.strip()
@@ -566,6 +578,13 @@ class AISocialEngine(
         self.current_action = action_str
 
         print("current action_str:", action_str)
+
+        # Increment exp_point by 1 on each call
+        current_exp = int(self.aichatcfg_record.exp_point or 0)
+        self.aichatcfg_record.exp_point = current_exp + 1
+
+        # Increment in-memory instruction total count for IQ tracking
+        self._instruction_total_count += 1
 
         if self.temp_index > 7:
             self.temp_index = 0
@@ -600,10 +619,17 @@ class AISocialEngine(
                 # Extract the JSON part using regex
                 json_match = re.search(r'\{.*\}', action_str)
                 if not json_match:
+                    self._instruction_invalid_count += 1
+                    self._update_iq_point_from_counters()
                     return None, None
 
                 # Parse JSON
-                data = json.loads(json_match.group(0))
+                try:
+                    data = json.loads(json_match.group(0))
+                except Exception:
+                    self._instruction_invalid_count += 1
+                    self._update_iq_point_from_counters()
+                    return None, None
 
                 # Extract required fields
                 place = data.get('place')
@@ -617,18 +643,22 @@ class AISocialEngine(
 
         elif "3_COMMUNICATE" in action_str:
             self.communicate_with_a_people(action_str, instruction)
+            self._update_iq_point_from_counters()
             return
 
         elif "4_PROMOTE" in action_str:
             self.sell_to_a_people(action_str, instruction)
+            self._update_iq_point_from_counters()
             return
 
         elif "5_PURCHASE" in action_str:
             self.buy_from_a_people(action_str, instruction)
+            self._update_iq_point_from_counters()
             return
 
         elif "6_WEB_SERVICE" in action_str:
             self.use_service(action_str, instruction)
+            self._update_iq_point_from_counters()
             return
 
         elif "7_NAVIGATION" in action_str:
@@ -648,10 +678,17 @@ class AISocialEngine(
                 # Extract the JSON part using regex
                 json_match = re.search(r'\{.*\}', action_str)
                 if not json_match:
+                    self._instruction_invalid_count += 1
+                    self._update_iq_point_from_counters()
                     return None, None
 
                 # Parse JSON
-                data = json.loads(json_match.group(0))
+                try:
+                    data = json.loads(json_match.group(0))
+                except Exception:
+                    self._instruction_invalid_count += 1
+                    self._update_iq_point_from_counters()
+                    return None, None
 
                 # Extract required fields
                 place = data.get('place')
@@ -664,6 +701,10 @@ class AISocialEngine(
             action_result = self.call_a_doctor()
         else:
             action_result = f"'{action_str}' is not in the list of valid actions."
+            # Increment in-memory instruction invalid count for IQ tracking
+            self._instruction_invalid_count += 1
+
+        self._update_iq_point_from_counters()
 
         self.action_result = action_result
         self.taskmng.add_process_info_to_list(f"system:{action_result}")

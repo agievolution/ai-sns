@@ -37,6 +37,26 @@ function setPersonModelPointByNationId(nation_id, point) {
     person_model = getPersonModelByNationId(nation_id);
     console.log("the set model point:", point);
     // overlay.setAnchor(coordinates);
+    try {
+        if (person_model) {
+            const lngVal = (point && typeof point.lng === 'function') ? point.lng() : (point ? point.lng : null);
+            const latVal = (point && typeof point.lat === 'function') ? point.lat() : (point ? point.lat : null);
+            if (lngVal !== null && latVal !== null && Number.isFinite(Number(lngVal)) && Number.isFinite(Number(latVal))) {
+                if (!person_model.userData) person_model.userData = {};
+                person_model.userData.geo = { lat: Number(latVal), lng: Number(lngVal), altitude: 0 };
+                try {
+                    const isMe = (typeof nation_id_me !== 'undefined') && String(nation_id) === String(nation_id_me);
+                    if (window && isMe && typeof window.__preferPersonAnchorForMs === 'function') {
+                        window.__preferPersonAnchorForMs(4500);
+                    } else if (window && typeof window.__maybeUpdateOverlayAnchorToMapCenter === 'function') {
+                        window.__maybeUpdateOverlayAnchorToMapCenter();
+                    }
+                } catch (e) {
+                }
+            }
+        }
+    } catch (e) {
+    }
     const position = overlay.latLngAltitudeToVector3(point);
     console.log("model.positiona24", person_model.position)
     console.log("model.positionxa24", person_model.position.x)

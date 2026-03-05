@@ -947,6 +947,19 @@ function load_aisns_building() {
             console.log("AI-SNS building model added to scene");
 
             try {
+                if (!mesh.userData) mesh.userData = {};
+                mesh.userData.geo = {
+                    lat: Number(coordinates.lat),
+                    lng: Number(coordinates.lng),
+                    altitude: 0,
+                };
+                if (typeof geoBoundObjects !== 'undefined' && geoBoundObjects && typeof geoBoundObjects.add === 'function') {
+                    geoBoundObjects.add(mesh);
+                }
+            } catch (e) {
+            }
+
+            try {
                 if (map && window.google && google.maps && google.maps.event && typeof google.maps.event.addListenerOnce === 'function') {
                     google.maps.event.addListenerOnce(map, 'idle', () => {
                         if (overlayUiInitialized) {

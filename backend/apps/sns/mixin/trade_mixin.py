@@ -540,6 +540,9 @@ class TradeMixin:
             self.talk_to_a_people(message, nation_id, account, nick_name)
 
             self.add_money(0 - float(price or 0))
+            # Increment credit by 1 for each buy trade
+            current_credit = int(self.aichatcfg_record.credit or 0)
+            self.aichatcfg_record.credit = current_credit + 1
             trade_type = "B"
             title = f"Trade with {nick_name}"
             detail = "Waiting for goods"
@@ -660,6 +663,9 @@ class TradeMixin:
             else:
                 add_map_trade(trade_id=trade_id, trade_type=trade_type, title=title, detail=detail, pay=price, trade_with_name=trade_with_name, trade_with_account=trade_with_account, status=2)
             self.add_money(price)
+            # Increment credit by 1 for each sell trade
+            current_credit = int(self.aichatcfg_record.credit or 0)
+            self.aichatcfg_record.credit = current_credit + 1
 
         except Exception as e:
             print(f"Tool trade sell error: {str(e)}")

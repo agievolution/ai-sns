@@ -327,8 +327,13 @@ function createMarker(latlng, label, html) {
 
 
     google.maps.event.addListener(user_marker, 'click', function () {
-        infowindow.setContent(contentString);
-        infowindow.open(map, user_marker);
+        openBubble({
+            title: label,
+            body: html,
+            showClose: true,
+            position: latlng,
+            pixelOffset: new google.maps.Size(0, -50),
+        }, map);
     });
     return user_marker;
 }

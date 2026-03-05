@@ -79,37 +79,37 @@ class SNSService:
                 # Return default values
                 return {
                     "level": 3,
-                    "credit": 100,
-                    "money": 10996.61,
-                    "life": 125,
-                    "iq": 70,
-                    "energy": 150,
-                    "move": 187.5,
-                    "exp": 30
+                    "credit": 0,
+                    "money": 0.0,
+                    "life": 100,
+                    "iq": 100,
+                    "energy": 100,
+                    "move": 100,
+                    "exp": 0
                 }
 
             return {
-                "level": config.level or 3,
-                "credit": config.credit or 100,
-                "money": config.money or 10996.61,
-                "life": _to_int(config.life_point, 125),
-                "iq": config.iq_point or 70,
-                "energy": _to_int(config.energy_point, 150),
-                "move": _to_float(config.move_point, 187.5),
-                "exp": config.exp_point or 30
+                "level": _to_int(config.level, 3),
+                "credit": _to_int(config.credit, 0),
+                "money": _to_float(config.money, 0.0, 2),
+                "life": _to_int(config.life_point, 100),
+                "iq": _to_int(config.iq_point, 100),
+                "energy": _to_int(config.energy_point, 100),
+                "move": _to_float(config.move_point, 100.0),
+                "exp": _to_int(config.exp_point, 0)
             }
         except Exception as e:
             logger.error(f"Error getting user stats: {e}")
             # Return default values on error
             return {
                 "level": 3,
-                "credit": 100,
-                "money": 10996.61,
-                "life": 125,
-                "iq": 70,
-                "energy": 150,
-                "move": 187.5,
-                "exp": 30
+                "credit": 0,
+                "money": 0.0,
+                "life": 100,
+                "iq": 100,
+                "energy": 100,
+                "move": 100,
+                "exp": 0
             }
 
     def get_contacts(self) -> List[AIFriend]:

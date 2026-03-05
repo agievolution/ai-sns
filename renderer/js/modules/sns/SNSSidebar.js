@@ -53,9 +53,42 @@ export default {
         const num = Number(value);
         if (!Number.isFinite(num)) return String(value ?? '');
 
+        if (label === 'Money') {
+            const pct = Math.round((num / 1000) * 100);
+            return `${pct}`;
+        }
+
         const decimals = label === 'Move' ? 1 : 0;
         const fixed = num.toFixed(decimals);
         return decimals === 0 ? fixed : fixed.replace(/\.0+$/, '');
+    },
+
+    /**
+     * Format a value with dynamic K/M/B/T suffix and compute bar percentage.
+     * Returns { display: string, percent: number }.
+     */
+    formatScaledValue(v) {
+        const num = Number(v) || 0;
+        // Use "ceiling" unit scaling:
+        // - < 1K => show in K (v/1K)
+        // - [1K, 1M) => show in M (v/1M)
+        // - [1M, 1B) => show in B (v/1B)
+        // - [1B, 1T) => show in T (v/1T)
+        let tier;
+        if (num < 1e3) tier = { divisor: 1e3, suffix: 'K' };
+        else if (num < 1e6) tier = { divisor: 1e6, suffix: 'M' };
+        else if (num < 1e9) tier = { divisor: 1e9, suffix: 'B' };
+        else tier = { divisor: 1e12, suffix: 'T' };
+
+        const ratio = num / tier.divisor;
+        const percent = Math.min(ratio * 100, 100);
+
+        const ratioText = ratio
+            .toFixed(3)
+            .replace(/\.0+$/, '')
+            .replace(/(\.\d*?)0+$/, '$1');
+
+        return { display: `${ratioText}${tier.suffix}`, percent };
     },
 
     renderMessageContent(content) {
@@ -237,17 +270,17 @@ export default {
                                 <span class="stat-label">Credit</span>
                                 <div class="stat-bar-wrapper">
                                     <div class="stat-bar-container">
-                                        <div class="stat-bar" style="width: ${(this.userStats.credit / 200) * 100}%"></div>
-                                        <span class="stat-value">${this.userStats.credit}</span>
+                                        <div class="stat-bar" style="width: ${this.formatScaledValue(this.userStats.credit).percent}%"></div>
+                                        <span class="stat-value">${this.formatScaledValue(this.userStats.credit).display}</span>
                                     </div>
                                 </div>
                             </div>
                             <div class="stat-bar-item">
-                                <span class="stat-label">Money</span>
+                                <span class="stat-label">Exp</span>
                                 <div class="stat-bar-wrapper">
                                     <div class="stat-bar-container">
-                                        <div class="stat-bar" style="width: ${Math.min((this.userStats.money / 20000) * 100, 100)}%"></div>
-                                        <span class="stat-value">${this.userStats.money.toFixed(2)}</span>
+                                        <div class="stat-bar" style="width: ${this.formatScaledValue(this.userStats.exp).percent}%"></div>
+                                        <span class="stat-value">${this.formatScaledValue(this.userStats.exp).display}</span>
                                     </div>
                                 </div>
                             </div>
@@ -666,15 +699,26 @@ export default {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+        // Money radar value: (money/1000)*100, capped at 100 for line length
+        const moneyRadar = Math.min(Math.round((this.userStats.money / 1000) * 100), 100);
+
         const data = {
-            labels: ['Life', 'IQ', 'Energy', 'Move', 'Exp'],
+            labels: ['Energy', 'Life', 'Money', 'Move', 'IQ'],
             datasets: [{
                 data: [
-                    this.userStats.life,
-                    this.userStats.iq,
                     this.userStats.energy,
+                    this.userStats.life,
+                    moneyRadar,
                     this.userStats.move,
-                    this.userStats.exp
+                    this.userStats.iq
+                ],
+                // Raw values for label display (Money shows uncapped percentage)
+                rawValues: [
+                    this.userStats.energy,
+                    this.userStats.life,
+                    this.userStats.money,
+                    this.userStats.move,
+                    this.userStats.iq
                 ],
                 backgroundColor: 'rgba(26, 115, 232, 0.2)',
                 borderColor: 'rgba(26, 115, 232, 1)',
@@ -695,7 +739,8 @@ export default {
         const radius = Math.min(width, height) / 2 - 25;
         const labels = data.labels;
         const values = data.datasets[0].data;
-        const maxValue = 200;
+        const maxValue = 100;
+        const rawValues = data.datasets[0].rawValues || values;
 
         const theme = this.getRadarTheme();
         const gridStroke = this.toRgba(theme.textTertiary, theme.isDark ? 0.35 : 0.4);
@@ -762,7 +807,7 @@ export default {
             ctx.font = '9px Inter, Arial';
             this.drawOutlinedText(ctx, `${labels[i]}`, labelX, labelY - 4, theme.textSecondary, theme.labelStroke);
             ctx.font = '8px Inter, Arial';
-            this.drawOutlinedText(ctx, this.formatRadarValue(labels[i], values[i]), labelX, labelY + 6, theme.textPrimary, theme.labelStroke);
+            this.drawOutlinedText(ctx, this.formatRadarValue(labels[i], rawValues[i]), labelX, labelY + 6, theme.textPrimary, theme.labelStroke);
         }
 
         // Draw data - use bar-chart palette
@@ -953,14 +998,19 @@ export default {
     renderStats() {
         const statBars = document.querySelectorAll('.stat-bar-item');
         if (statBars.length > 0) {
+            // Level bar: max 10
             statBars[0].querySelector('.stat-bar').style.width = `${(this.userStats.level / 10) * 100}%`;
             statBars[0].querySelector('.stat-value').textContent = this.userStats.level;
 
-            statBars[1].querySelector('.stat-bar').style.width = `${(this.userStats.credit / 200) * 100}%`;
-            statBars[1].querySelector('.stat-value').textContent = this.userStats.credit;
+            // Credit bar: dynamic K/M/B/T scaling
+            const creditFmt = this.formatScaledValue(this.userStats.credit);
+            statBars[1].querySelector('.stat-bar').style.width = `${creditFmt.percent}%`;
+            statBars[1].querySelector('.stat-value').textContent = creditFmt.display;
 
-            statBars[2].querySelector('.stat-bar').style.width = `${Math.min((this.userStats.money / 20000) * 100, 100)}%`;
-            statBars[2].querySelector('.stat-value').textContent = this.userStats.money.toFixed(2);
+            // Exp bar: dynamic K/M/B/T scaling
+            const expFmt = this.formatScaledValue(this.userStats.exp);
+            statBars[2].querySelector('.stat-bar').style.width = `${expFmt.percent}%`;
+            statBars[2].querySelector('.stat-value').textContent = expFmt.display;
         }
         this.renderRadarChart();
     },

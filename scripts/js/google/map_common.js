@@ -108,8 +108,10 @@ function findMeshes(object) {
 }
 
 var highlightedObject = null;
+var highlightedObjectOriginalColors = null;
 // Load 3D models
 var all_model_meshes = [];
+var geoBoundObjects = new Set();
 var loader = new THREE.GLTFLoader();
 var loader2 = new THREE.GLTFLoader();
 
@@ -260,6 +262,279 @@ function initMap() {
         upAxis: "Y"
     });
 
+    let overlayAnchor = {
+        lat: Number(tmpcenter.lat),
+        lng: Number(tmpcenter.lng),
+        altitude: 0,
+    };
+
+    const registerGeoBoundObject = (obj, geo) => {
+        try {
+            if (!obj) return;
+            if (!obj.userData) obj.userData = {};
+            if (geo && Number.isFinite(Number(geo.lat)) && Number.isFinite(Number(geo.lng))) {
+                obj.userData.geo = {
+                    lat: Number(geo.lat),
+                    lng: Number(geo.lng),
+                    altitude: Number(geo.altitude) || 0,
+                };
+            }
+            geoBoundObjects.add(obj);
+        } catch (e) {
+        }
+    };
+
+    const getGeoFromObject = (obj) => {
+        try {
+            if (!obj) return null;
+            const geo = (obj.userData && obj.userData.geo) ? obj.userData.geo : null;
+            if (geo && Number.isFinite(Number(geo.lat)) && Number.isFinite(Number(geo.lng))) {
+                return { lat: Number(geo.lat), lng: Number(geo.lng), altitude: Number(geo.altitude) || 0 };
+            }
+
+            const loc = (obj.userData && obj.userData.location) ? obj.userData.location : null;
+            if (Array.isArray(loc) && loc.length >= 2) {
+                const lat = Number(loc[1]);
+                const lng = Number(loc[0]);
+                if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                    return { lat, lng, altitude: 0 };
+                }
+            }
+        } catch (e) {
+        }
+        return null;
+    };
+
+    const reprojectGeoBoundObjects = () => {
+        try {
+            if (!overlay || typeof overlay.latLngAltitudeToVector3 !== 'function') return;
+
+            const objectsToReproject = new Set();
+
+            if (model_loaded_list) {
+                for (const nationId of Object.keys(model_loaded_list)) {
+                    const m = model_loaded_list[nationId];
+                    if (!m) continue;
+                    objectsToReproject.add(m);
+                    registerGeoBoundObject(m);
+                }
+            }
+
+            for (const obj of geoBoundObjects) {
+                if (obj) objectsToReproject.add(obj);
+            }
+
+            for (const obj of objectsToReproject) {
+                const geo = getGeoFromObject(obj);
+                if (!geo) continue;
+                registerGeoBoundObject(obj, geo);
+                overlay.latLngAltitudeToVector3(geo, obj.position);
+            }
+
+            if (typeof overlay.requestRedraw === 'function') {
+                overlay.requestRedraw();
+            }
+        } catch (e) {
+            console.warn('Failed to reproject geo-bound objects after anchor update:', e);
+        }
+    };
+
+    let __preferPersonAnchorUntil = 0;
+    let __preferPersonAnchorRevertTimer = null;
+    let __overlayAnchorMode = 'map';
+
+    const __getMyPersonGeo = () => {
+        try {
+            if (typeof nation_id_me !== 'undefined' && nation_id_me && model_loaded_list && model_loaded_list[nation_id_me]) {
+                const m = model_loaded_list[nation_id_me];
+                const geo = (m && m.userData && m.userData.geo) ? m.userData.geo : null;
+                if (geo && Number.isFinite(Number(geo.lat)) && Number.isFinite(Number(geo.lng))) {
+                    return { lat: Number(geo.lat), lng: Number(geo.lng), altitude: Number(geo.altitude) || 0 };
+                }
+            }
+        } catch (e) {
+        }
+
+        try {
+            if (typeof getPersonPointByNationId === 'function' && typeof nation_id_me !== 'undefined' && nation_id_me) {
+                const p = getPersonPointByNationId(nation_id_me);
+                if (p) {
+                    const latVal = (typeof p.lat === 'function') ? p.lat() : p.lat;
+                    const lngVal = (typeof p.lng === 'function') ? p.lng() : p.lng;
+                    if (Number.isFinite(Number(latVal)) && Number.isFinite(Number(lngVal))) {
+                        return { lat: Number(latVal), lng: Number(lngVal), altitude: 0 };
+                    }
+                }
+            }
+        } catch (e) {
+        }
+
+        try {
+            if (typeof window !== 'undefined' && window.current_position) {
+                const latVal = window.current_position.lat;
+                const lngVal = window.current_position.lng;
+                if (Number.isFinite(Number(latVal)) && Number.isFinite(Number(lngVal))) {
+                    return { lat: Number(latVal), lng: Number(lngVal), altitude: 0 };
+                }
+            }
+        } catch (e) {
+        }
+
+        return null;
+    };
+
+    const __isMyPersonNearViewportCenter = (centerLat, centerLng) => {
+        try {
+            const personGeo = __getMyPersonGeo();
+            if (!personGeo) return false;
+
+            const centerLatLng = new google.maps.LatLng(Number(centerLat), Number(centerLng));
+            const personLatLng = new google.maps.LatLng(Number(personGeo.lat), Number(personGeo.lng));
+            const d = google.maps.geometry.spherical.computeDistanceBetween(centerLatLng, personLatLng);
+
+            let radius = 0;
+            try {
+                const b = map.getBounds && map.getBounds();
+                const ne = b && b.getNorthEast ? b.getNorthEast() : null;
+                if (ne) {
+                    radius = google.maps.geometry.spherical.computeDistanceBetween(centerLatLng, ne);
+                }
+            } catch (e) {
+            }
+
+            if (!Number.isFinite(radius) || radius <= 0) {
+                radius = 5000;
+            }
+
+            const threshold = Math.max(500, radius * 0.35);
+            return Number.isFinite(d) && d <= threshold;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    const maybeUpdateOverlayAnchorToMapCenter = (opts = {}) => {
+        try {
+            if (!map || !overlay || typeof overlay.setAnchor !== 'function') return;
+
+            const c = map.getCenter();
+            if (!c) return;
+
+            const centerLat = (typeof c.lat === 'function') ? c.lat() : c.lat;
+            const centerLng = (typeof c.lng === 'function') ? c.lng() : c.lng;
+            if (!Number.isFinite(Number(centerLat)) || !Number.isFinite(Number(centerLng))) return;
+
+            let strategy = 'hybrid';
+            try {
+                if (typeof window !== 'undefined' && window.__overlayAnchorStrategy) {
+                    strategy = String(window.__overlayAnchorStrategy || '').toLowerCase();
+                }
+            } catch (e) {
+            }
+
+            const allowPersonAnchor = strategy !== 'map';
+
+            const now = Date.now();
+            const preferPerson = allowPersonAnchor && Number.isFinite(__preferPersonAnchorUntil) && now < __preferPersonAnchorUntil;
+            const personNearCenter = allowPersonAnchor && __isMyPersonNearViewportCenter(centerLat, centerLng);
+
+            let desiredAnchor = { lat: Number(centerLat), lng: Number(centerLng), altitude: 0 };
+            let desiredMode = 'map';
+            if (preferPerson || personNearCenter) {
+                const myGeo = __getMyPersonGeo();
+                if (myGeo) {
+                    desiredAnchor = myGeo;
+                    desiredMode = 'person';
+                }
+            }
+
+            const distM = google.maps.geometry.spherical.computeDistanceBetween(
+                new google.maps.LatLng(Number(overlayAnchor.lat), Number(overlayAnchor.lng)),
+                new google.maps.LatLng(Number(desiredAnchor.lat), Number(desiredAnchor.lng))
+            );
+
+            const force = !!opts.force;
+            const modeSwitch = String(desiredMode) !== String(__overlayAnchorMode);
+
+            const shouldUpdate = force
+                ? (Number.isFinite(distM) && distM > 1)
+                : (modeSwitch
+                    ? (Number.isFinite(distM) && distM > 1)
+                    : (Number.isFinite(distM) && distM > 100000));
+
+            if (shouldUpdate) {
+                overlayAnchor = { lat: Number(desiredAnchor.lat), lng: Number(desiredAnchor.lng), altitude: Number(desiredAnchor.altitude) || 0 };
+                __overlayAnchorMode = desiredMode;
+                overlay.setAnchor(overlayAnchor);
+                reprojectGeoBoundObjects();
+                try {
+                    if (typeof requestAnimationFrame === 'function') {
+                        requestAnimationFrame(() => {
+                            reprojectGeoBoundObjects();
+                        });
+                    }
+                } catch (e) {
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to update overlay anchor:', e);
+        }
+    };
+
+    try {
+        window.__maybeUpdateOverlayAnchorToMapCenter = maybeUpdateOverlayAnchorToMapCenter;
+        window.__reprojectGeoBoundObjects = reprojectGeoBoundObjects;
+        window.__preferPersonAnchorForMs = (ms = 4500) => {
+            try {
+                const dur = Number(ms);
+                const safeDur = (Number.isFinite(dur) ? Math.max(0, dur) : 4500);
+                __preferPersonAnchorUntil = Date.now() + safeDur;
+
+                if (__preferPersonAnchorRevertTimer) {
+                    clearTimeout(__preferPersonAnchorRevertTimer);
+                    __preferPersonAnchorRevertTimer = null;
+                }
+
+                maybeUpdateOverlayAnchorToMapCenter({ force: true });
+
+                __preferPersonAnchorRevertTimer = setTimeout(() => {
+                    try {
+                        maybeUpdateOverlayAnchorToMapCenter({ force: true });
+                    } catch (e) {
+                    }
+                }, safeDur + 50);
+            } catch (e) {
+            }
+        };
+    } catch (e) {
+    }
+
+    try {
+        map.addListener('idle', () => {
+            maybeUpdateOverlayAnchorToMapCenter();
+        });
+    } catch (e) {
+    }
+
+    try {
+        let __anchorUpdateDebounceTimer = null;
+        map.addListener('center_changed', () => {
+            try {
+                if (__anchorUpdateDebounceTimer) clearTimeout(__anchorUpdateDebounceTimer);
+                __anchorUpdateDebounceTimer = setTimeout(() => {
+                    maybeUpdateOverlayAnchorToMapCenter();
+                }, 150);
+            } catch (e) {
+            }
+        });
+    } catch (e) {
+    }
+
+    try {
+        maybeUpdateOverlayAnchorToMapCenter();
+    } catch (e) {
+    }
+
     const mapDiv = map.getDiv();
     const mousePosition = new THREE.Vector2();
     console.log("intimouseposition:", mousePosition);
@@ -333,20 +608,6 @@ function initMap() {
         console.log("Current zoom level:", zoomLevel);
     });
 
-    const contentString = "<div style='font-size:20px'>Hello,I'm CBot.Nice to meet you.</div>";
-
-    const offsetpoint = new google.maps.Size(20, -150);
-    var infowindow = new google.maps.InfoWindow({
-        content: contentString,
-        ariaLabel: "Uluru",
-        headerDisabled: true,
-        position: {
-            lat: 40.76971146231474,
-            lng: -73.97265643012797,
-            altitude: 520
-        },
-        pixelOffset: offsetpoint,
-    });
     const uluru = {lat: 40.76971146231474, lng: -73.97265643012797};
     const latLngAltitudeLiteral2 = {
         lat: 40.76726879657253,
@@ -354,48 +615,36 @@ function initMap() {
         altitude: 80,
     };
 
+    // Show initial greeting bubble
     function showinfo() {
-        infowindow.open({
-            anchor: null,
-            map,
-        });
+        openBubble({
+            body: "Hello, I'm CBot. Nice to meet you.",
+            showClose: false,
+            position: {
+                lat: 40.76971146231474,
+                lng: -73.97265643012797,
+                altitude: 520
+            },
+            pixelOffset: new google.maps.Size(20, -150),
+        }, map);
     }
 
+    // Show second greeting bubble then auto-close
     function moveinfo() {
-        infowindow.close();
-        const contentString2 = "<div style='font-size:20px'>Nice to meet you.How can I go to AI-SNS Center.</div>";
-        const offsetpoint2 = new google.maps.Size(-140, -150);
-        var infowindow2 = new google.maps.InfoWindow({
-            content: contentString2,
-            ariaLabel: "Uluru",
-            headerDisabled: true,
+        closeBubble();
+        openBubble({
+            body: "Nice to meet you. How can I go to AI-SNS Center.",
+            showClose: false,
             position: {
                 lat: 40.76971146231474,
                 lng: -73.97265643012797,
                 altitude: 520
             },
-            pixelOffset: offsetpoint2,
-        });
-
-        const opt = {
-            content: contentString2,
-            ariaLabel: "Uluru",
-            headerDisabled: true,
-            position: {
-                lat: 40.76971146231474,
-                lng: -73.97265643012797,
-                altitude: 520
-            },
-            pixelOffset: offsetpoint2,
-        }
-        infowindow2.open({
-            anchor: null,
-            map,
-        });
+            pixelOffset: new google.maps.Size(-140, -150),
+        }, map);
         setTimeout(() => {
-            // Close info window
-            infowindow2.close();
-            console.log("Info window closed"); // For debugging
+            closeBubble();
+            console.log("Bubble closed"); // For debugging
         }, 2000);
     }
 
@@ -429,6 +678,8 @@ function initMap() {
             // Position model
             const position3 = overlay.latLngAltitudeToVector3(buildingLatLng, modelBuilding.position);
             modelBuilding.position.copy(position3);
+
+            registerGeoBoundObject(modelBuilding, buildingLatLng);
 
             overlay.scene.add(modelBuilding);
             console.log("Building model loaded successfully");
@@ -476,6 +727,12 @@ function initMap() {
             modelhouse.rotation.x = (Math.PI / 15) * 0;
             modelhouse.rotation.y = (Math.PI / 15) * 1.6;
             const position3 = overlay.latLngAltitudeToVector3(home_position, modelhouse.position);
+            try {
+                if (home_position && home_position.lat !== undefined && home_position.lng !== undefined) {
+                    registerGeoBoundObject(modelhouse, { lat: Number(home_position.lat), lng: Number(home_position.lng), altitude: Number(home_position.altitude) || 0 });
+                }
+            } catch (e) {
+            }
             // Add model to scene
             overlay.scene.add(modelhouse);
             console.log("House model loaded successfully");
@@ -511,7 +768,29 @@ function initMap() {
             model.scale.set(scale, scale, scale);
             model.rotation.x = Math.PI / 30;
             model.rotation.y = Math.PI / 1.5;
-            model.position.set(60, 0, -250);
+            try {
+                const base = (home_position && home_position.lat !== undefined && home_position.lng !== undefined)
+                    ? { lat: Number(home_position.lat), lng: Number(home_position.lng) }
+                    : (() => {
+                        const c = map && typeof map.getCenter === 'function' ? map.getCenter() : null;
+                        const lat = c ? ((typeof c.lat === 'function') ? c.lat() : c.lat) : null;
+                        const lng = c ? ((typeof c.lng === 'function') ? c.lng() : c.lng) : null;
+                        return { lat: Number(lat), lng: Number(lng) };
+                    })();
+
+                if (Number.isFinite(base.lat) && Number.isFinite(base.lng)) {
+                    const baseLatLng = new google.maps.LatLng(base.lat, base.lng);
+                    const pEast = google.maps.geometry.spherical.computeOffset(baseLatLng, 60, 90);
+                    const pFinal = google.maps.geometry.spherical.computeOffset(pEast, 250, 180);
+                    const geo = { lat: pFinal.lat(), lng: pFinal.lng(), altitude: 0 };
+                    registerGeoBoundObject(model, geo);
+                    overlay.latLngAltitudeToVector3(geo, model.position);
+                } else {
+                    model.position.set(60, 0, -250);
+                }
+            } catch (e) {
+                model.position.set(60, 0, -250);
+            }
             // Add model to scene
             overlay.scene.add(model);
             // Find all meshes in the scene
@@ -573,7 +852,29 @@ function initMap() {
             model2.rotation.x = THREE.MathUtils.degToRad(6);  // 6 degrees -> radians
             model2.rotation.z = THREE.MathUtils.degToRad(0);  // 0 degrees -> radians
             model2.rotation.y = Math.PI / 1.5;
-            model2.position.set(130, 0, -250);
+            try {
+                const base = (home_position && home_position.lat !== undefined && home_position.lng !== undefined)
+                    ? { lat: Number(home_position.lat), lng: Number(home_position.lng) }
+                    : (() => {
+                        const c = map && typeof map.getCenter === 'function' ? map.getCenter() : null;
+                        const lat = c ? ((typeof c.lat === 'function') ? c.lat() : c.lat) : null;
+                        const lng = c ? ((typeof c.lng === 'function') ? c.lng() : c.lng) : null;
+                        return { lat: Number(lat), lng: Number(lng) };
+                    })();
+
+                if (Number.isFinite(base.lat) && Number.isFinite(base.lng)) {
+                    const baseLatLng = new google.maps.LatLng(base.lat, base.lng);
+                    const pEast = google.maps.geometry.spherical.computeOffset(baseLatLng, 130, 90);
+                    const pFinal = google.maps.geometry.spherical.computeOffset(pEast, 250, 180);
+                    const geo = { lat: pFinal.lat(), lng: pFinal.lng(), altitude: 0 };
+                    registerGeoBoundObject(model2, geo);
+                    overlay.latLngAltitudeToVector3(geo, model2.position);
+                } else {
+                    model2.position.set(130, 0, -250);
+                }
+            } catch (e) {
+                model2.position.set(130, 0, -250);
+            }
             // Add model to scene
             overlay.scene.add(model2);
             // Find all meshes in the scene
@@ -699,6 +1000,7 @@ function initMap() {
 
 
     overlay.onBeforeDraw = () => {
+        // --- Raycasting first (needs the original projectionMatrix) ---
         if (mousePosition.x != 0 && mousePosition.y != 0) {
             var intersections = overlay.raycast(mousePosition, all_model_meshes, {
                 recursive: false,
@@ -708,21 +1010,118 @@ function initMap() {
                 console.log("Mouse position:", mousePosition);
             }
             if (intersections.length === 0) {
+                try {
+                    if (highlightedObject && highlightedObject.material && highlightedObjectOriginalColors) {
+                        const mats = Array.isArray(highlightedObject.material) ? highlightedObject.material : [highlightedObject.material];
+                        for (let i = 0; i < mats.length; i++) {
+                            const m = mats[i];
+                            if (m && m.color && highlightedObjectOriginalColors[i] !== null && highlightedObjectOriginalColors[i] !== undefined) {
+                                m.color.setHex(highlightedObjectOriginalColors[i]);
+                            }
+                        }
+                    }
+                } catch (e) {
+                }
                 highlightedObject = null;
-                return;
-            }
-            highlightedObject = intersections[0].object;
-            highlightedObject.material.color.setHex(HIGHLIGHT_COLOR);// pause color changes
-            if (highlightedObject.userData) {
-                if (highlightedObject.userData.nation_id) {
-                    console.log("Detected nation ID:", highlightedObject.userData.nation_id);
-                    nation_id = highlightedObject.userData.nation_id;
-                    currentModel = getPersonModelByNationId(nation_id);
-                    mousePosition.x = 0;
-                    mousePosition.y = 0;
-                    showprofile3d(currentModel);
+                highlightedObjectOriginalColors = null;
+            } else {
+                try {
+                    if (highlightedObject && highlightedObject !== intersections[0].object && highlightedObject.material && highlightedObjectOriginalColors) {
+                        const mats = Array.isArray(highlightedObject.material) ? highlightedObject.material : [highlightedObject.material];
+                        for (let i = 0; i < mats.length; i++) {
+                            const m = mats[i];
+                            if (m && m.color && highlightedObjectOriginalColors[i] !== null && highlightedObjectOriginalColors[i] !== undefined) {
+                                m.color.setHex(highlightedObjectOriginalColors[i]);
+                            }
+                        }
+                    }
+                } catch (e) {
+                }
+
+                highlightedObject = intersections[0].object;
+                try {
+                    const mats = (highlightedObject && highlightedObject.material)
+                        ? (Array.isArray(highlightedObject.material) ? highlightedObject.material : [highlightedObject.material])
+                        : [];
+                    highlightedObjectOriginalColors = mats.map(m => (m && m.color) ? m.color.getHex() : null);
+                    for (const m of mats) {
+                        if (m && m.color) {
+                            m.color.setHex(HIGHLIGHT_COLOR);
+                        }
+                    }
+                } catch (e) {
+                }
+                if (highlightedObject.userData) {
+                    if (highlightedObject.userData.nation_id) {
+                        console.log("Detected nation ID:", highlightedObject.userData.nation_id);
+                        nation_id = highlightedObject.userData.nation_id;
+                        currentModel = getPersonModelByNationId(nation_id);
+                        mousePosition.x = 0;
+                        mousePosition.y = 0;
+                        showprofile3d(currentModel);
+                    }
                 }
             }
+        }
+
+        // --- Camera position fix (runs AFTER raycasting, BEFORE render) ---
+        // ThreeJSOverlayView sets projectionMatrix to the full MVP but leaves
+        // camera.position at (0,0,0). Three.js uses cameraPosition for PBR
+        // specular/reflection calculations, so objects far from the anchor get
+        // incorrect specular highlights (one side bright, one side dark).
+        // We estimate the real camera position from the map API, set it on the
+        // camera, then compensate projectionMatrix so vertex positions are
+        // unaffected while the cameraPosition uniform becomes correct.
+        try {
+            const cam = overlay.camera;
+            if (cam && map) {
+                const c = map.getCenter();
+                if (c) {
+                    const cLat = (typeof c.lat === 'function') ? c.lat() : c.lat;
+                    const cLng = (typeof c.lng === 'function') ? c.lng() : c.lng;
+                    const zoom = map.getZoom() || 15;
+                    const tiltDeg = map.getTilt() || 0;
+                    const headDeg = map.getHeading() || 0;
+
+                    // Estimate camera altitude from zoom level (meters)
+                    const altitudeM = 35200000 / Math.pow(2, Math.max(zoom - 1, 0));
+
+                    // Tilt & heading in radians
+                    const tiltR = tiltDeg * Math.PI / 180;
+                    const headR = headDeg * Math.PI / 180;
+
+                    // Camera is elevated above the look-at point (map center) and
+                    // offset horizontally opposite to heading by tilt amount.
+                    // In Y-up scene coords (ThreeJSOverlayView with upAxis "Y"):
+                    //   Y = up,  X ~ east,  Z ~ south at anchor
+                    const camAlt = altitudeM * Math.cos(tiltR);
+                    const camHoriz = altitudeM * Math.sin(tiltR);
+
+                    // Convert map center to scene coordinates (ground level)
+                    const centerVec = overlay.latLngAltitudeToVector3(
+                        { lat: Number(cLat), lng: Number(cLng), altitude: 0 }
+                    );
+
+                    // Horizontal offset direction (opposite of heading in scene XZ)
+                    const offX = -camHoriz * Math.sin(headR);
+                    const offZ =  camHoriz * Math.cos(headR);
+
+                    cam.position.set(
+                        centerVec.x + offX,
+                        centerVec.y + camAlt,
+                        centerVec.z + offZ
+                    );
+                    cam.updateMatrixWorld(true);
+
+                    // Compensate projectionMatrix so vertex positions stay correct:
+                    // new_proj = original_MVP * cam.matrixWorld
+                    // gl_Position = new_proj * (matrixWorldInverse * objectWorld) * v
+                    //             = MVP * mW * mWInv * objectWorld * v
+                    //             = MVP * objectWorld * v  (unchanged)
+                    cam.projectionMatrix.multiply(cam.matrixWorld);
+                }
+            }
+        } catch (e) {
         }
     };
 
@@ -1065,6 +1464,15 @@ alert(height);
                 };
                 console.log(`Applied altitude: ${modelParams.altitude}`);
             }
+            try {
+                if (!model.userData) model.userData = {};
+                model.userData.geo = {
+                    lat: Number(altitudeCoordinates.lat),
+                    lng: Number(altitudeCoordinates.lng),
+                    altitude: Number(altitudeCoordinates.altitude) || 0,
+                };
+            } catch (e) {
+            }
             const position2 = overlay.latLngAltitudeToVector3(altitudeCoordinates, model.position);
             console.log("Model position:", position2);
 
@@ -1133,6 +1541,11 @@ function removeModel(nation_id) {
         overlay.scene.remove(model);
         delete model_loaded_list[nation_id];
 
+        try {
+            geoBoundObjects.delete(model);
+        } catch (e) {
+        }
+
         const meshes = person_model_meshes_by_nation[nation_id] || [];
         if (Array.isArray(meshes) && meshes.length && Array.isArray(all_model_meshes)) {
             const toRemove = new Set(meshes);
@@ -1178,6 +1591,13 @@ function updateHouseModel(position, scale, rotation) {
             lat: parseFloat(position.lat),
             lng: parseFloat(position.lng)
         };
+
+        try {
+            if (!modelhouse.userData) modelhouse.userData = {};
+            modelhouse.userData.geo = { lat: Number(coordinates.lat), lng: Number(coordinates.lng), altitude: 0 };
+            geoBoundObjects.add(modelhouse);
+        } catch (e) {
+        }
 
         // Convert lat/lng to 3D scene coordinates
         const position3 = overlay.latLngAltitudeToVector3(coordinates, modelhouse.position);
@@ -1470,9 +1890,7 @@ function talk_to_it(nation_id, content) {
 
     //close the window of profile
     try {
-        if (typeof infowindow !== 'undefined' && infowindow && typeof infowindow.close === 'function') {
-            infowindow.close();
-        }
+        closeBubble();
     } catch (e) {
     }
 
@@ -1633,11 +2051,7 @@ function stop_talk_to_it(nation_id) {
     }
 
     try {
-        if (typeof infowindow !== 'undefined' && infowindow && typeof infowindow.close === 'function') {
-            //infowindow.close();
-            closeprofile();
-
-        }
+        closeprofile();
     } catch (e) {
     }
 }
@@ -1649,158 +2063,86 @@ let showing_info_flag = false;
 function send_chat_msg(lng, lat, msg, send_person_name = "") {
     // Check whether an info window is currently being shown
     if (showing_info_flag) {
-        console.log("Info window is still open. Please wait...");
+        console.log("Bubble is still open. Please wait...");
 
         // Retry later
         setTimeout(() => send_chat_msg(lng, lat, msg, send_person_name), 1000);
         return; // If showing, exit
     }
 
-    // Set flag to true to indicate an info window is being shown
+    // Set flag to true to indicate a bubble is being shown
     showing_info_flag = true;
 
     // Create map coordinate point
-
     let person_point = new google.maps.LatLng(lat, lng);
 
-    var contentString = `
-    <p style='margin:0;line-height:1.5;font-size:13px;'>
-    ${msg}
-
-    </p></div>`;
-
-    // Create a <h4> element
-    var h4Element = document.createElement('h4');
-
-    // Set styles
-    h4Element.style.margin = '0 30px 5px 0';
-
-    // Set text content
-    if (send_person_name) {
-        h4Element.textContent = send_person_name;
-    } else {
-        h4Element.textContent = "Message";
-    }
-
-
-    const offsetpoint = new google.maps.Size(20, -50);
-    infowindow = new google.maps.InfoWindow({
-        content: contentString,
-        ariaLabel: "Profile",
-        headerContent: h4Element,
-        // headerDisabled: true,
+    openBubble({
+        title: send_person_name || 'Message',
+        body: msg,
+        showClose: false,
         position: person_point,
-        pixelOffset: offsetpoint,
-    });
+        pixelOffset: new google.maps.Size(20, -50),
+    }, map);
 
-    infowindow.open({
-        anchor: null,
-        map,
-    });
-
-    // Set timer to close the info window and reset the flag
+    // Set timer to close the bubble and reset the flag
     setTimeout(function () {
-        infowindow.close(); // close info window
+        closeBubble();
         showing_info_flag = false; // reset flag
     }, 3000);
 
     // Debug output
-    console.log("Info window opened.");
+    console.log("Chat bubble opened.");
 }
 
 
 function showprofile(nation_id) {
-    if (infowindow) {
-        infowindow.close();
-    }
+    closeBubble();
 
     let person_point = getPersonPointByNationId(nation_id);
     console.log("person_point");
     console.log(person_point);
     let person = getPersonDataByNationId(nation_id);
-    var contentString = `
-<div>
-<div style="display: flex; justify-content: space-between; align-items: center; margin: 0; line-height: 1.5; font-size: 13px; color: black;">
-    <span style="font-weight: bold;corlor:black; cursor: pointer;" >${person['nick_name']}</span>
-    <span style="cursor: pointer;color:black;"  onclick="closeprofile()">X</span>
-</div>
-    <p style='margin:0;line-height:1.5;font-size:13px;text-indent:2em'>
-    ${person["profile"]}
-    <a href="#" onclick="talk_to_it('${nation_id}','');return false;">Chat</a>
-    </p></div>`;
-    // Create a <h4> element
-    // var h4Element = document.createElement('h4');
-    var h4Element = document.createElement('div');
 
-    // Set styles
-    h4Element.style.margin = '0 0 5px 0';
+    var level = (person["level"] !== undefined && person["level"] !== null && person["level"] !== '') ? person["level"] : 1;
+    var badgeHTML = '<span class="bubble-level-badge">' + level + '</span>';
+    var bodyHTML = badgeHTML + person["profile"] +
+        '<div style="text-align: right;"><a href="#" class="bubble-action-btn" onclick="talk_to_it(\'' + nation_id + '\',\'\');return false;">Chat</a></div>';
 
-    // Set text content
-    h4Element.textContent = person['nick_name'];//can be disabled
-
-
-    const offsetpoint = new google.maps.Size(20, -50);
-    infowindow = new google.maps.InfoWindow({
-        content: contentString,
-        ariaLabel: "Profile",
-        headerContent: h4Element,
-        headerDisabled: true,
+    openBubble({
+        title: person['nick_name'],
+        body: bodyHTML,
+        showClose: true,
+        closeAction: 'closeprofile()',
         position: person_point,
-        pixelOffset: offsetpoint,
-    });
-
-    infowindow.open({
-        anchor: null,
-        map,
-    });
+        pixelOffset: new google.maps.Size(20, -50),
+    }, map);
 
     open_sns_profile(person['sns_url']);
-
 }
 
 function closeprofile() {
-    infowindow.close();
-    close_sns_profile()
+    closeBubble();
+    close_sns_profile();
 }
 
 function showprofile3d(geoGroup) {
     let nation_id = geoGroup.userData.nation_id;
     let person_point = getPersonPointByNationId(nation_id);
     let person = geoGroup.userData;
-    var contentString = `
-<div>
-<div style="display: flex; justify-content: space-between; align-items: center; margin: 0; line-height: 1.5; font-size: 13px; color: black;">
-    <span style="font-weight: bold;corlor:black; cursor: pointer;" >${person['nick_name']}</span>
-    <span style="cursor: pointer;color:black;"  onclick="closeprofile()">X</span>
-</div>
-    <p style='margin:0;line-height:1.5;font-size:13px;text-indent:2em'>
-    ${person["profile"]}
-    <a href="#" onclick="stop_talk_to_it('${nation_id}');return false;">End chat</a>
-    </p></div>`;
-// Create a <h4> element
-    var h4Element = document.createElement('h4');
 
-    // Set styles
-    h4Element.style.margin = '0 0 5px 0';
+    var level = (person["level"] !== undefined && person["level"] !== null && person["level"] !== '') ? person["level"] : 1;
+    var badgeHTML = '<span class="bubble-level-badge">' + level + '</span>';
+    var bodyHTML = badgeHTML + person["profile"] +
+        '<div style="text-align: right;"><a href="#" class="bubble-action-btn btn-danger" onclick="stop_talk_to_it(\'' + nation_id + '\');return false;">End chat</a></div>';
 
-    // Set text content
-    h4Element.textContent = person['nick_name'];//can be disabled
-
-
-    const offsetpoint = new google.maps.Size(20, -50);
-    infowindow = new google.maps.InfoWindow({
-        content: contentString,
-        ariaLabel: "Profile",
-        headerContent: h4Element,
-        headerDisabled: true,
+    openBubble({
+        title: person['nick_name'],
+        body: bodyHTML,
+        showClose: true,
+        closeAction: 'closeprofile()',
         position: person_point,
-        pixelOffset: offsetpoint,
-    });
-
-    infowindow.open({
-        anchor: null,
-        map,
-    });
+        pixelOffset: new google.maps.Size(20, -50),
+    }, map);
     overlay.requestRedraw();
 }
 

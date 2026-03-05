@@ -957,16 +957,17 @@ function set_move_status() {
 
 }
 
-var opts = {
-    width: 200,     // Info window width 200
-    height: 100,     // Info window height 100
-    title: "", // Info window title
-    offset: new BMapGL.Size(30, -50),
-}
-
-var infoWindow = new BMapGL.InfoWindow("Hi, I'm YBot", opts);  // Create info window object
-
-var infoWindow2 = new BMapGL.InfoWindow("Hello!", opts);  // Create info window object
+// Initial greeting bubbles (opened via openBaiduBubble when needed)
+var _initialBubbleOpts = {
+    body: "Hi, I'm YBot",
+    showClose: false,
+    offset: { x: 30, y: -50 },
+};
+var _initialBubbleOpts2 = {
+    body: "Hello!",
+    showClose: false,
+    offset: { x: 30, y: -50 },
+};
 
 function __snsPostJson(path, payload) {
     try {
@@ -1218,10 +1219,8 @@ function stop_talk_to_it(nation_id) {
     }
 
     try {
-        if (typeof map !== 'undefined' && map && typeof map.closeInfoWindow === 'function') {
-            map.closeInfoWindow();
-            close_sns_profile();
-        }
+        closeBaiduBubble();
+        close_sns_profile();
     } catch (e) {
     }
 }
@@ -1230,96 +1229,73 @@ function stop_talk_to_it(nation_id) {
 // Flag variable indicating whether an info window is currently being shown
 let showing_info_flag = false;
 
-function send_chat_msg(lng, lat, msg,send_person_name="") {
-    // Check whether an info window is currently being shown
+function send_chat_msg(lng, lat, msg, send_person_name = "") {
+    // Check whether a bubble is currently being shown
     if (showing_info_flag) {
-        console.log("The info window is still showing. Please wait...");
+        console.log("Bubble is still open. Please wait...");
 
         // Retry later
-        setTimeout(() => send_chat_msg(lng, lat, msg,send_person_name), 1000);
+        setTimeout(() => send_chat_msg(lng, lat, msg, send_person_name), 1000);
         return; // If showing, exit
     }
 
-    // Set flag to true to indicate an info window is being shown
+    // Set flag to true to indicate a bubble is being shown
     showing_info_flag = true;
 
     // Create map coordinate point
     var point = new BMapGL.Point(lng, lat);
 
+    openBaiduBubble(point, {
+        title: send_person_name || '',
+        body: msg,
+        showClose: false,
+        offset: { x: 30, y: -50 },
+    }, map);
 
-    let opts = {
-    width: 200,     // Info window width 200
-    height: 100,     // Info window height 100
-    title: send_person_name, // Info window title
-    offset: new BMapGL.Size(30, -50),
-}
-
-let infoWindow_chat = new BMapGL.InfoWindow(msg, opts);  // Create info window object
-
-
-
-
-    // Open info window
-    map.openInfoWindow(infoWindow_chat, point);
-
-    // Set timer to close the info window and reset the flag
+    // Set timer to close the bubble and reset the flag
     setTimeout(function () {
-        map.closeInfoWindow(); // close info window
+        closeBaiduBubble();
         showing_info_flag = false; // reset flag
     }, 3000);
 
     // Debug output
-    console.log("Info window opened.");
+    console.log("Chat bubble opened.");
 }
 
 
 
 function showprofile(nation_id) {
-    alert("showprofile");
+    closeBaiduBubble();
 
     let person_point = getPersonPointByNationId(nation_id);
-    alert("person_point");
     console.log("person_point");
     console.log(person_point);
     let person = getPersonDataByNationId(nation_id);
-    var sContent = `
-    <p style='margin:0;line-height:1.5;font-size:13px;text-indent:2em'>
-    ${person["profile"]}
-    <a href="#" onclick="talk_to_it('${nation_id}','');return false;">Chat</a>
-    </p></div>`;
-    alert("showprofile22");
-    var opts = {
-        width: 200,     // Info window width 200
-        height: 100,     // Info window height 100
-        title: `<h4 style='margin:0 0 5px 0;'>${person["nick_name"]}</h4>`, // Info window title
-        offset: new BMapGL.Size(30, -50),
-    }
-    let profile_info_window = new BMapGL.InfoWindow(sContent, opts);
-    alert("showprofile2333cjrok");
-    // Listen for InfoWindow close event
-profile_info_window.addEventListener("close", function() {
-    // Code to run when the InfoWindow is closed
-    alert(1);
-    closeprofile();
-});
 
-    // var point = new BMapGL.Point(116.28882, 39.72164);
+    var level = (person["level"] !== undefined && person["level"] !== null && person["level"] !== '') ? person["level"] : 1;
+    var badgeHTML = '<span class="bubble-level-badge">' + level + '</span>';
+    var bodyHTML = badgeHTML + person["profile"] +
+        '<div style="text-align: right;"><a href="#" class="bubble-action-btn" onclick="talk_to_it(\'' + nation_id + '\',\'\');return false;">Chat</a></div>';
+
     var point = getPersonPointByNationId(nation_id);
-    console.log("the point", point)
-    map.openInfoWindow(profile_info_window, point); // Open InfoWindow
-    // map.openInfoWindow(profile_info_window, point); // Open InfoWindow
-    // map.openInfoWindow(profile_info_window, point); // Open InfoWindow
-    // map.openInfoWindow(infoWindow3, point); // Open InfoWindow
-    // map.openInfoWindow(infoWindow3, point); // Open InfoWindow
-    alert("showprofile444");
-    open_sns_profile(person['sns_url']);
+    console.log("the point", point);
 
+    openBaiduBubble(point, {
+        title: person["nick_name"],
+        body: bodyHTML,
+        showClose: true,
+        offset: { x: 30, y: -50 },
+        onClose: function () {
+            closeprofile();
+        },
+    }, map);
+
+    open_sns_profile(person['sns_url']);
 }
 
 function closeprofile(){
-    // map.closeInfoWindow();
-    alert("closing");
-    close_sns_profile()
+    closeBaiduBubble();
+    close_sns_profile();
 }
 
 function showprofile3d(geoGroup) {
@@ -1338,20 +1314,11 @@ function showprofile3d(geoGroup) {
     // return;
 
     let person = geoGroup.userData;
-    var sContent = `<h4 style='margin:0 0 5px 0;'>${person["nick_name"]}</h4>
-    <p style='margin:0;line-height:1.5;font-size:13px;text-indent:2em'>
-    ${person["profile"]}
-    <a href="#" onclick="stop_talk_to_it('${nation_id}');return false;">End chat</a>
-    </p></div>`;
 
-    let opts_3d = {
-        width: 200,     // Info window width 200
-        height: 100,     // Info window height 100
-        title: "", // Info window title
-        offset: new BMapGL.Size(30, -50),
-    }
-    let infoWindow_3d = new BMapGL.InfoWindow(sContent, opts_3d);
-
+    var level = (person["level"] !== undefined && person["level"] !== null && person["level"] !== '') ? person["level"] : 1;
+    var badgeHTML = '<span class="bubble-level-badge">' + level + '</span>';
+    var bodyHTML = badgeHTML + person["profile"] +
+        '<div style="text-align: right;"><a href="#" class="bubble-action-btn btn-danger" onclick="stop_talk_to_it(\'' + nation_id + '\');return false;">End chat</a></div>';
 
     // Assume geoGroup.position x/y are Mercator coordinates
     const mercatorX = geoGroup.position.x;
@@ -1369,11 +1336,19 @@ function showprofile3d(geoGroup) {
     console.log('Latitude:', geoCoord2.lat); // Output latitude
     let point = geoCoord2;
 
-    console.log("infowindow pointsnew002:",point)
-    map.openInfoWindow(infoWindow_3d, point); // Open InfoWindow
+    console.log("bubble point:", point);
 
+    openBaiduBubble(point, {
+        title: person["nick_name"],
+        body: bodyHTML,
+        showClose: true,
+        offset: { x: 30, y: -50 },
+        onClose: function () {
+            closeprofile();
+        },
+    }, map);
 
-    alert("infowindow shown2new6");
+    console.log("Bubble shown for 3D profile");
 
     // Get all THREE.Group instances in threeLayer
     const allGroups = getAllGroups(threeLayer.scene);

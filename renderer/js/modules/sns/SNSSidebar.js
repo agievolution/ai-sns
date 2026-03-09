@@ -17,6 +17,7 @@ const getApiClient = () => {
 
 export default {
     userStats: {
+        rebirth: 0,
         level: 3,
         credit: 100,
         money: 10996.61,
@@ -55,8 +56,7 @@ export default {
         if (!Number.isFinite(num)) return String(value ?? '');
 
         if (label === 'Money') {
-            const pct = Math.round((num / 1000) * 100);
-            return `${pct}`;
+            return `${Math.round(num)}`;
         }
 
         const decimals = label === 'Move' ? 1 : 0;
@@ -126,7 +126,7 @@ export default {
     _formatExploreNickname(rawNickname) {
         const name = String(rawNickname ?? '').trim();
         if (!name) return '';
-        return this._truncateDisplayWidth(name, 12);
+        return name;
     },
 
     updateExploreTitle(nickname) {
@@ -246,18 +246,21 @@ export default {
             <div class="sidebar-section">
                 <div class="sidebar-header-row">
 <svg height="26" viewBox="0 -960 960 960" width="26" fill="#1a73e8"><path d="M572-405.5q43-21.5 68-63.5-35-27-75.5-43T480-528q-44 0-84.5 16T320-469q25 42 68 63.5t92 21.5q49 0 92-21.5ZM480-576q30 0 51-21t21-51q0-30-21-51t-51-21q-30 0-51 21t-21 51q0 30 21 51t51 21Zm0 385q119-107 179.5-197T720-549q0-105-68.5-174T480-792q-103 0-171.5 69T240-549q0 71 60.5 161T480-191Zm0 95Q323-227 245.5-339.5T168-549q0-134 89-224.5T480-864q133 0 222.5 90.5T792-549q0 97-77 209T480-96Zm0-456Z"/></svg>
-                    <span class="sidebar-section-title" id="snsExploreTitle"></span>
+                    <div class="sns-explore-title-wrap">
+                        <span class="sidebar-section-title" id="snsExploreTitle"></span>
+                        <span class="level-badge" id="levelBadge">LV.${this.userStats.level}</span>
+                    </div>
                 </div>
                 <!-- User stats panel -->
                 <div class="user-stats-panel">
                     <div class="user-stats-charts">
                         <div class="user-stat-bars">
                             <div class="stat-bar-item">
-                                <span class="stat-label">Level</span>
+                                <span class="stat-label">Rebirth</span>
                                 <div class="stat-bar-wrapper">
                                     <div class="stat-bar-container">
-                                        <div class="stat-bar" style="width: ${(this.userStats.level / 10) * 100}%"></div>
-                                        <span class="stat-value">${this.userStats.level}</span>
+                                        <div class="stat-bar" style="width: ${Math.min((this.userStats.rebirth / 100) * 100, 100)}%"></div>
+                                        <span class="stat-value">${this.userStats.rebirth}</span>
                                     </div>
                                 </div>
                             </div>
@@ -265,8 +268,8 @@ export default {
                                 <span class="stat-label">Credit</span>
                                 <div class="stat-bar-wrapper">
                                     <div class="stat-bar-container">
-                                        <div class="stat-bar" style="width: ${this.formatScaledValue(this.userStats.credit).percent}%"></div>
-                                        <span class="stat-value">${this.formatScaledValue(this.userStats.credit).display}</span>
+                                        <div class="stat-bar" style="width: ${Math.min((this.userStats.credit / 100) * 100, 100)}%"></div>
+                                        <span class="stat-value">${this.userStats.credit}</span>
                                     </div>
                                 </div>
                             </div>
@@ -274,8 +277,8 @@ export default {
                                 <span class="stat-label">Exp</span>
                                 <div class="stat-bar-wrapper">
                                     <div class="stat-bar-container">
-                                        <div class="stat-bar" style="width: ${this.formatScaledValue(this.userStats.exp).percent}%"></div>
-                                        <span class="stat-value">${this.formatScaledValue(this.userStats.exp).display}</span>
+                                        <div class="stat-bar" style="width: ${Math.min((this.userStats.exp / 1000) * 100, 100)}%"></div>
+                                        <span class="stat-value">${this.userStats.exp}</span>
                                     </div>
                                 </div>
                             </div>
@@ -459,6 +462,7 @@ export default {
         // Update local userStats
         if (data) {
             this.userStats = {
+                rebirth: data.rebirth ?? this.userStats.rebirth,
                 level: data.level ?? this.userStats.level,
                 credit: data.credit ?? this.userStats.credit,
                 money: data.money ?? this.userStats.money,
@@ -721,22 +725,22 @@ export default {
         const moneyRadar = Math.min(Math.round((this.userStats.money / 1000) * 100), 100);
 
         const data = {
-            labels: ['Energy', 'Life', 'Money', 'Move', 'IQ'],
+            labels: ['IQ', 'Life', 'Money', 'Energy', 'Move'],
             datasets: [{
                 data: [
-                    this.userStats.energy,
+                    this.userStats.iq,
                     this.userStats.life,
                     moneyRadar,
-                    this.userStats.move,
-                    this.userStats.iq
+                    this.userStats.energy,
+                    this.userStats.move
                 ],
                 // Raw values for label display (Money shows uncapped percentage)
                 rawValues: [
-                    this.userStats.energy,
+                    this.userStats.iq,
                     this.userStats.life,
                     this.userStats.money,
-                    this.userStats.move,
-                    this.userStats.iq
+                    this.userStats.energy,
+                    this.userStats.move
                 ],
                 backgroundColor: 'rgba(26, 115, 232, 0.2)',
                 borderColor: 'rgba(26, 115, 232, 1)',
@@ -1014,21 +1018,25 @@ export default {
      * Render user stats
      */
     renderStats() {
+        // Update level badge
+        const levelBadge = document.getElementById('levelBadge');
+        if (levelBadge) {
+            levelBadge.textContent = `LV.${this.userStats.level}`;
+        }
+
         const statBars = document.querySelectorAll('.stat-bar-item');
         if (statBars.length > 0) {
-            // Level bar: max 10
-            statBars[0].querySelector('.stat-bar').style.width = `${(this.userStats.level / 10) * 100}%`;
-            statBars[0].querySelector('.stat-value').textContent = this.userStats.level;
+            // Rebirth bar: max 100 (data from backend, in-memory only)
+            statBars[0].querySelector('.stat-bar').style.width = `${Math.min((this.userStats.rebirth / 100) * 100, 100)}%`;
+            statBars[0].querySelector('.stat-value').textContent = this.userStats.rebirth;
 
-            // Credit bar: dynamic K/M/B/T scaling
-            const creditFmt = this.formatScaledValue(this.userStats.credit);
-            statBars[1].querySelector('.stat-bar').style.width = `${creditFmt.percent}%`;
-            statBars[1].querySelector('.stat-value').textContent = creditFmt.display;
+            // Credit bar: max 100, show actual number
+            statBars[1].querySelector('.stat-bar').style.width = `${Math.min((this.userStats.credit / 100) * 100, 100)}%`;
+            statBars[1].querySelector('.stat-value').textContent = this.userStats.credit;
 
-            // Exp bar: dynamic K/M/B/T scaling
-            const expFmt = this.formatScaledValue(this.userStats.exp);
-            statBars[2].querySelector('.stat-bar').style.width = `${expFmt.percent}%`;
-            statBars[2].querySelector('.stat-value').textContent = expFmt.display;
+            // Exp bar: max 1000, show actual number
+            statBars[2].querySelector('.stat-bar').style.width = `${Math.min((this.userStats.exp / 1000) * 100, 100)}%`;
+            statBars[2].querySelector('.stat-value').textContent = this.userStats.exp;
         }
         this.renderRadarChart();
     },

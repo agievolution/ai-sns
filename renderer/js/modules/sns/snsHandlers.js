@@ -2745,6 +2745,16 @@ export default {
         // Append new content
         thinkingLogSection.appendChild(contentDiv);
 
+        // Keep only the newest 100 log entries to avoid slow rendering
+        try {
+            while (thinkingLogSection.querySelectorAll('.thinking-log-entry').length > 100) {
+                const oldest = thinkingLogSection.querySelector('.thinking-log-entry');
+                if (!oldest) break;
+                oldest.remove();
+            }
+        } catch (e) {
+        }
+
         // Scroll to bottom
         thinkingLogSection.scrollTop = thinkingLogSection.scrollHeight;
         thinkingLogSection.scrollTop = thinkingLogSection.scrollHeight;

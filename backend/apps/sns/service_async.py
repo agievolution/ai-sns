@@ -167,10 +167,16 @@ class SNSService:
                 except (TypeError, ValueError):
                     return default
 
+            # Read rebirth count from the running engine instance (in-memory only)
+            rebirth = 0
+            if _social_engine_instance is not None:
+                rebirth = getattr(_social_engine_instance, '_rebirth_count', 0)
+
             config = await self._get_latest_user_config()
 
             if not config:
                 return {
+                    "rebirth": rebirth,
                     "level": 3,
                     "credit": 0,
                     "money": 0.0,
@@ -182,6 +188,7 @@ class SNSService:
                 }
 
             return {
+                "rebirth": rebirth,
                 "level": _to_int(config.level, 3),
                 "credit": _to_int(config.credit, 0),
                 "money": _to_float(config.money, 0.0, 2),
@@ -194,6 +201,7 @@ class SNSService:
         except Exception as e:
             logger.error(f"Error getting user stats: {e}")
             return {
+                "rebirth": 0,
                 "level": 3,
                 "credit": 0,
                 "money": 0.0,

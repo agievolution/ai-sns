@@ -164,6 +164,9 @@ class AISocialEngine(
         self._instruction_total_count = 0
         self._instruction_invalid_count = 0
 
+        # In-memory rebirth counter (not persisted to DB)
+        self._rebirth_count = 0
+
     async def async_init(self):
         """
         Async initialization method.
@@ -766,6 +769,24 @@ class AISocialEngine(
         await self.ask_agent_and_get_instruction(full_ask_content, role_prompt)
 
     def compose_full_ask_content_human(self, task_description,  question_to_llm):
+        if self.life_decline_counter >= self.LIFE_DECLINE_INTERVAL:
+            logger.info(
+                "Life decline triggered (human control). counter=%s interval=%s",
+                self.life_decline_counter,
+                self.LIFE_DECLINE_INTERVAL,
+            )
+            self.decline_life()
+            self.life_decline_counter = 0
+
+        if self.energy_decline_counter >= self.ENERGY_DECLINE_INTERVAL:
+            logger.info(
+                "Energy decline triggered (human control). counter=%s interval=%s",
+                self.energy_decline_counter,
+                self.ENERGY_DECLINE_INTERVAL,
+            )
+            self.decline_energy()
+            self.energy_decline_counter = 0
+
         prompt = get_prompt_by_title("__human_instruction_to_process_activity_content__")
         prompt = prompt.replace(f"__human_instruction__", question_to_llm)
         prompt = prompt.replace(f"__service_list__", json.dumps(self.get_service_list(), indent=4, ensure_ascii=False))
@@ -834,6 +855,34 @@ class AISocialEngine(
             self.human_instruction = human_instruction
             asyncio.create_task(self.taskmng.process_task(action="process_human_instruction", ask_content=human_instruction, human_send_flag=True))
 
+    def check_and_handle_rebirth(self):
+        """
+        Check if rebirth should trigger.
+        Condition: life <= 0 OR energy <= 0 OR money <= 0.
+        On rebirth: increment counter, reset life=100, energy=100, move=100, money=1000.
+        Uses re-entrancy guard to prevent cascading callback increments.
+        """
+        if getattr(self, '_rebirth_in_progress', False):
+            return False
+
+        life = float(self.aichatcfg_record.life_point or 0)
+        energy = float(self.aichatcfg_record.energy_point or 0)
+        money = float(self.aichatcfg_record.money or 0)
+
+        if life <= 0 or energy <= 0 or money <= 0:
+            self._rebirth_in_progress = True
+            try:
+                self._rebirth_count += 1
+                self.aichatcfg_record.life_point = 100
+                self.aichatcfg_record.energy_point = 100
+                self.aichatcfg_record.move_point = 100
+                self.aichatcfg_record.money = 1000
+                logger.info(f"Rebirth triggered (#{self._rebirth_count}). Stats reset: life=100, energy=100, move=100, money=1000")
+            finally:
+                self._rebirth_in_progress = False
+            return True
+        return False
+
     def handle_aichatcfg_property_updated(self, property_name):
         """
         Handle AiChatCfg property updates.
@@ -842,6 +891,12 @@ class AISocialEngine(
         Args:
             property_name (str): Updated property name
         """
+        # Check rebirth for money changes via callback.
+        # For life_point/energy_point, rebirth is checked explicitly at end of
+        # decline_energy()/decline_life() to avoid move_point overwrite bug.
+        if property_name == 'money':
+            self.check_and_handle_rebirth()
+
         # Properties that should trigger chart updates
         chart_related_properties = [
             'iq_point', 'energy_point', 'life_point',

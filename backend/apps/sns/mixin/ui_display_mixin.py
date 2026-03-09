@@ -493,7 +493,9 @@ class UIDisplayMixin:
         bar_colors = ['#ffb676', '#c3f1d7', '#99d4ff']
 
         # Build user stats object (use explicit None checks to avoid 0 being treated as falsy)
+        rebirth_count = getattr(self, '_rebirth_count', 0)
         user_stats = {
+            "rebirth": rebirth_count,
             "level": int(self.aichatcfg_record.level) if self.aichatcfg_record.level is not None else 3,
             "credit": int(self.aichatcfg_record.credit) if self.aichatcfg_record.credit is not None else 0,
             "money": float(self.aichatcfg_record.money) if self.aichatcfg_record.money is not None else 0.0,

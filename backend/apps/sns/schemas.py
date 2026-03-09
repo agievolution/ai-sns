@@ -5,6 +5,7 @@ from datetime import datetime
 
 
 class UserStatsResponse(BaseModel):
+    rebirth: int = 0
     level: int
     credit: int
     money: float

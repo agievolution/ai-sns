@@ -700,3 +700,5 @@ class TradeMixin:
     def add_money(self, count):
         money = float(self.aichatcfg_record.money or 0) + count
         self.aichatcfg_record.money = money
+        # Check rebirth after money change
+        self.check_and_handle_rebirth()

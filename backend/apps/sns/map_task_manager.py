@@ -35,6 +35,8 @@ class MapTaskManager:
         self.current_process = None
 
         self.current_situation = ""
+
+        self._process_info_compacting = False
         self.reviewing_current_process = False
         self.reviewing_task = False
 
@@ -57,6 +59,8 @@ class MapTaskManager:
         self.process_list = []
         self.current_process = None
         self.current_situation = ""
+
+        self._process_info_compacting = False
 
         self.js_task_manager = self.parent.taskmng_js
         self.current_task_record = query_single_map_task(status=1)
@@ -321,6 +325,70 @@ I am participating in a virtual social game based on Google Maps. Players role-p
 
     def add_process_info_to_list(self, info):
         self.process_info_list.append(info)
+
+        if len(self.process_info_list) < 50:
+            return
+
+        if self._process_info_compacting:
+            return
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._compact_process_info_list())
+        except RuntimeError:
+            # Called from a sync context without a running event loop.
+            # Fall back to trimming without summarization.
+            self.process_info_list = self.process_info_list[-50:]
+
+    async def _compact_process_info_list(self):
+        if self._process_info_compacting:
+            return
+
+        if len(self.process_info_list) < 50:
+            return
+
+        self._process_info_compacting = True
+        try:
+            items_to_summarize = list(self.process_info_list[:40])
+            prompt = (
+                "Summarize the following 40 process log entries into a single concise note.\n"
+                "Requirements:\n"
+                "- Output must be <= 250 tokens.\n"
+                "- Keep key decisions, outcomes, and next steps.\n"
+                "- Do not include the full raw logs.\n\n"
+                "Entries:\n"
+            )
+            for idx, item in enumerate(items_to_summarize, 1):
+                prompt += f"{idx}. {item}\n"
+
+            summary = ""
+            try:
+                summary = await self.parent.chat_with_agent(
+                    prompt,
+                    conversation_suffix="process_info_compact",
+                    use_tools=False,
+                    use_memory=False,
+                    use_knowledge_base=False,
+                )
+            except Exception as e:
+                logger.warning("Failed to call agent for process log compaction: %s", e)
+                summary = ""
+
+            summary = (summary or "").strip()
+            if not summary:
+                # If summarization fails, keep only the newest 10 to avoid unbounded growth.
+                self.process_info_list = self.process_info_list[-10:]
+                return
+
+            tail = list(self.process_info_list[-10:])
+            self.process_info_list = [f"Summary: {summary}"] + tail
+            logger.info(
+                "Compacted process_info_list. summary_len=%s tail_len=%s",
+                len(summary),
+                len(tail),
+            )
+        finally:
+            self._process_info_compacting = False
 
     def set_current_objective(self, content):
         self.current_objective = content

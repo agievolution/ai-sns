@@ -223,6 +223,9 @@ class DataQueryMixin:
         print("self.aichatcfg_record", self.aichatcfg_record.current_position)
         print("self.aichatcfg_recordprofile", self.aichatcfg_record.sign)
 
+        # Check rebirth condition for existing negative data loaded from DB
+        self.check_and_handle_rebirth()
+
         # Update resource display and charts after all data is loaded
         self.update_resource_display()
         self.update_map_charts()
@@ -280,6 +283,8 @@ class DataQueryMixin:
             100 * (life_point / 100) * (energy_point / 100),
             1,
         )
+        # Check rebirth after all calculations are done
+        self.check_and_handle_rebirth()
 
     def decline_life(self):
         
@@ -291,3 +296,5 @@ class DataQueryMixin:
             100 * (life_point / 100) * (energy_point / 100),
             1,
         )
+        # Check rebirth after all calculations are done
+        self.check_and_handle_rebirth()

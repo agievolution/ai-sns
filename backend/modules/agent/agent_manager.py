@@ -213,6 +213,102 @@ class AgentManager:
 
         return kbs
 
+    def _create_agent_instance(self, agent_cfg: AgentCfg, extra_data: Dict, db: Session) -> AgentInstance:
+        # Load LLM config
+        model_config_id = extra_data.get('model_config_id') or agent_cfg.defaultmodel
+        llm_config = None
+        if model_config_id:
+            llm_config = self._load_llm_config(model_config_id, db)
+
+        # If no config is found, log a warning and use defaults
+        if not llm_config:
+            logger.warning(
+                f"Agent {agent_cfg.id} has no LLM config; default settings will be used."
+                f" Please select a model configuration for this agent in the frontend."
+            )
+            llm_config = {
+                'config_id': model_config_id or 'default',
+                'api_endpoint': 'https://api.openai.com/v1',
+                'api_key': '',
+                'model_name': agent_cfg.defaultmodel or 'gpt-4o-mini',
+                'temperature': 0.7,
+                'max_tokens': 2048
+            }
+            # Flag indicating this is a default config
+            llm_config['_is_default'] = True
+
+        model_params = extra_data.get('model_params')
+        if isinstance(model_params, dict) and model_params:
+            for k, v in model_params.items():
+                llm_config[k] = v
+
+        # Load role config
+        role_config_id = extra_data.get('role_id') or agent_cfg.defaultrole
+        role_config = None
+        if role_config_id:
+            role_config = self._load_role_config(role_config_id, db)
+
+        # If no config is found, use defaults
+        if not role_config:
+            role_config = {
+                'system_prompt': agent_cfg.prompt or 'You are a helpful AI assistant.',
+                'greeting_message': 'Hello! How can I help you today?'
+            }
+
+        # Load tools
+        tools = self._load_tools(agent_cfg)
+
+        # Load knowledge bases
+        knowledge_bases = self._load_knowledge_bases(agent_cfg)
+
+        # Parse plugins
+        plugins = []
+        if agent_cfg.plugins:
+            plugins = [p.strip() for p in agent_cfg.plugins.split(',') if p.strip()]
+
+        # Create agent instance
+        return AgentInstance(
+            agent_id=agent_cfg.id,
+            name=agent_cfg.name,
+            description=extra_data.get('description', ''),
+            llm_config=llm_config,
+            role_config=role_config,
+            tools=tools,
+            knowledge_bases=knowledge_bases,
+            plugins=plugins,
+            enable_code_execution=agent_cfg.execfile or False
+        )
+
+    def build_agent_instance(self, agent_id: int) -> Optional[AgentInstance]:
+        try:
+            db = get_session()
+            agent_cfg = db.query(AgentCfg).filter(
+                AgentCfg.id == agent_id,
+                AgentCfg.is_delete == False
+            ).first()
+
+            if not agent_cfg:
+                logger.error(f"Agent {agent_id} does not exist")
+                return None
+
+            extra_data = {}
+            try:
+                if agent_cfg.memo:
+                    import json
+                    extra_data = json.loads(agent_cfg.memo)
+            except Exception:
+                extra_data = {}
+
+            return self._create_agent_instance(agent_cfg, extra_data, db)
+        except Exception as e:
+            logger.error(f"Failed to build agent instance: {e}", exc_info=True)
+            return None
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+
     def load_agent(self, agent_id: int, force_reload: bool = False) -> Optional[AgentInstance]:
         """
         Load an agent from the database and create an instance.
@@ -250,65 +346,7 @@ class AgentManager:
             except:
                 pass
 
-            # Load LLM config
-            model_config_id = extra_data.get('model_config_id') or agent_cfg.defaultmodel
-            llm_config = None
-            if model_config_id:
-                llm_config = self._load_llm_config(model_config_id, db)
-
-            # If no config is found, log a warning and use defaults
-            if not llm_config:
-                logger.warning(
-                    f"Agent {agent_id} has no LLM config; default settings will be used."
-                    f" Please select a model configuration for this agent in the frontend."
-                )
-                llm_config = {
-                    'config_id': model_config_id or 'default',
-                    'api_endpoint': 'https://api.openai.com/v1',
-                    'api_key': '',
-                    'model_name': agent_cfg.defaultmodel or 'gpt-4o-mini',
-                    'temperature': 0.7,
-                    'max_tokens': 2048
-                }
-                # Flag indicating this is a default config
-                llm_config['_is_default'] = True
-
-            # Load role config
-            role_config_id = extra_data.get('role_id') or agent_cfg.defaultrole
-            role_config = None
-            if role_config_id:
-                role_config = self._load_role_config(role_config_id, db)
-
-            # If no config is found, use defaults
-            if not role_config:
-                role_config = {
-                    'system_prompt': agent_cfg.prompt or 'You are a helpful AI assistant.',
-                    'greeting_message': 'Hello! How can I help you today?'
-                }
-
-            # Load tools
-            tools = self._load_tools(agent_cfg)
-
-            # Load knowledge bases
-            knowledge_bases = self._load_knowledge_bases(agent_cfg)
-
-            # Parse plugins
-            plugins = []
-            if agent_cfg.plugins:
-                plugins = [p.strip() for p in agent_cfg.plugins.split(',') if p.strip()]
-
-            # Create agent instance
-            agent_instance = AgentInstance(
-                agent_id=agent_cfg.id,
-                name=agent_cfg.name,
-                description=extra_data.get('description', ''),
-                llm_config=llm_config,
-                role_config=role_config,
-                tools=tools,
-                knowledge_bases=knowledge_bases,
-                plugins=plugins,
-                enable_code_execution=agent_cfg.execfile or False
-            )
+            agent_instance = self._create_agent_instance(agent_cfg, extra_data, db)
 
             # Cache
             self._agents_cache[agent_id] = agent_instance

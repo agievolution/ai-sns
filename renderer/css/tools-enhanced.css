@@ -304,7 +304,7 @@
 }
 
 /* DocSkill modal close button refinement */
-.doc-skill-modal__close {
+.skill-modal__close {
     width: 36px;
     height: 36px;
     display: inline-flex;
@@ -317,16 +317,16 @@
     background: transparent;
 }
 
-.doc-skill-modal__close:hover {
+.skill-modal__close:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
 }
 
-.doc-skill-modal__close:active {
+.skill-modal__close:active {
     transform: scale(0.98);
 }
 
-.doc-skill-modal__close svg {
+.skill-modal__close svg {
     display: block;
 }
 

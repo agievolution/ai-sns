@@ -382,10 +382,7 @@ const WebSidebar = {
                                 <label>Name *</label>
                                 <input type="text" id="editName" value="${item.name || ''}" required>
                             </div>
-                            <div class="web-edit-form-group">
-                                <label>Title</label>
-                                <input type="text" id="editTitle" value="${item.title || ''}">
-                            </div>
+                            <input type="hidden" id="editTitle" value="${item.title || ''}">
                             <div class="web-edit-form-group">
                                 <label>URL *</label>
                                 <input type="text" id="editUrl" value="${item.url || ''}" required>
@@ -394,10 +391,7 @@ const WebSidebar = {
                                 <label>Description</label>
                                 <textarea id="editDescription" rows="3">${item.description || ''}</textarea>
                             </div>
-                            <div class="web-edit-form-group">
-                                <label>Icon Filename</label>
-                                <input type="text" id="editFilename" value="${item.filename || ''}" placeholder="e.g., icon.png">
-                            </div>
+                            <input type="hidden" id="editFilename" value="${item.filename || ''}">
                         </div>
                     </div>
                     <div class="web-edit-dialog-footer">
@@ -499,9 +493,48 @@ const WebSidebar = {
 
     // Delete
     async deleteItem(itemId, type) {
-        if (!confirm('Are you sure you want to delete this item?')) {
-            return;
-        }
+        const data = type === 'LLM' ? this.llmData : this.toolData;
+        const item = (data || []).find(i => parseInt(i.id) === parseInt(itemId));
+        const itemName = item && item.name ? `"${item.name}"` : 'this item';
+        const dialogTitle = type === 'LLM' ? 'Delete LLM Service' : 'Delete AI Tool';
+
+        const confirmed = await (async () => {
+            try {
+                if (window.Toast && typeof window.Toast.confirm === 'function') {
+                    return await window.Toast.confirm(`Delete ${itemName}?`, {
+                        title: dialogTitle,
+                        confirmText: 'Delete',
+                        cancelText: 'Cancel',
+                        type: 'warning'
+                    });
+                }
+
+                if (window.Modal && typeof window.Modal.show === 'function') {
+                    return await new Promise((resolve) => {
+                        window.Modal.show({
+                            title: dialogTitle,
+                            content: `<p>Delete ${itemName}?</p>`,
+                            confirmText: 'Delete',
+                            cancelText: 'Cancel',
+                            onConfirm: () => {
+                                resolve(true);
+                                return true;
+                            },
+                            onCancel: () => {
+                                resolve(false);
+                                return true;
+                            }
+                        });
+                    });
+                }
+            } catch (err) {
+                console.error('[WebSidebar] Failed to show delete confirmation dialog:', err);
+            }
+
+            return confirm(`Delete ${itemName}?`);
+        })();
+
+        if (!confirmed) return;
 
         try {
             const response = await window.api.delete(`/api/system/web-mng/${itemId}`);
@@ -677,21 +710,18 @@ const WebSidebar = {
                     <div class="web-edit-dialog-content">
                         <div class="web-edit-form">
                             <div class="web-edit-form-group">
-                                <label>Service Name *</label>
+                                <label>Name *</label>
                                 <input type="text" id="addName" placeholder="e.g., ChatGPT" required>
                             </div>
                             <div class="web-edit-form-group">
-                                <label>Service URL *</label>
+                                <label>URL *</label>
                                 <input type="url" id="addUrl" placeholder="https://..." required>
                             </div>
                             <div class="web-edit-form-group">
-                                <label>Description (Optional)</label>
+                                <label>Description</label>
                                 <textarea id="addDescription" rows="3"></textarea>
                             </div>
-                            <div class="web-edit-form-group">
-                                <label>Icon Filename</label>
-                                <input type="text" id="addFilename" value="openai.png" placeholder="e.g., icon.png">
-                            </div>
+                            <input type="hidden" id="addFilename" value="openai.png">
                         </div>
                     </div>
                     <div class="web-edit-dialog-footer">
@@ -757,6 +787,15 @@ const WebSidebar = {
         const description = document.getElementById('addDescription').value.trim();
         const filename = document.getElementById('addFilename').value.trim();
 
+        const basePosition = type === 'LLM' ? 0 : 1000;
+        const data = type === 'LLM' ? this.llmData : this.toolData;
+        const maxPosition = (data || []).reduce((max, item) => {
+            const p = item && item.position !== null && item.position !== undefined ? Number(item.position) : NaN;
+            if (!Number.isFinite(p)) return max;
+            return Math.max(max, p);
+        }, basePosition - 1);
+        const position = Math.max(maxPosition, basePosition - 1) + 1;
+
         if (!name || !url) {
             alert('Name and URL are required!');
             return;
@@ -768,7 +807,8 @@ const WebSidebar = {
                 url,
                 type,
                 description,
-                filename
+                filename,
+                position
             });
 
             if (response && response.success) {

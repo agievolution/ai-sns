@@ -74,6 +74,8 @@ class AgentInstance:
         # Memory - stores conversation history
         self.memory: Dict[str, List[Dict[str, Any]]] = {}
 
+        self._usage_cache: Dict[str, Dict[str, Any]] = {}
+
         # Initialize the OpenAI client
         self._init_llm_client()
 
@@ -153,6 +155,76 @@ IMPORTANT Tool Usage Guidelines:
     def get_max_tokens(self) -> int:
         """Get the max_tokens parameter."""
         return self.llm_config.get('max_tokens', 2048)
+
+    def get_top_p(self) -> Optional[float]:
+        v = self.llm_config.get('top_p', None)
+        return None if v is None else float(v)
+
+    def get_frequency_penalty(self) -> Optional[float]:
+        v = self.llm_config.get('frequency_penalty', None)
+        return None if v is None else float(v)
+
+    def get_presence_penalty(self) -> Optional[float]:
+        v = self.llm_config.get('presence_penalty', None)
+        return None if v is None else float(v)
+
+    def get_custom_params(self) -> Optional[Dict[str, Any]]:
+        v = self.llm_config.get('custom_params', None)
+        return v if isinstance(v, dict) else None
+
+    def get_last_usage(self, conversation_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        key = conversation_id or 'default'
+        return self._usage_cache.get(key)
+
+    def _set_last_usage(self, conversation_id: Optional[str], usage: Optional[Dict[str, Any]]):
+        if not usage:
+            return
+        key = conversation_id or 'default'
+        self._usage_cache[key] = usage
+
+    def _usage_to_dict(self, usage_obj: Any) -> Optional[Dict[str, Any]]:
+        if not usage_obj:
+            return None
+        if isinstance(usage_obj, dict):
+            return usage_obj
+        try:
+            return usage_obj.model_dump()
+        except Exception:
+            return {
+                'prompt_tokens': getattr(usage_obj, 'prompt_tokens', None),
+                'completion_tokens': getattr(usage_obj, 'completion_tokens', None),
+                'total_tokens': getattr(usage_obj, 'total_tokens', None)
+            }
+
+    def _build_llm_kwargs(self, *, stream: bool, show_token_usage: bool = False) -> Dict[str, Any]:
+        kwargs: Dict[str, Any] = {
+            'model': self.get_model_name(),
+            'temperature': self.get_temperature(),
+            'max_tokens': self.get_max_tokens(),
+        }
+
+        top_p = self.get_top_p()
+        if top_p is not None:
+            kwargs['top_p'] = top_p
+        fp = self.get_frequency_penalty()
+        if fp is not None:
+            kwargs['frequency_penalty'] = fp
+        pp = self.get_presence_penalty()
+        if pp is not None:
+            kwargs['presence_penalty'] = pp
+
+        custom = self.get_custom_params()
+        if custom:
+            for k, v in custom.items():
+                if k not in kwargs:
+                    kwargs[k] = v
+
+        if stream:
+            kwargs['stream'] = True
+            if show_token_usage:
+                kwargs['stream_options'] = {'include_usage': True}
+
+        return kwargs
 
     def _get_conversation_memory(self, conversation_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -461,6 +533,7 @@ IMPORTANT Tool Usage Guidelines:
         attachments_text: str = "",
         image_data_urls: Optional[List[str]] = None,
         tool_choice: Optional[dict] = None,
+        show_token_usage: bool = False,
     ) -> str:
         """
         Non-streaming Q&A.
@@ -530,18 +603,17 @@ IMPORTANT Tool Usage Guidelines:
             print("[info]:Message Send to llm:", messages)
 
             # Call LLM
-            kwargs = {
-                'model': self.get_model_name(),
-                'messages': messages,
-                'temperature': self.get_temperature(),
-                'max_tokens': self.get_max_tokens()
-            }
+            kwargs = self._build_llm_kwargs(stream=False, show_token_usage=show_token_usage)
+            kwargs['messages'] = messages
 
             if use_tools and tools:
                 kwargs['tools'] = tools
                 kwargs['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
             response = await self.client.chat.completions.create(**kwargs)
+
+            if show_token_usage:
+                self._set_last_usage(conversation_id, self._usage_to_dict(getattr(response, 'usage', None)))
 
             # Process response
             assistant_message = response.choices[0].message
@@ -590,17 +662,15 @@ IMPORTANT Tool Usage Guidelines:
                     messages.extend(tool_messages)
 
                     tools_schema = self._prepare_tools_schema() if use_tools else []
-                    kwargs2 = {
-                        'model': self.get_model_name(),
-                        'messages': messages,
-                        'temperature': self.get_temperature(),
-                        'max_tokens': self.get_max_tokens()
-                    }
+                    kwargs2 = self._build_llm_kwargs(stream=False, show_token_usage=show_token_usage)
+                    kwargs2['messages'] = messages
                     if use_tools and tools_schema:
                         kwargs2['tools'] = tools_schema
                         kwargs2['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
                     response2 = await self.client.chat.completions.create(**kwargs2)
+                    if show_token_usage:
+                        self._set_last_usage(conversation_id, self._usage_to_dict(getattr(response2, 'usage', None)))
                     current_assistant_message = response2.choices[0].message
                     reply = current_assistant_message.content or ""
 
@@ -626,6 +696,7 @@ IMPORTANT Tool Usage Guidelines:
         image_data_urls: Optional[List[str]] = None,
         attachments_meta: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[dict] = None,
+        show_token_usage: bool = False,
     ) -> AsyncIterator[str]:
         """
         Streaming chat.
@@ -697,14 +768,8 @@ IMPORTANT Tool Usage Guidelines:
             # Prepare tools
             tools = self._prepare_tools_schema() if use_tools else []
 
-            # Call LLM (streaming)
-            kwargs = {
-                'model': self.get_model_name(),
-                'messages': messages,
-                'temperature': self.get_temperature(),
-                'max_tokens': self.get_max_tokens(),
-                'stream': True
-            }
+            kwargs = self._build_llm_kwargs(stream=True, show_token_usage=show_token_usage)
+            kwargs['messages'] = messages
 
             if use_tools and tools:
                 kwargs['tools'] = tools
@@ -715,8 +780,12 @@ IMPORTANT Tool Usage Guidelines:
             # Collect full reply and tool calls
             full_reply = ""
             tool_calls_accumulator = {}
+            last_usage: Optional[Dict[str, Any]] = None
 
             async for chunk in stream:
+                if show_token_usage and getattr(chunk, 'usage', None):
+                    last_usage = self._usage_to_dict(getattr(chunk, 'usage', None))
+
                 if not chunk.choices:
                     continue
 
@@ -780,11 +849,8 @@ IMPORTANT Tool Usage Guidelines:
 
                     # ask model again, still allowing tools
                     kwargs_final = {
-                        'model': self.get_model_name(),
+                        **self._build_llm_kwargs(stream=True, show_token_usage=show_token_usage),
                         'messages': messages,
-                        'temperature': self.get_temperature(),
-                        'max_tokens': self.get_max_tokens(),
-                        'stream': True
                     }
                     if use_tools and tools:
                         kwargs_final['tools'] = tools
@@ -795,6 +861,9 @@ IMPORTANT Tool Usage Guidelines:
                     full_reply = ""
                     pending_tool_calls = {}
                     async for chunk in final_stream:
+                        if show_token_usage and getattr(chunk, 'usage', None):
+                            last_usage = self._usage_to_dict(getattr(chunk, 'usage', None))
+
                         if not chunk.choices:
                             continue
                         delta = chunk.choices[0].delta
@@ -820,6 +889,9 @@ IMPORTANT Tool Usage Guidelines:
                                         pending_tool_calls[idx]['function']['arguments'] += tc_delta.function.arguments
 
                     round_idx += 1
+
+            if show_token_usage and last_usage:
+                self._set_last_usage(conversation_id, last_usage)
 
             # Save to memory
             if use_memory:

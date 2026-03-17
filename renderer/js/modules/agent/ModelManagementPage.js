@@ -261,7 +261,6 @@ const ModelManagementPage = {
             <form id="modelForm" class="model-form">
                 <div class="form-tabs">
                     <button type="button" class="tab-btn active" data-tab="basic">Basic</button>
-                    <button type="button" class="tab-btn" data-tab="advanced">Advanced</button>
                 </div>
 
                 <!-- Basic Config -->
@@ -334,62 +333,6 @@ const ModelManagementPage = {
                         </div>
                     </div>
                 </div>
-
-                <!-- Advanced Config -->
-                <div class="tab-content" data-tab-content="advanced">
-                    <div class="dialog-section">
-                        <h4>Generation</h4>
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 1;">
-                                <label>Temperature (0-2)</label>
-                                <input type="number" name="temperature" class="form-control"
-                                       value="${model?.temperature ?? 0.7}"
-                                       min="0" max="2" step="0.1">
-                                <small class="form-hint">Controls randomness</small>
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label>Top P (0-1)</label>
-                                <input type="number" name="top_p" class="form-control"
-                                       value="${model?.top_p ?? 1.0}"
-                                       min="0" max="1" step="0.1">
-                                <small class="form-hint">Nucleus sampling threshold</small>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Max Tokens</label>
-                            <input type="number" name="max_tokens" class="form-control"
-                                   value="${model?.max_tokens ?? 2048}"
-                                   min="1">
-                            <small class="form-hint">Maximum tokens per response</small>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 1;">
-                                <label>Frequency Penalty</label>
-                                <input type="number" name="frequency_penalty" class="form-control"
-                                       value="${model?.frequency_penalty ?? 0}"
-                                       min="-2" max="2" step="0.1">
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label>Presence Penalty</label>
-                                <input type="number" name="presence_penalty" class="form-control"
-                                       value="${model?.presence_penalty ?? 0}"
-                                       min="-2" max="2" step="0.1">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="dialog-section">
-                        <h4>Other</h4>
-                        <div class="checkbox-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="stream" ${model?.stream !== false ? 'checked' : ''}>
-                                Enable streaming output
-                            </label>
-                        </div>
-                    </div>
-                </div>
             </form>
         `;
     },
@@ -400,11 +343,8 @@ const ModelManagementPage = {
         const data = {};
 
         for (const [key, value] of formData.entries()) {
-            if (key === 'is_default' || key === 'is_active' || key === 'stream') {
+            if (key === 'is_default' || key === 'is_active') {
                 data[key] = form.querySelector(`[name="${key}"]`).checked;
-            } else if (key === 'temperature' || key === 'max_tokens' || key === 'top_p' ||
-                       key === 'frequency_penalty' || key === 'presence_penalty') {
-                data[key] = parseFloat(value) || 0;
             } else {
                 data[key] = value;
             }

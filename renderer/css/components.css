@@ -3213,10 +3213,6 @@ body.theme-dark .chat-tree .tree-item.active {
     color: var(--text-primary);
 }
 
-.agent-list .agent-item.agent-management {
-    color: var(--color-primary);
-}
-
 /* Backward-compatible legacy styles */
 .message {
     margin-bottom: 16px;
@@ -8347,7 +8343,6 @@ body.theme-dark .control-send-btn:hover {
 }
 
 .km-list .km-item.km-management {
-    color: var(--color-primary);
     border-top: 1px solid var(--border-light);
     margin-top: auto;
 }

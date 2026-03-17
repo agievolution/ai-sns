@@ -3,7 +3,6 @@ import asyncio
 import logging
 import os
 import uuid
-import base64
 import requests
 import httpx
 from datetime import datetime
@@ -1037,16 +1036,18 @@ class SNSService:
     async def upload_avatar(self, user_id: str = None, file=None):
         """Upload avatar image"""
         try:
-            file_ext = Path(file.filename).suffix
+            from backend.modules.system.service import SystemInitWizardService
+
+            file_ext = Path(file.filename or '').suffix.lower()
+            if file_ext not in ('.png', '.jpg', '.jpeg', '.bmp', '.webp'):
+                file_ext = '.png'
+
             file_id = str(uuid.uuid4())
             filename = f"{file_id}{file_ext}"
-            file_path = AVATAR_DIR / filename
 
             content = await file.read()
-            with open(file_path, "wb") as f:
-                f.write(content)
-
-            avatar_data = f"data:image/{file_ext[1:]};base64,{base64.b64encode(content).decode()}"
+            SystemInitWizardService._save_uploaded_avatar(content, filename)
+            avatar_map_filename = SystemInitWizardService._generate_avatar_map(filename)
 
             stmt = (
                 select(AiChatCfg)
@@ -1063,7 +1064,7 @@ class SNSService:
                 config = AiChatCfg(user_id=user_id)
                 self.db.add(config)
 
-            config.avatar = avatar_data
+            config.avatar = filename
 
             memo_raw = getattr(config, 'memo', None)
             memo_obj = {}
@@ -1088,8 +1089,9 @@ class SNSService:
             return {
                 "success": True,
                 "message": "Avatar uploaded successfully",
-                "avatar_url": f"/uploads/avatars/{filename}",
-                "avatar_data": avatar_data
+                "avatar_url": f"/images/avatars/{filename}",
+                "avatar": filename,
+                "avatar_map": avatar_map_filename,
             }
         except Exception as e:
             logger.error(f"Error uploading avatar: {e}")
@@ -1110,8 +1112,6 @@ class SNSService:
             SystemInitWizardService._save_uploaded_avatar(content, filename)
             avatar_map_filename = SystemInitWizardService._generate_avatar_map(filename)
 
-            avatar_data = f"data:image/{file_ext[1:]};base64,{base64.b64encode(content).decode()}"
-
             stmt = (
                 select(AiChatCfg)
                 .where(AiChatCfg.is_delete == False)
@@ -1124,7 +1124,7 @@ class SNSService:
                 config = AiChatCfg(user_id=None)
                 self.db.add(config)
 
-            config.avatar = avatar_data
+            config.avatar = filename
 
             memo_raw = getattr(config, 'memo', None)
             memo_obj = {}
@@ -1150,7 +1150,7 @@ class SNSService:
                 'data': {
                     'avatar': filename,
                     'avatar_map': avatar_map_filename,
-                    'avatar_data': avatar_data,
+                    'avatar_url': f"/images/avatars/{filename}",
                 }
             }
         except Exception as e:

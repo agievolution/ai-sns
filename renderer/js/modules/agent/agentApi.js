@@ -48,6 +48,7 @@ const agentApi = {
             }
             formData.append('use_memory', options.use_memory !== false ? 'true' : 'false');
             formData.append('use_knowledge_base', options.use_knowledge_base !== false ? 'true' : 'false');
+            formData.append('show_token_usage', options.show_token_usage ? 'true' : 'false');
 
             (files || []).forEach(f => {
                 formData.append('files', f);
@@ -69,12 +70,13 @@ const agentApi = {
             const decoder = new TextDecoder();
             let buffer = '';
 
+            let finalUsage = null;
             while (true) {
                 const { done, value } = await reader.read();
 
                 if (done) {
                     if (callbacks.onEnd) {
-                        callbacks.onEnd([]);
+                        callbacks.onEnd([], finalUsage);
                     }
                     break;
                 }
@@ -100,9 +102,13 @@ const agentApi = {
 
                             if (parsed.done) {
                                 if (callbacks.onEnd) {
-                                    callbacks.onEnd(parsed.attachments || []);
+                                    callbacks.onEnd(parsed.attachments || [], finalUsage);
                                 }
-                                return { success: true, attachments: parsed.attachments || [] };
+                                return { success: true, attachments: parsed.attachments || [], usage: finalUsage };
+                            }
+
+                            if (parsed.usage) {
+                                finalUsage = parsed.usage;
                             }
 
                             if (parsed.content) {
@@ -152,7 +158,8 @@ const agentApi = {
                     message: message,
                     conversation_id: conversationId,
                     use_memory: options.use_memory !== false,
-                    use_knowledge_base: options.use_knowledge_base !== false
+                    use_knowledge_base: options.use_knowledge_base !== false,
+                    show_token_usage: !!options.show_token_usage
                 })
             });
             return await response.json();
@@ -177,7 +184,8 @@ const agentApi = {
                     message: message,
                     conversation_id: conversationId,
                     use_memory: options.use_memory !== false,
-                    use_knowledge_base: options.use_knowledge_base !== false
+                    use_knowledge_base: options.use_knowledge_base !== false,
+                    show_token_usage: !!options.show_token_usage
                 })
             });
 
@@ -189,12 +197,14 @@ const agentApi = {
             const decoder = new TextDecoder();
             let buffer = '';
 
+            let finalUsage = null;
+
             while (true) {
                 const { done, value } = await reader.read();
 
                 if (done) {
                     if (callbacks.onEnd) {
-                        callbacks.onEnd();
+                        callbacks.onEnd([], finalUsage);
                     }
                     break;
                 }
@@ -220,7 +230,7 @@ const agentApi = {
 
                             if (parsed.done) {
                                 if (callbacks.onEnd) {
-                                    callbacks.onEnd();
+                                    callbacks.onEnd([], finalUsage);
                                 }
                                 return { success: true };
                             }
@@ -229,6 +239,10 @@ const agentApi = {
                                 if (callbacks.onData) {
                                     callbacks.onData(parsed.content);
                                 }
+                            }
+
+                            if (parsed.usage) {
+                                finalUsage = parsed.usage;
                             }
                         } catch (e) {
                             console.warn('Failed to parse SSE data:', data);

@@ -55,7 +55,7 @@ const toolsHandlers = {
                     <div class="modal-dialog" style="max-width: 520px;">
                         <div class="modal-header">
                             <h2>${title || 'Confirm action'}</h2>
-                            <button class="modal-close doc-skill-modal__close" data-confirm-close="1">
+                            <button class="modal-close skill-modal__close" data-confirm-close="1">
                                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                                     <line x1="18" y1="6" x2="6" y2="18"/>
                                     <line x1="6" y1="6" x2="18" y2="18"/>
@@ -117,8 +117,8 @@ const toolsHandlers = {
             <div class="modal-overlay" id="docSkillRunDialog">
                 <div class="modal-dialog test-result-dialog" style="max-width: 760px; max-height: 85vh; overflow: auto;">
                     <div class="modal-header">
-                        <h2>Run Doc Skill - ${skillKey}</h2>
-                        <button class="modal-close doc-skill-modal__close" onclick="document.getElementById('docSkillRunDialog').remove()">
+                        <h2>Run Skill - ${skillKey}</h2>
+                        <button class="modal-close skill-modal__close" onclick="document.getElementById('docSkillRunDialog').remove()">
                             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                                 <line x1="18" y1="6" x2="6" y2="18"/>
                                 <line x1="6" y1="6" x2="18" y2="18"/>
@@ -182,7 +182,7 @@ const toolsHandlers = {
                     document.getElementById('docSkillRunDialog')?.remove();
                     this.showTestResult(result.result || result);
                 } catch (e) {
-                    console.error('Run doc-skill error:', e);
+                    console.error('Run skill error:', e);
                     this.showMessage('Run failed: ' + e.message, 'error');
                 } finally {
                     runBtn.disabled = false;
@@ -273,7 +273,7 @@ const toolsHandlers = {
                 case 'computer-use':
                     endpoint = '/skills';
                     break;
-                case 'doc-skill':
+                case 'skill':
                     endpoint = '/list';
                     break;
                 default:
@@ -283,13 +283,13 @@ const toolsHandlers = {
 
             // Load data from API (only fetch on first load)
             if (offset === 0 || this.currentData.length === 0) {
-                const baseUrl = category === 'doc-skill' ? this.skillsApiBaseUrl : this.apiBaseUrl;
+                const baseUrl = category === 'skill' ? this.skillsApiBaseUrl : this.apiBaseUrl;
                 const response = await fetch(`${baseUrl}${endpoint}`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const payload = await response.json();
-                this.currentData = category === 'doc-skill' ? (payload?.data || []) : payload;
+                this.currentData = category === 'skill' ? (payload?.data || []) : payload;
             }
 
             console.log(`Loaded ${this.currentData.length} total items for ${category}`);
@@ -359,10 +359,10 @@ const toolsHandlers = {
         const description = tool.description || 'No description available';
         const type = this.getCategoryDisplayName(category);
 
-        const statusLabel = category === 'doc-skill'
+        const statusLabel = category === 'skill'
             ? (tool.eligible ? 'Eligible' : 'Missing')
             : (tool.confirm_needed ? 'Confirm Required' : 'Active');
-        const statusClass = category === 'doc-skill'
+        const statusClass = category === 'skill'
             ? (tool.eligible ? 'author-official--active' : 'author-official--confirm')
             : (tool.confirm_needed ? 'author-official--confirm' : 'author-official--active');
 
@@ -371,14 +371,14 @@ const toolsHandlers = {
             'mcp': 'dns',
             'function': 'functions',
             'computer-use': 'desktop_windows',
-            'doc-skill': 'school'
+            'skill': 'school'
         };
         const iconName = categoryIconMap[category] || 'construction';
 
         const instructionLabel = tool.instruction || name;
         const filePath = tool.file_path || tool.location || '';
 
-        const actionsHTML = category === 'doc-skill'
+        const actionsHTML = category === 'skill'
             ? `
                 <div class="plugin-actions tools-card-ref__actions">
                     <button class="plugin-test-btn tools-card-ref__btn tools-card-ref__btn--test" data-id="${id}" data-category="${category}" title="Run">
@@ -506,7 +506,7 @@ const toolsHandlers = {
     },
 
     async testTool(id, category, btn) {
-        if (category === 'doc-skill') {
+        if (category === 'skill') {
             this.showDocSkillRunDialog(id);
             return;
         }
@@ -531,12 +531,12 @@ const toolsHandlers = {
                 case 'computer-use':
                     endpoint = `/skills/${id}/execute`;
                     break;
-                case 'doc-skill':
+                case 'skill':
                     endpoint = `/${id}/run`;
                     break;
             }
 
-            const baseUrl = category === 'doc-skill' ? this.skillsApiBaseUrl : this.apiBaseUrl;
+            const baseUrl = category === 'skill' ? this.skillsApiBaseUrl : this.apiBaseUrl;
             const response = await fetch(`${baseUrl}${endpoint}`, {
                 method: 'POST',
                 headers: {
@@ -594,7 +594,7 @@ const toolsHandlers = {
 
     async editTool(id, category) {
         try {
-            if (category === 'doc-skill') {
+            if (category === 'skill') {
                 const response = await fetch(`${this.skillsApiBaseUrl}/read?skill_key=${encodeURIComponent(id)}`);
                 if (!response.ok) {
                     throw new Error('Failed to fetch SKILL.md');
@@ -642,7 +642,7 @@ const toolsHandlers = {
     },
 
     async deleteTool(id, category) {
-        if (category === 'doc-skill') {
+        if (category === 'skill') {
             const ok = await this.showConfirmDialog({
                 title: 'Delete Skill',
                 message: 'Want to delete this Skill? (Only skills in the workspace "skills/" directory can be deleted.)',
@@ -662,7 +662,7 @@ const toolsHandlers = {
                 this.showMessage('Deleted successfully', 'success');
                 await this.loadCategoryContent(category);
             } catch (error) {
-                console.error('Delete doc-skill error:', error);
+                console.error('Delete skill error:', error);
                 this.showMessage('Delete failed: ' + error.message, 'error');
             }
             return;
@@ -715,8 +715,8 @@ const toolsHandlers = {
     },
 
     showAddDialog(category) {
-        if (category === 'doc-skill') {
-            this.showMessage('Doc Skills does not currently support creating/importing in the UI (import/refresh will be added later).', 'info');
+        if (category === 'skill') {
+            this.showMessage('Skills does not currently support creating/importing in the UI (import/refresh will be added later).', 'info');
             return;
         }
         this.editDialog.show(category, null, () => {
@@ -730,7 +730,7 @@ const toolsHandlers = {
             'mcp': 'MCP',
             'function': 'Function',
             'computer-use': 'Computer Use',
-            'doc-skill': 'Doc Skill'
+            'skill': 'Skill'
         };
         return names[category] || category;
     },
@@ -741,7 +741,7 @@ const toolsHandlers = {
                 <div class="modal-dialog test-result-dialog" style="max-width: 900px; max-height: 90vh; overflow: auto;">
                     <div class="modal-header">
                         <h2>SKILL.md - ${skillKey}</h2>
-                        <button class="modal-close doc-skill-modal__close" onclick="document.getElementById('docSkillMarkdownDialog').remove()">
+                        <button class="modal-close skill-modal__close" onclick="document.getElementById('docSkillMarkdownDialog').remove()">
                             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                                 <line x1="18" y1="6" x2="6" y2="18"/>
                                 <line x1="6" y1="6" x2="18" y2="18"/>
@@ -784,9 +784,9 @@ const toolsHandlers = {
                         throw new Error(text || `Save failed: ${resp.status}`);
                     }
                     this.showMessage('Saved successfully', 'success');
-                    await this.loadCategoryContent('doc-skill');
+                    await this.loadCategoryContent('skill');
                 } catch (e) {
-                    console.error('Save doc-skill error:', e);
+                    console.error('Save skill error:', e);
                     this.showMessage('Save failed: ' + e.message, 'error');
                 } finally {
                     saveBtn.disabled = false;

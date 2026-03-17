@@ -1090,6 +1090,52 @@ const multiAgentHandlers = {
             }
         });
 
+        if (!this._paramInputEventsBound) {
+            this._paramInputEventsBound = true;
+            if (!this._paramSaveTimers) {
+                this._paramSaveTimers = new Map();
+            }
+
+            const scheduleParamSave = (agentId) => {
+                const key = String(agentId);
+                const prev = this._paramSaveTimers.get(key);
+                if (prev) clearTimeout(prev);
+                const t = setTimeout(() => {
+                    this.saveModelParamsForAgent(agentId);
+                }, 800);
+                this._paramSaveTimers.set(key, t);
+            };
+
+            document.addEventListener('change', (e) => {
+                const target = e.target;
+                if (!target) return;
+
+                const agentIdRaw = target.dataset ? target.dataset.agentId : null;
+                if (!agentIdRaw) return;
+                const agentId = parseInt(agentIdRaw);
+                if (!agentId) return;
+
+                const paramPane = target.closest(`#settingsTabContent-${agentId} [data-tab="param"]`);
+                if (!paramPane) return;
+
+                const toggleLabel = target.closest('label.param-toggle');
+                const toggleText = toggleLabel ? (toggleLabel.querySelector('span')?.textContent || '').trim() : '';
+                if (target.type === 'checkbox' && toggleText === 'Show token usage') {
+                    this.setShowTokenUsageForAgent(agentId, !!target.checked);
+                    return;
+                }
+
+                if (target.classList && target.classList.contains('param-input')) {
+                    scheduleParamSave(agentId);
+                    return;
+                }
+
+                if (target.type === 'checkbox' && toggleText === 'Stream mode') {
+                    scheduleParamSave(agentId);
+                }
+            });
+        }
+
         // 5. Settings panel tab switching
         document.addEventListener('click', (e) => {
             const tab = e.target.closest('.settings-tab[data-agent-id]');
@@ -1476,21 +1522,21 @@ const multiAgentHandlers = {
         fileList.querySelectorAll('.file-remove-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const aId = btn.dataset.attachmentId;
-                const aAgentId = parseInt(btn.dataset.agentId);
-                if (aId) {
-                    this.removeAttachment(aAgentId, aId);
-                }
+                const attachmentId = btn.dataset.attachmentId;
+                const ownerAgentId = parseInt(btn.dataset.agentId);
+                this.removeAttachment(ownerAgentId, attachmentId);
             });
         });
     },
 
     formatFileSize(bytes) {
-        if (!bytes) return '0 B';
+        const n = Number(bytes) || 0;
+        if (n <= 0) return '0 B';
+
         const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.min(sizes.length - 1, Math.floor(Math.log(n) / Math.log(k)));
+        return parseFloat((n / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     },
 
     /**
@@ -1861,6 +1907,11 @@ const multiAgentHandlers = {
 
         const state = agentState.ensureAgentState(agentId);
         const attachments = state.attachments || [];
+        const currentModelConfig = state.currentModelConfig;
+        const streamEnabled = attachments.length > 0
+            ? true
+            : (currentModelConfig ? (currentModelConfig.stream !== false) : true);
+        const showTokenUsage = this.getShowTokenUsageForAgent(agentId);
         const currentConversationId = agentState.getConversationId();
         const attachmentBlock = attachments.length > 0
             ? `<div class="message-attachments">${attachments.map(a => `<span class="attachment-chip" data-conversation-id="${this.escapeHtml(String(currentConversationId || ''))}" data-attachment-id="">${this.escapeHtml(a.name || 'file')}</span>`).join('')}</div>`
@@ -1932,7 +1983,7 @@ const multiAgentHandlers = {
             }
         };
 
-        // Start streaming request - use agent-specific endpoint
+        // Start request - stream or non-stream based on model config
         try {
             if (isRemoteAgent) {
                 if (!currentAgent.url) {
@@ -1944,56 +1995,100 @@ const multiAgentHandlers = {
                 }
             }
 
-            // Prepare callbacks (bound to agentId)
-            const callbacks = {
-                onData: (content) => {
-                    agentState.appendStreamingContent(content);
-                    this.updateStreamingMessageForAgent(agentState.getStreamingContent(), agentId);
-                },
-                onEnd: (savedAttachments) => {
-                    this.finalizeStreamingMessageForAgent(agentId);
-                    this.clearAttachments(agentId);
-                    if (savedAttachments && savedAttachments.length > 0) {
-                        this.updateLastUserMessageAttachmentIds(agentId, conversationId, savedAttachments);
+            if (streamEnabled) {
+                // Prepare callbacks (bound to agentId)
+                const callbacks = {
+                    onData: (content) => {
+                        agentState.appendStreamingContent(content);
+                        this.updateStreamingMessageForAgent(agentState.getStreamingContent(), agentId);
+                    },
+                    onEnd: (savedAttachments, usage) => {
+                        this.finalizeStreamingMessageForAgent(agentId);
+                        this.clearAttachments(agentId);
+                        if (savedAttachments && savedAttachments.length > 0) {
+                            this.updateLastUserMessageAttachmentIds(agentId, conversationId, savedAttachments);
+                        }
+                        if (usage && showTokenUsage) {
+                            this.appendTokenUsageToLastAssistantMessageForAgent(agentId, usage);
+                        }
+                        agentState.clearRequestId();
+                        enableSendBtn();
+                        // Reload chat list
+                        this.loadChatListForAgent(agentId);
+                    },
+                    onError: (error) => {
+                        this.showStreamErrorForAgent(error, agentId);
+                        agentState.clearRequestId();
+                        enableSendBtn();
                     }
-                    agentState.clearRequestId();
-                    enableSendBtn();
-                    // Reload chat list
-                    this.loadChatListForAgent(agentId);
-                },
-                onError: (error) => {
-                    this.showStreamErrorForAgent(error, agentId);
-                    agentState.clearRequestId();
-                    enableSendBtn();
-                }
-            };
+                };
 
-            // Call agent-specific streaming API
-            console.log('[MultiAgentHandlers] Calling agent-specific endpoint:', `/api/agent/${agentId}/chat/stream`);
-            const uploadFiles = (attachments || []).filter(a => a && a.file).map(a => a.file);
-            if (uploadFiles.length > 0) {
-                await agentApi.agentChatStreamWithFiles(
-                    agentId,
-                    message,
-                    conversationId,
-                    uploadFiles,
-                    callbacks,
-                    {
-                        use_memory: true,
-                        use_knowledge_base: true
-                    }
-                );
+                // Call agent-specific streaming API
+                console.log('[MultiAgentHandlers] Calling agent-specific endpoint:', `/api/agent/${agentId}/chat/stream`);
+                const uploadFiles = (attachments || []).filter(a => a && a.file).map(a => a.file);
+                if (uploadFiles.length > 0) {
+                    await agentApi.agentChatStreamWithFiles(
+                        agentId,
+                        message,
+                        conversationId,
+                        uploadFiles,
+                        callbacks,
+                        {
+                            use_memory: true,
+                            use_knowledge_base: true,
+                            show_token_usage: showTokenUsage
+                        }
+                    );
+                } else {
+                    await agentApi.agentChatStream(
+                        agentId,
+                        message,
+                        conversationId,
+                        callbacks,
+                        {
+                            use_memory: true,
+                            use_knowledge_base: true,
+                            show_token_usage: showTokenUsage
+                        }
+                    );
+                }
             } else {
-                await agentApi.agentChatStream(
+                console.log('[MultiAgentHandlers] Calling agent-specific endpoint:', `/api/agent/${agentId}/chat`);
+                const result = await agentApi.agentChat(
                     agentId,
                     message,
                     conversationId,
-                    callbacks,
                     {
                         use_memory: true,
-                        use_knowledge_base: true
+                        use_knowledge_base: true,
+                        show_token_usage: showTokenUsage
                     }
                 );
+
+                const reply = result && result.success && result.data ? (result.data.reply || '') : '';
+                const usage = result && result.success && result.data ? result.data.usage : null;
+
+                const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
+                const streamingMsg = messagesContainer ? messagesContainer.querySelector('.message-item.streaming') : null;
+                if (streamingMsg) {
+                    streamingMsg.classList.remove('streaming');
+                    const body = streamingMsg.querySelector('.message-body');
+                    if (body) {
+                        body.innerHTML = this.renderMarkdown(reply);
+                        this.highlightCodeBlocks(body);
+                        if (window.MindmapPlugin) {
+                            window.MindmapPlugin.renderInMessage(body);
+                        }
+                    }
+                }
+
+                agentState.addMessage('assistant', reply);
+                if (usage && showTokenUsage) {
+                    this.appendTokenUsageToLastAssistantMessageForAgent(agentId, usage);
+                }
+                agentState.clearRequestId();
+                enableSendBtn();
+                this.loadChatListForAgent(agentId);
             }
 
             // Setup timeout handling
@@ -2011,6 +2106,45 @@ const multiAgentHandlers = {
             agentState.clearRequestId();
             enableSendBtn();
         }
+    },
+
+    getShowTokenUsageForAgent(agentId) {
+        try {
+            const state = agentState.ensureAgentState(agentId);
+            if (typeof state.showTokenUsage === 'boolean') return state.showTokenUsage;
+            const raw = localStorage.getItem(`agent_show_token_usage_${agentId}`);
+            const v = raw === '1' || raw === 'true';
+            state.showTokenUsage = v;
+            return v;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    setShowTokenUsageForAgent(agentId, enabled) {
+        try {
+            const state = agentState.ensureAgentState(agentId);
+            state.showTokenUsage = !!enabled;
+            localStorage.setItem(`agent_show_token_usage_${agentId}`, enabled ? '1' : '0');
+        } catch (e) {
+        }
+    },
+
+    appendTokenUsageToLastAssistantMessageForAgent(agentId, usage) {
+        const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
+        if (!messagesContainer) return;
+        const assistantMessages = messagesContainer.querySelectorAll('.message-item.assistant-message');
+        const lastAssistant = assistantMessages && assistantMessages.length > 0
+            ? assistantMessages[assistantMessages.length - 1]
+            : null;
+        const body = lastAssistant ? lastAssistant.querySelector('.message-body') : null;
+        if (!body) return;
+
+        const prompt = usage && (usage.prompt_tokens ?? usage.promptTokens);
+        const completion = usage && (usage.completion_tokens ?? usage.completionTokens);
+        const total = usage && (usage.total_tokens ?? usage.totalTokens);
+        const text = `Token usage: prompt=${prompt ?? '-'} completion=${completion ?? '-'} total=${total ?? '-'}`;
+        body.insertAdjacentHTML('beforeend', `<div class="token-usage" style="margin-top:8px;opacity:0.75;font-size:12px;">${this.escapeHtml(text)}</div>`);
     },
 
     /**
@@ -2238,6 +2372,7 @@ const multiAgentHandlers = {
 
                     // 5. Load selected model config (only when a valid config exists)
                     if (selectedModel) {
+                        agentState.setCurrentAgent(agentId);
                         agentState.setModel(selectedModel.config_id);
                         await this.loadAndApplyModelConfig(selectedModel.config_id, agentId, false);
                     }
@@ -2315,6 +2450,7 @@ const multiAgentHandlers = {
 
                     // 5. Load selected role config (only when a valid config exists)
                     if (selectedRole) {
+                        agentState.setCurrentAgent(agentId);
                         agentState.setRole(selectedRole.role_id);
                         await this.loadAndApplyRoleConfig(selectedRole.role_id, agentId, false);
                     }
@@ -2338,8 +2474,19 @@ const multiAgentHandlers = {
 
             if (result.success && result.data) {
                 const modelConfig = result.data;
-                agentState.currentModelConfig = modelConfig;
-                this.populateParamTabForAgent(modelConfig, agentId);
+                let mergedConfig = { ...modelConfig };
+                try {
+                    const paramsResp = await fetch(this.resolve(`/api/agent/${agentId}/model-params`));
+                    const paramsRes = await paramsResp.json();
+                    const overrides = (paramsRes && paramsRes.success && paramsRes.data && typeof paramsRes.data === 'object')
+                        ? paramsRes.data
+                        : {};
+                    mergedConfig = { ...modelConfig, ...overrides };
+                } catch (e) {
+                }
+
+                agentState.currentModelConfig = mergedConfig;
+                this.populateParamTabForAgent(mergedConfig, agentId);
                 console.log(`[MultiAgentHandlers] Agent ${agentId} model config loaded:`, modelConfig.name);
 
                 // If needed, update agent config in database
@@ -2502,9 +2649,78 @@ const multiAgentHandlers = {
             }
         });
 
-        const streamCheckbox = paramPane.querySelector('input[type="checkbox"]');
-        if (streamCheckbox && modelConfig.stream !== undefined) {
-            streamCheckbox.checked = modelConfig.stream;
+        const checkboxes = Array.from(paramPane.querySelectorAll('input[type="checkbox"]'));
+        for (const cb of checkboxes) {
+            const label = cb.closest('label.param-toggle');
+            const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+            if (labelText === 'Stream mode' && modelConfig.stream !== undefined) {
+                cb.checked = !!modelConfig.stream;
+            }
+            if (labelText === 'Show token usage') {
+                cb.checked = this.getShowTokenUsageForAgent(agentId);
+            }
+        }
+    },
+
+    async saveModelParamsForAgent(agentId) {
+        agentState.setCurrentAgent(agentId);
+
+        const state = agentState.ensureAgentState(agentId);
+        const currentConfig = state.currentModelConfig;
+        if (!currentConfig || !currentConfig.config_id) {
+            console.warn(`[MultiAgentHandlers] Agent ${agentId} has no current model config; cannot save params`);
+            return;
+        }
+
+        const paramPane = document.querySelector(`#settingsTabContent-${agentId} [data-tab="param"]`);
+        if (!paramPane) return;
+
+        const params = {};
+        const inputs = paramPane.querySelectorAll('.param-input');
+        inputs.forEach(input => {
+            const label = input.closest('.param-label');
+            if (!label) return;
+            const labelText = label.querySelector('span')?.textContent.trim();
+            const value = parseFloat(input.value);
+
+            if (labelText === 'Temperature') {
+                params.temperature = value;
+            } else if (labelText === 'Max Tokens') {
+                params.max_tokens = parseInt(input.value);
+            } else if (labelText === 'Top P') {
+                params.top_p = value;
+            } else if (labelText === 'Frequency Penalty') {
+                params.frequency_penalty = value;
+            } else if (labelText === 'Presence Penalty') {
+                params.presence_penalty = value;
+            }
+        });
+
+        const checkboxes = Array.from(paramPane.querySelectorAll('input[type="checkbox"]'));
+        for (const cb of checkboxes) {
+            const label = cb.closest('label.param-toggle');
+            const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+            if (labelText === 'Stream mode') {
+                params.stream = !!cb.checked;
+            }
+        }
+
+        try {
+            const response = await fetch(this.resolve(`/api/agent/${agentId}/model-params`), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
+            const result = await response.json();
+            if (result.success) {
+                Object.assign(state.currentModelConfig, params);
+                console.log(`[MultiAgentHandlers] Agent ${agentId} model params saved`);
+                await this.reloadAgentInstance(agentId);
+            } else {
+                console.error(`[MultiAgentHandlers] Agent ${agentId} failed to save model params:`, result.error);
+            }
+        } catch (error) {
+            console.error(`[MultiAgentHandlers] Agent ${agentId} failed to save model params:`, error);
         }
     },
 

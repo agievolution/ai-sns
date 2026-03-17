@@ -52,12 +52,14 @@ const ToolsSidebar = {
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </button>
-                <button class="tools-category-item" data-category="doc-skill" type="button">
+                <button class="tools-category-item" data-category="skill" type="button">
                     <svg class="tools-sidebar-ref__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+  <polyline points="14 2 14 8 20 8"/>
+  <polyline points="10 13 8 15 10 17"/>
+  <polyline points="14 13 16 15 14 17"/>
                     </svg>
-                    <span class="tools-sidebar-ref__label">Doc Skills</span>
+                    <span class="tools-sidebar-ref__label">Skills</span>
                     <svg class="category-arrow ml-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>

@@ -16,6 +16,21 @@ export class SNSAvatarDialog {
         this.existingUserInfo = null;
     }
 
+    _resolveAvatarSrc(avatarValue) {
+        const value = String(avatarValue || '').trim();
+        if (!value) return '';
+
+        if (value.startsWith('data:')) {
+            return value;
+        }
+
+        if (this._isWebUrl(value) || value.startsWith('/')) {
+            return this.resolve(value);
+        }
+
+        return this.resolve(`/images/avatars/${value}`);
+    }
+
     clearInlineMessage() {
         const alertBox = this._q('#snsAvatarAlert');
         if (!alertBox) {
@@ -362,7 +377,8 @@ export class SNSAvatarDialog {
             if (xmppAccountEl) xmppAccountEl.value = config.account || '';
 
             if (config.avatar) {
-                this.setAvatarPreview(config.avatar);
+                const avatarSrc = this._resolveAvatarSrc(config.avatar);
+                this.setAvatarPreview(avatarSrc);
             }
             if (config.avatar3d) {
                 const rawName = String(config.avatar3d || '');
@@ -645,8 +661,12 @@ export class SNSAvatarDialog {
                     didChangeSubmit = true;
                     try {
                         this.uploadedAvatarMeta = uploadData;
-                        if (uploadData.avatar_data) {
-                            this.setAvatarPreview(uploadData.avatar_data);
+                        const avatarSrc = uploadData.avatar_url
+                            ? this._resolveAvatarSrc(uploadData.avatar_url)
+                            : this._resolveAvatarSrc(uploadData.avatar);
+
+                        if (avatarSrc) {
+                            this.setAvatarPreview(avatarSrc);
                         }
                         if (uploadData.avatar_map) {
                             avatarMapToSubmit = String(uploadData.avatar_map);

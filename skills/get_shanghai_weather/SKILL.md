@@ -1,7 +1,7 @@
 ---
 name: Get Guangzhou Weather
 skill_key: get_shanghai_weather
-description: Query Guangzhou weather for a given date and AM/PM.
+description: Query Shanghai weather for a given date and AM/PM.
 requires:
   always: true
 runner:

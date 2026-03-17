@@ -6,7 +6,7 @@ import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends, Request
 
-from .schemas import AgentConfig, AgentResponse, AgentUpdateConfig
+from .schemas import AgentConfig, AgentResponse, AgentUpdateConfig, AgentModelParamsUpdate
 from .service import AgentService
 from .dependencies import get_agent_service
 from .agent_manager import AgentManager
@@ -163,6 +163,80 @@ async def update_agent(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error updating agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{agent_id}/model-params", response_model=dict)
+async def get_agent_model_params(agent_id: int):
+    try:
+        session = Session()
+        try:
+            agent = session.query(AgentCfg).filter_by(id=agent_id).first()
+            if not agent:
+                raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+
+            extra_data = {}
+            try:
+                if agent.memo:
+                    import json
+                    extra_data = json.loads(agent.memo)
+            except Exception:
+                extra_data = {}
+
+            model_params = extra_data.get('model_params')
+            if not isinstance(model_params, dict):
+                model_params = {}
+
+            return {"success": True, "data": model_params}
+        finally:
+            session.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting agent model params: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{agent_id}/model-params", response_model=dict)
+async def update_agent_model_params(agent_id: int, params: AgentModelParamsUpdate):
+    try:
+        update_data = params.dict(exclude_unset=True, exclude_none=True)
+
+        session = Session()
+        try:
+            agent = session.query(AgentCfg).filter_by(id=agent_id).first()
+            if not agent:
+                raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+
+            extra_data = {}
+            try:
+                if agent.memo:
+                    import json
+                    extra_data = json.loads(agent.memo)
+            except Exception:
+                extra_data = {}
+
+            existing = extra_data.get('model_params')
+            if not isinstance(existing, dict):
+                existing = {}
+
+            merged = {**existing, **update_data}
+            extra_data['model_params'] = merged
+
+            import json
+            agent.memo = json.dumps(extra_data, ensure_ascii=False)
+            session.commit()
+        finally:
+            session.close()
+
+        agent_manager = AgentManager()
+        agent_manager.reload_agent(agent_id)
+
+        return {"success": True, "data": merged}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating agent model params: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

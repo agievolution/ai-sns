@@ -941,10 +941,6 @@ body.theme-dark .agent-list .agent-item:hover {
     color: var(--text-primary);
 }
 
-body.theme-dark .agent-list .agent-item.agent-management {
-    color: var(--color-primary-light);
-}
-
 body.theme-dark .message.assistant .message-content {
     background: var(--bg-tertiary);
     color: var(--text-primary);
@@ -1959,11 +1955,6 @@ body.theme-dark .km-list .km-item.active {
     background: rgba(0, 120, 212, 0.15);
     color: var(--color-primary-light);
     border-left-color: var(--color-primary);
-}
-
-body.theme-dark .km-list .km-item.km-management {
-    color: var(--color-primary-light);
-    border-top-color: var(--border-color);
 }
 
 body.theme-dark .km-section-container {

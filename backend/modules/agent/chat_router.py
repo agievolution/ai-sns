@@ -573,6 +573,7 @@ class AgentChatRequest(BaseModel):
     use_tools: bool = True
     use_memory: bool = True
     use_knowledge_base: bool = True
+    show_token_usage: bool = False
 
 
 class AgentChatResponse(BaseModel):
@@ -638,8 +639,11 @@ async def agent_chat_by_id(
             conversation_id=request.conversation_id,
             use_tools=request.use_tools,
             use_memory=request.use_memory,
-            use_knowledge_base=request.use_knowledge_base
+            use_knowledge_base=request.use_knowledge_base,
+            show_token_usage=request.show_token_usage,
         )
+
+        usage = agent.get_last_usage(request.conversation_id) if request.show_token_usage else None
 
         return {
             "success": True,
@@ -647,7 +651,8 @@ async def agent_chat_by_id(
                 "reply": reply,
                 "conversation_id": request.conversation_id or "default",
                 "agent_id": agent_id,
-                "agent_name": agent.name
+                "agent_name": agent.name,
+                "usage": usage,
             }
         }
 
@@ -666,6 +671,7 @@ async def agent_chat_stream_with_files(
     use_tools: bool = Form(True),
     use_memory: bool = Form(True),
     use_knowledge_base: bool = Form(True),
+    show_token_usage: bool = Form(False),
     files: List[UploadFile] = File(default=[])
 ):
     try:
@@ -809,9 +815,14 @@ async def agent_chat_stream_with_files(
                     use_knowledge_base=use_knowledge_base,
                     attachments_text=attachments_text,
                     image_data_urls=image_data_urls,
-                    attachments_meta=attachments_meta_full
+                    attachments_meta=attachments_meta_full,
+                    show_token_usage=show_token_usage,
                 ):
                     yield f"data: {json.dumps({'content': chunk})}\n\n"
+                if show_token_usage:
+                    usage = agent.get_last_usage(conversation_id)
+                    if usage:
+                        yield f"data: {json.dumps({'usage': usage})}\n\n"
                 yield f"data: {json.dumps({'done': True, 'attachments': attachments_public})}\n\n"
             except Exception as e:
                 logger.error(f"Streaming generation failed: {e}", exc_info=True)
@@ -893,10 +904,16 @@ async def agent_chat_stream_by_id(
                     conversation_id=request.conversation_id,
                     use_tools=request.use_tools,
                     use_memory=request.use_memory,
-                    use_knowledge_base=request.use_knowledge_base
+                    use_knowledge_base=request.use_knowledge_base,
+                    show_token_usage=request.show_token_usage,
                 ):
                     # SSE format
                     yield f"data: {json.dumps({'content': chunk})}\n\n"
+
+                if request.show_token_usage:
+                    usage = agent.get_last_usage(request.conversation_id)
+                    if usage:
+                        yield f"data: {json.dumps({'usage': usage})}\n\n"
 
                 # Send completion signal
                 yield f"data: {json.dumps({'done': True})}\n\n"
@@ -970,8 +987,11 @@ async def agent_chat_by_name(
             conversation_id=request.conversation_id,
             use_tools=request.use_tools,
             use_memory=request.use_memory,
-            use_knowledge_base=request.use_knowledge_base
+            use_knowledge_base=request.use_knowledge_base,
+            show_token_usage=request.show_token_usage,
         )
+
+        usage = agent.get_last_usage(request.conversation_id) if request.show_token_usage else None
 
         return {
             "success": True,
@@ -979,7 +999,8 @@ async def agent_chat_by_name(
                 "reply": reply,
                 "conversation_id": request.conversation_id or "default",
                 "agent_id": agent.agent_id,
-                "agent_name": agent.name
+                "agent_name": agent.name,
+                "usage": usage,
             }
         }
 
@@ -1044,10 +1065,16 @@ async def agent_chat_stream_by_name(
                     conversation_id=request.conversation_id,
                     use_tools=request.use_tools,
                     use_memory=request.use_memory,
-                    use_knowledge_base=request.use_knowledge_base
+                    use_knowledge_base=request.use_knowledge_base,
+                    show_token_usage=request.show_token_usage,
                 ):
                     # SSE format
                     yield f"data: {json.dumps({'content': chunk})}\n\n"
+
+                if request.show_token_usage:
+                    usage = agent.get_last_usage(request.conversation_id)
+                    if usage:
+                        yield f"data: {json.dumps({'usage': usage})}\n\n"
 
                 # Send completion signal
                 yield f"data: {json.dumps({'done': True})}\n\n"

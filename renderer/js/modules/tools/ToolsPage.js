@@ -11,7 +11,7 @@ const ToolsPage = {
                         <header class="tools-main-ref__header plugin-list-header">
                             <div>
                                 <h1 class="plugin-list-title">Tools Plugin List</h1>
-                                <p class="tools-main-ref__subtitle">Manage and test your Model Context Protocol servers</p>
+                                <p class="tools-main-ref__subtitle">Manage and test here</p>
                             </div>
                             <button class="tools-add-btn" onclick="toolsHandlers.showAddDialog(toolsHandlers.currentCategory)">
                                 <span class="material-icons-round tools-main-ref__add-icon">add</span>

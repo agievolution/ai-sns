@@ -5,6 +5,7 @@ This file is intended as the customization point for how SNS talks to the Agent 
 
 import logging
 import json
+import os
 import time
 from typing import Optional, Callable, Dict, Any, Tuple
 
@@ -75,9 +76,45 @@ class AgentAdapter:
         if not agent_identifier:
             return None
 
-        if str(agent_identifier).isdigit():
-            return agent_manager.get_agent_by_id(int(agent_identifier))
-        return agent_manager.get_agent_by_name(str(agent_identifier))
+        identifier = str(agent_identifier)
+        if self._use_isolated_agent_instance():
+            agent_id = self._resolve_agent_id(identifier)
+            if not agent_id:
+                return None
+            return agent_manager.build_agent_instance(int(agent_id))
+
+        if identifier.isdigit():
+            return agent_manager.get_agent_by_id(int(identifier))
+        return agent_manager.get_agent_by_name(identifier)
+
+    def _use_isolated_agent_instance(self) -> bool:
+        v = str(os.environ.get('SNS_USE_ISOLATED_AGENT_INSTANCE', '')).strip().lower()
+        return v in {'1', 'true', 'yes', 'y', 'on'}
+
+    def _resolve_agent_id(self, agent_identifier: str) -> Optional[int]:
+        identifier = str(agent_identifier or '').strip()
+        if not identifier:
+            return None
+        if identifier.isdigit():
+            try:
+                return int(identifier)
+            except Exception:
+                return None
+
+        db = get_session()
+        try:
+            row = db.query(AgentCfg).filter(
+                AgentCfg.name == identifier,
+                AgentCfg.is_delete == False,
+            ).first()
+            if not row:
+                return None
+            return int(row.id)
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
 
     def _extract_delta_text_from_a2a_event(self, event_obj: dict) -> str:
         if not isinstance(event_obj, dict):
@@ -472,6 +509,13 @@ class AgentAdapter:
         agent_id = getattr(ai_chat_cfg, "agent_id", None)
         if not agent_id:
             return None
+
+        if self._use_isolated_agent_instance():
+            try:
+                return agent_manager.build_agent_instance(int(agent_id))
+            except Exception:
+                return None
+
         return agent_manager.get_agent_by_id(agent_id)
 
     def build_conversation_id(self, *, prefix: str = "sns", suffix: str = "agent_conversation") -> str:

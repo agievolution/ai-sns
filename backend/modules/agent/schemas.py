@@ -129,6 +129,16 @@ class AgentUpdateConfig(BaseModel):
     is_active: Optional[bool] = None
 
 
+class AgentModelParamsUpdate(BaseModel):
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    top_p: Optional[float] = None
+    frequency_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    stream: Optional[bool] = None
+    custom_params: Optional[Dict[str, Any]] = None
+
+
 class AgentA2ACard(BaseModel):
     """Agent A2A Card export model"""
     name: str

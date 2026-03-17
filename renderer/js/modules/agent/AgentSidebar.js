@@ -111,20 +111,20 @@ const AgentSidebar = {
         const agentItemsHTML = agents.map(agent => `
             <!-- Agent list item -->
             <div class="agent-item" data-agent-id="${agent.id}">
-<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!-- Head -->
-  <rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+  <rect x="3" y="6" width="18" height="14" rx="2" stroke="#1a73e8" stroke-width="2"/>
   <!-- Antenna -->
-  <line x1="12" y1="6" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
-  <circle cx="12" cy="2" r="1.5" fill="currentColor"/>
+  <line x1="12" y1="6" x2="12" y2="3" stroke="#1a73e8" stroke-width="2"/>
+  <circle cx="12" cy="2" r="1.5" fill="#1a73e8"/>
   <!-- Eyes -->
-  <circle cx="8.5" cy="11.5" r="1.5" fill="currentColor"/>
-  <circle cx="15.5" cy="11.5" r="1.5" fill="currentColor"/>
+  <circle cx="8.5" cy="11.5" r="1.5" fill="#1a73e8"/>
+  <circle cx="15.5" cy="11.5" r="1.5" fill="#1a73e8"/>
   <!-- Mouth -->
-  <path d="M9 15 Q12 18 15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M9 15 Q12 18 15 15" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
 </svg>
 
-                <span>${agent.name || 'Unnamed Agent'}</span>
+                <span class="web-section-title">${agent.name || 'Unnamed Agent'}</span>
             </div>
 
             <!-- Agent-specific expandable section (initially hidden) -->
@@ -136,22 +136,22 @@ const AgentSidebar = {
         // Add management buttons
         const managementButtons = `
             <div class="agent-item agent-management" data-page="model-management">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                 </svg>
-                <span>LLM Setting</span>
+                <span class="web-section-title">LLM Setting</span>
             </div>
             <div class="agent-item agent-management" data-page="role-management">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                 </svg>
-                <span>Role Setting</span>
+                <span class="web-section-title">Role Setting</span>
             </div>
             <div class="agent-item agent-management" data-page="agent-management">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58z"/>
                 </svg>
-                <span>Agent Management</span>
+                <span class="web-section-title">Agent Management</span>
             </div>
         `;
 
@@ -576,7 +576,7 @@ const AgentSidebar = {
                         <div class="web-manage-item-url">${description ? description : activeText}</div>
                     </div>
                     <div class="web-manage-item-actions">
-                        <div style="font-size:12px; color:#666; padding:0 6px;">${activeText}</div>
+                        
                         <button type="button" class="web-manage-item-btn web-manage-item-btn-delete" data-action="delete-agent" data-id="${agent.id}" title="Delete">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M3 6h18"/>

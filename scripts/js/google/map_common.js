@@ -3779,11 +3779,15 @@ function __snsEndActiveConversation(payload) {
 
 function start_talk_to_it(nation_id, content) {
 
+    const __nationId = (typeof __snsNormalizeNationId === 'function')
+        ? __snsNormalizeNationId(nation_id)
+        : String(nation_id ?? '').trim();
+
 
     // Ensure only one active talk target at a time.
     try {
         const prev = (typeof window !== 'undefined') ? window.__active_talk_nation_id : undefined;
-        if (prev && String(prev) !== String(nation_id) && typeof stop_talk_to_it === 'function') {
+        if (prev && String(prev) !== String(__nationId) && typeof stop_talk_to_it === 'function') {
             stop_talk_to_it(prev, { skipTerminate: true });
         }
     } catch (e) {
@@ -3791,25 +3795,31 @@ function start_talk_to_it(nation_id, content) {
     }
     try {
         if (typeof window !== 'undefined') {
-            window.__active_talk_nation_id = String(nation_id);
+            window.__active_talk_nation_id = String(__nationId);
         }
     } catch (e) {
     }
 
 
-    let marker = hiddenMarkers[nation_id];
+    let marker = hiddenMarkers[__nationId];
 
-    hideMarker(marker);
+    try {
+        if (typeof hideMarker === 'function') {
+            hideMarker(marker, __nationId);
+        }
+    } catch (e) {
+        console.warn('[sns][marker] start_talk_to_it hideMarker failed:', e);
+    }
 
 
 
     // alert(map.getZoom());
 
-    person_target_point = getPersonPointByNationId(nation_id);
+    person_target_point = getPersonPointByNationId(__nationId);
 
     person_data_me = getPersonDataByNationId(nation_id_me);
 
-    person_target = getPersonDataByNationId(nation_id);
+    person_target = getPersonDataByNationId(__nationId);
 
     try {
         const account = (person_target && person_target["account"]) ? String(person_target["account"]).trim() : '';
@@ -3817,7 +3827,7 @@ function start_talk_to_it(nation_id, content) {
             if (!window.__talk_target_account_by_nation_id || typeof window.__talk_target_account_by_nation_id !== 'object') {
                 window.__talk_target_account_by_nation_id = {};
             }
-            window.__talk_target_account_by_nation_id[String(nation_id)] = account;
+            window.__talk_target_account_by_nation_id[String(__nationId)] = account;
         }
     } catch (e) {
     }
@@ -3920,7 +3930,7 @@ function start_talk_to_it(nation_id, content) {
 
 
 
-    rotateMyModel180AfterTalkMove(nation_id);
+    rotateMyModel180AfterTalkMove(__nationId);
 
     // return true;
 
@@ -4100,10 +4110,14 @@ function start_talk_to_it(nation_id, content) {
 
 function talk_to_it(nation_id, content) {
 
+    const __nationId = (typeof __snsNormalizeNationId === 'function')
+        ? __snsNormalizeNationId(nation_id)
+        : String(nation_id ?? '').trim();
+
     // Ensure only one active talk target at a time.
     try {
         const prev = (typeof window !== 'undefined') ? window.__active_talk_nation_id : undefined;
-        if (prev && String(prev) !== String(nation_id) && typeof stop_talk_to_it === 'function') {
+        if (prev && String(prev) !== String(__nationId) && typeof stop_talk_to_it === 'function') {
             let prevAccount = '';
             try {
                 const m = (typeof window !== 'undefined') ? window.__talk_target_account_by_nation_id : null;
@@ -4119,7 +4133,7 @@ function talk_to_it(nation_id, content) {
     }
     try {
         if (typeof window !== 'undefined') {
-            window.__active_talk_nation_id = String(nation_id);
+            window.__active_talk_nation_id = String(__nationId);
         }
     } catch (e) {
     }
@@ -4128,19 +4142,25 @@ function talk_to_it(nation_id, content) {
 
     // alert(nation_id);
 
-    let marker = hiddenMarkers[nation_id];
+    let marker = hiddenMarkers[__nationId];
 
-    hideMarker(marker);
+    try {
+        if (typeof hideMarker === 'function') {
+            hideMarker(marker, __nationId);
+        }
+    } catch (e) {
+        console.warn('[sns][marker] talk_to_it hideMarker failed:', e);
+    }
 
 
 
     // alert(map.getZoom());
 
-    person_target_point = getPersonPointByNationId(nation_id);
+    person_target_point = getPersonPointByNationId(__nationId);
 
     person_data_me = getPersonDataByNationId(nation_id_me);
 
-    person_target = getPersonDataByNationId(nation_id);
+    person_target = getPersonDataByNationId(__nationId);
 
     setTimeout(function () {
         const targetLat = person_target_point.lat() - 0.0025;
@@ -4455,6 +4475,10 @@ function stop_talk_to_it(nation_id, options) {
 
     const opts = options || {};
 
+    const __nationId = (typeof __snsNormalizeNationId === 'function')
+        ? __snsNormalizeNationId(nation_id)
+        : String(nation_id ?? '').trim();
+
     try {
 
         resetMyModelRotationAfterTalk();
@@ -4471,7 +4495,7 @@ function stop_talk_to_it(nation_id, options) {
 
         if (typeof hidePersonModelByNationId === 'function') {
 
-            hidePersonModelByNationId(nation_id);
+            hidePersonModelByNationId(__nationId);
 
         }
 
@@ -4491,7 +4515,7 @@ function stop_talk_to_it(nation_id, options) {
 
         }
 
-        let marker = hiddenMarkers[nation_id];
+        let marker = hiddenMarkers[__nationId];
 
         if (!marker || typeof marker.setVisible !== 'function') {
 
@@ -4501,7 +4525,11 @@ function stop_talk_to_it(nation_id, options) {
 
         }
 
-        marker.setVisible(true);
+        if (typeof showMarker === 'function') {
+            showMarker(marker, __nationId);
+        } else {
+            marker.setVisible(true);
+        }
 
     } catch (e) {
 
@@ -4534,7 +4562,7 @@ function stop_talk_to_it(nation_id, options) {
     try {
         if (typeof window !== 'undefined') {
             const cur = window.__active_talk_nation_id;
-            if (cur && String(cur) === String(nation_id)) {
+            if (cur && String(cur) === String(__nationId)) {
                 window.__active_talk_nation_id = '';
             }
         }
@@ -4543,7 +4571,7 @@ function stop_talk_to_it(nation_id, options) {
 
     try {
         if (typeof window !== 'undefined' && window.__talk_target_account_by_nation_id && typeof window.__talk_target_account_by_nation_id === 'object') {
-            delete window.__talk_target_account_by_nation_id[String(nation_id)];
+            delete window.__talk_target_account_by_nation_id[String(__nationId)];
         }
     } catch (e) {
     }

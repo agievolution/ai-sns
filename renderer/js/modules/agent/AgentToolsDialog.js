@@ -90,12 +90,12 @@ const AgentToolsDialog = {
                                 Computer Use
                             </button>
 
-                            <button class="tab-btn" data-tab="doc-skill">
+                            <button class="tab-btn" data-tab="skill">
                                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                                     <path d="M19 2H8c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 18H9V4h9v16z"/>
                                     <path d="M7 6H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h2V6z"/>
                                 </svg>
-                                Doc Skill
+                                Skills
                             </button>
                         </div>
 
@@ -157,7 +157,7 @@ const AgentToolsDialog = {
                 console.log('[AgentToolsDialog] Added to selections:', key);
             });
 
-            // Initialize doc skills selections
+            // Initialize skills selections
             this.docSkillSelections.clear();
             const enabledSkillKeys = agentDocSkillsResponse?.data;
             if (Array.isArray(enabledSkillKeys)) {
@@ -239,11 +239,11 @@ const AgentToolsDialog = {
 
         // Create tool items
         const toolsHTML = tools.map(tool => {
-            const toolId = toolType === 'doc-skill'
+            const toolId = toolType === 'skill'
                 ? (tool.skill_key || tool.skillKey || tool.name)
                 : (tool.plugin_id || tool.mcp_id || tool.function_id || tool.skill_id);
             const selectionKey = `${toolType}:${toolId}`;
-            const isSelected = toolType === 'doc-skill'
+            const isSelected = toolType === 'skill'
                 ? this.docSkillSelections.has(String(toolId))
                 : this.currentSelections.has(selectionKey);
 
@@ -283,7 +283,7 @@ const AgentToolsDialog = {
             mcp: '🔗',
             function: '⚡',
             skill: '🖥️',
-            'doc-skill': '📄'
+            'skill': '📄'
         };
         return icons[toolType] || '🔧';
     },
@@ -367,7 +367,7 @@ const AgentToolsDialog = {
             mcp: allTools.mcps || [],
             function: allTools.functions || [],
             skill: allTools.skills || [],
-            'doc-skill': allTools.docSkills || []
+            'skill': allTools.docSkills || []
         };
 
         this.renderTools(tab, toolsMap[tab]);
@@ -409,7 +409,7 @@ const AgentToolsDialog = {
         const toolType = checkbox.dataset.toolType;
         const selectionKey = `${toolType}:${toolId}`;
 
-        if (toolType === 'doc-skill') {
+        if (toolType === 'skill') {
             if (checkbox.checked) {
                 this.docSkillSelections.add(String(toolId));
             } else {
@@ -462,7 +462,7 @@ const AgentToolsDialog = {
             // Save via API
             const result = await agentApi.updateAgentTools(agentId, tools);
 
-            // Save Doc Skills
+            // Save Skills
             await fetch(this.resolve(`/api/skills/agent/${agentId}/skills`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },

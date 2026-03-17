@@ -98,7 +98,8 @@ class ToolsMixin:
         role_prompt = role_prompt.replace("__service_list__", service_list)
         # role_prompt = role_prompt.replace("__objective_to_achieve__", objective_to_achieve)
 
-        question = f"当前的目标是：{objective_to_achieve}。请根据相关的任务要求，准确选择服务，如果没有合适的服务请返回空列表。"
+
+        question = f"The current objective is: {objective_to_achieve}. Based on the task requirements, select the appropriate services. If no suitable service is available, return an empty list."
 
         # Memory recall: inject past service usage experience
         try:

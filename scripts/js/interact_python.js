@@ -505,34 +505,65 @@ var show_status_on_map = function (status) {
 
 var handle_command = function (command, param_1, param_2) {
     if (command == "talk_to_it") {
-        if (map_type == "google") {
-            let marker = getMarkerByNationId(param_1);
-            hiddenMarkers[param_1] = marker;
-        } else {
-            div = document.getElementById(param_1);
-            if (!div) {
-                console.warn(`Element with ID ${param_1} not found on map, proceeding anyway`);
+        const nationId = (typeof __snsNormalizeNationId === 'function')
+            ? __snsNormalizeNationId(param_1)
+            : String(param_1 ?? '').trim();
+        try {
+            if (map_type == "google") {
+                let marker = null;
+                try {
+                    marker = (typeof getMarkerByNationId === 'function') ? getMarkerByNationId(nationId) : null;
+                } catch (e) {
+                    console.warn('[sns][marker] getMarkerByNationId failed:', e);
+                }
+                if (typeof hiddenMarkers !== 'undefined' && hiddenMarkers) {
+                    hiddenMarkers[nationId] = marker;
+                }
             } else {
-                hiddenPoints[param_1] = div;
+                div = document.getElementById(nationId);
+                if (!div) {
+                    console.warn(`Element with ID ${nationId} not found on map, proceeding anyway`);
+                } else {
+                    hiddenPoints[nationId] = div;
+                }
             }
+            talk_to_it(nationId, param_2);
+        } catch (e) {
+            console.error('[sns][talk] talk_to_it failed:', e);
         }
-        talk_to_it(param_1, param_2)
     } else if (command == "start_talk_to_it") {
-        if (map_type == "google") {
-            let marker = getMarkerByNationId(param_1);
-            hiddenMarkers[param_1] = marker;
-        } else {
-            div = document.getElementById(param_1);
-            if (!div) {
-                console.warn(`Element with ID ${param_1} not found on map, proceeding anyway`);
+        const nationId = (typeof __snsNormalizeNationId === 'function')
+            ? __snsNormalizeNationId(param_1)
+            : String(param_1 ?? '').trim();
+        try {
+            if (map_type == "google") {
+                let marker = null;
+                try {
+                    marker = (typeof getMarkerByNationId === 'function') ? getMarkerByNationId(nationId) : null;
+                } catch (e) {
+                    console.warn('[sns][marker] getMarkerByNationId failed:', e);
+                }
+                if (typeof hiddenMarkers !== 'undefined' && hiddenMarkers) {
+                    hiddenMarkers[nationId] = marker;
+                }
             } else {
-                hiddenPoints[param_1] = div;
+                div = document.getElementById(nationId);
+                if (!div) {
+                    console.warn(`Element with ID ${nationId} not found on map, proceeding anyway`);
+                } else {
+                    hiddenPoints[nationId] = div;
+                }
             }
+            start_talk_to_it(nationId, param_2);
+        } catch (e) {
+            console.error('[sns][talk] start_talk_to_it failed:', e);
         }
-        start_talk_to_it(param_1, param_2)
     } else if (command == "stop_talk_to_it") {
         try {
-            stop_talk_to_it(param_1);
+            const nationId = (typeof __snsNormalizeNationId === 'function')
+                ? __snsNormalizeNationId(param_1)
+                : String(param_1 ?? '').trim();
+            stop_talk_to_it(nationId);
         } catch (e) {
             console.error("stop_talk_to_it failed:", e);
         }

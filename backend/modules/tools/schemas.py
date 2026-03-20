@@ -88,7 +88,7 @@ class MCPBase(BaseModel):
     parameter: Optional[str] = Field(None, description="Parameter JSON")
     description: Optional[str] = Field(None, description="Description")
     detail: Optional[str] = Field(None, description="Detail")
-    mcp_type: Optional[str] = Field("stdio", description="MCP type: stdio/sse")
+    mcp_type: Optional[str] = Field("stdio", description="MCP type: stdio/sse/streamable-http")
     mcp_event: Optional[str] = Field(None, description="MCP event")
     confirm_needed: Optional[bool] = Field(True, description="Confirm needed")
     can_be_sold: Optional[bool] = Field(False, description="Can be sold")

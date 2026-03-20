@@ -1912,13 +1912,89 @@ var view_animation = new BMapGL.ViewAnimation(keyFrames, view_opts);
 
 var auto_navigate_flag = false;
 
-function toggleNavigate() {
+var __sns_landmark_toggle_busy = false;
+
+async function __snsGetEngineStatusForLandmark() {
+    const base = (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? String(API_BASE_URL).replace(/\/+$/, '') : '';
+    const url = base ? `${base}/api/sns/engine-status` : '/api/sns/engine-status';
+    try {
+        const resp = await fetch(url, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store'
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (e) {
+        return { success: false, message: String(e && e.message ? e.message : e) };
+    }
+}
+
+function __snsIsEngineActiveForLandmark(status) {
+    try {
+        const ok = status && status.success === true;
+        if (!ok) return true;
+        const taskStatus = String(status && status.task_status ? status.task_status : '').toLowerCase();
+        return !!(status.running || status.started || taskStatus === 'started' || taskStatus === 'paused');
+    } catch (e) {
+        return true;
+    }
+}
+
+function __snsConfirmLandmarkStart(onConfirm, onCancel) {
+    const title = 'Landmark Animation';
+    const message = 'This will play a map animation for a while. Click the Landmark button again to stop it. Continue?';
+    try {
+        if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog(title, message, onConfirm, onCancel || function () {});
+            return;
+        }
+    } catch (e) {
+    }
+
+    const ok = window.confirm(`${title}\n\n${message}`);
+    if (ok) {
+        onConfirm();
+    } else if (onCancel) {
+        onCancel();
+    }
+}
+
+async function toggleNavigate() {
     if (auto_navigate_flag) {
         cancelNavigate();
         auto_navigate_flag = false;
-    } else {
-        autoNavigate();
-        auto_navigate_flag = true;
+        return;
+    }
+
+    if (__sns_landmark_toggle_busy) return;
+    __sns_landmark_toggle_busy = true;
+    try {
+        const status = await __snsGetEngineStatusForLandmark();
+        if (__snsIsEngineActiveForLandmark(status)) {
+            try {
+                if (typeof showAlert === 'function') {
+                    showAlert('Landmark animation is only available when the engine is stopped. Please stop the engine first.', true);
+                } else {
+                    alert('Landmark animation is only available when the engine is stopped. Please stop the engine first.');
+                }
+            } catch (e) {
+            }
+            return;
+        }
+
+        __snsConfirmLandmarkStart(
+            function () {
+                if (auto_navigate_flag) return;
+                auto_navigate_flag = true;
+                autoNavigate();
+            },
+            function () {
+                auto_navigate_flag = false;
+            }
+        );
+    } finally {
+        __sns_landmark_toggle_busy = false;
     }
 }
 
@@ -1926,7 +2002,6 @@ function autoNavigate() {
     map.centerAndZoom(new BMapGL.Point(116.307092, 40.054922), 20);  // Initialize map: center + zoom level
     map.enableScrollWheelZoom(true);     // Enable mouse wheel zoom
     map.setTilt(50);      // Set initial tilt
-    // Define keyframes
 
     displayOptions = {
         indoor: false,

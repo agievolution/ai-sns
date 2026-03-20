@@ -318,4 +318,9 @@ const agentState = {
     }
 };
 
+// Export to global (for other modules)
+if (typeof window !== 'undefined') {
+    window.agentState = agentState;
+}
+
 export default agentState;

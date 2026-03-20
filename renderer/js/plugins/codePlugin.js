@@ -4,6 +4,15 @@
  */
 
 const CodePlugin = {
+    resolve(urlOrPath) {
+        try {
+            if (typeof window !== 'undefined' && typeof window.resolveAgentServerUrl === 'function') {
+                return window.resolveAgentServerUrl(urlOrPath);
+            }
+        } catch (e) {
+        }
+        return urlOrPath;
+    },
     /**
      * Plugin metadata
      */
@@ -19,7 +28,8 @@ const CodePlugin = {
      */
     state: {
         codeBlocks: [],
-        currentIndex: 0
+        currentIndex: 0,
+        isSelectingOutput: false
     },
 
     /**
@@ -38,12 +48,12 @@ const CodePlugin = {
                 <!-- Code info bar -->
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--bg-secondary, #f5f5f5); border-radius: 4px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 10px; color: var(--text-secondary, #666);" id="code-plugin-info">No code extracted</span>
                         <select id="code-plugin-language" style="font-size: 10px; padding: 2px 4px; border: 1px solid var(--border-light, #ddd); border-radius: 3px; background: var(--bg-content, #fff); color: var(--text-primary, #333);">
                             <option value="javascript">JavaScript</option>
                             <option value="python">Python</option>
                             <option value="html">HTML</option>
                         </select>
+                        <span style="font-size: 10px; color: var(--text-secondary, #666);" id="code-plugin-info">No code extracted</span>
                     </div>
                     <button class="preset-use-btn" style="padding: 4px 8px; font-size: 10px;" onclick="CodePlugin.extractCodes()">
                         <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="vertical-align: middle; margin-right: 4px;">
@@ -56,6 +66,7 @@ const CodePlugin = {
                 <!-- Code editor -->
                 <textarea
                     id="code-plugin-editor"
+                    spellcheck="false"
                     placeholder="Click 'Extract code' to get code from chat, or write code here..."
                     style="flex: 1; min-height: 200px; padding: 12px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; line-height: 1.5; border: 1px solid var(--border-light, #ddd); border-radius: 4px; background: var(--bg-content, #fff); color: var(--text-primary, #333); resize: vertical;"
                 ></textarea>
@@ -94,10 +105,24 @@ const CodePlugin = {
                         <span style="font-size: 11px; font-weight: bold; color: var(--text-primary, #333);">Output:</span>
                         <button class="preset-use-btn" style="padding: 2px 6px; font-size: 10px;" onclick="CodePlugin.clearOutput()">Clear output</button>
                     </div>
-                    <div id="code-plugin-output" style="min-height: 80px; max-height: 200px; overflow-y: auto; padding: 8px; background: var(--bg-secondary, #f5f5f5); border: 1px solid var(--border-light, #ddd); border-radius: 4px; font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; line-height: 1.4; color: var(--text-primary, #333); white-space: pre-wrap;"></div>
+                    <div id="code-plugin-output" style="min-height: 80px; max-height: 200px; overflow-y: auto; padding: 8px; background: var(--bg-secondary, #f5f5f5); border: 1px solid var(--border-light, #ddd); border-radius: 4px; font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; line-height: 1.4; color: var(--text-primary, #333); white-space: pre-wrap; user-select: text; cursor: text;"></div>
                 </div>
             </div>
         `;
+
+        try {
+            this.state.isSelectingOutput = false;
+            const output = container.querySelector('#code-plugin-output');
+            if (output) {
+                output.addEventListener('mousedown', () => {
+                    this.state.isSelectingOutput = true;
+                });
+                window.addEventListener('mouseup', () => {
+                    this.state.isSelectingOutput = false;
+                }, { passive: true });
+            }
+        } catch (e) {
+        }
 
         console.log('[CodePlugin] Plugin UI rendered');
     },
@@ -109,8 +134,24 @@ const CodePlugin = {
         // Try to find the chat messages container - supports single-agent and multi-agent scenarios
         let chatMessages = null;
 
+        // Method 0: if the plugin is rendered inside an agent page, use that agent's chat container
+        try {
+            if (this._currentContainer && typeof this._currentContainer.closest === 'function') {
+                const agentPage = this._currentContainer.closest('.agent-page-layout');
+                if (agentPage) {
+                    const scoped = agentPage.querySelector('.agent-chat-messages');
+                    if (scoped) {
+                        chatMessages = scoped;
+                    }
+                }
+            }
+        } catch (e) {
+        }
+
         // Method 1: find the single-agent container
-        chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) {
+            chatMessages = document.getElementById('chatMessages');
+        }
 
         // Method 2: if not found, try the currently visible container in multi-agent mode
         if (!chatMessages) {
@@ -310,12 +351,44 @@ const CodePlugin = {
             if (language === 'javascript') {
                 this.runJavaScript(code);
             } else if (language === 'python') {
-                this.showOutput('\nPython execution requires backend support. Currently only JavaScript and HTML are supported.', 'error');
+                this.runPython(code);
             } else if (language === 'html') {
                 this.runHTML(code);
             }
         } catch (error) {
             this.showOutput(`\nError: ${error.message}\n${error.stack}`, 'error');
+        }
+    },
+
+    async runPython(code) {
+        try {
+            const resp = await fetch(this.resolve('/api/agent/execute-python'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            const payload = await resp.json().catch(() => ({}));
+            if (!resp.ok || !payload || payload.success !== true) {
+                const detail = payload && (payload.detail || payload.message || payload.error) ? String(payload.detail || payload.message || payload.error) : `HTTP ${resp.status}`;
+                this.showOutput(`\nPython execution failed: ${detail}`, 'error');
+                return;
+            }
+
+            const data = payload.data || {};
+            const stdout = data.output ? String(data.output) : '';
+            const stderr = data.error ? String(data.error) : '';
+
+            if (stdout) {
+                this.showOutput(`\n${stdout}`, 'success');
+            }
+            if (stderr) {
+                this.showOutput(`\n${stderr}`, 'error');
+            }
+            if (!stdout && !stderr) {
+                this.showOutput('\n[Execution completed with no output]', 'success');
+            }
+        } catch (e) {
+            this.showOutput(`\nPython execution error: ${e && e.message ? e.message : String(e)}`, 'error');
         }
     },
 
@@ -434,7 +507,9 @@ const CodePlugin = {
         output.appendChild(messageEl);
 
         // Scroll to bottom
-        output.scrollTop = output.scrollHeight;
+        if (!this.state.isSelectingOutput) {
+            output.scrollTop = output.scrollHeight;
+        }
     },
 
     /**

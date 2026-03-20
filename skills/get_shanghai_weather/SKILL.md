@@ -1,7 +1,8 @@
 ---
-name: Get Guangzhou Weather
-skill_key: get_shanghai_weather
-description: Query Shanghai weather for a given date and AM/PM.
+name: Get Shenzhen Weather V3
+skill_key: get_shenzhen_weather
+description: Query Shenzhen weather for a given date and AM/PM.
+instructions: Call by agent
 requires:
   always: true
 runner:

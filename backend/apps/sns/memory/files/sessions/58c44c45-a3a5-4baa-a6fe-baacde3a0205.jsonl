@@ -1,0 +1,2 @@
+{"ts": "2026-03-20T03:24:18.495174", "event_type": "session_start", "agent_id": "lili@xabber.de", "session_id": "58c44c45-a3a5-4baa-a6fe-baacde3a0205", "metadata": {"engine": "AISocialEngine", "current_place": "shanghai", "map_mode": "org"}}
+{"ts": "2026-03-20T03:24:42.582074", "event_type": "session_end", "agent_id": "lili@xabber.de", "session_id": "58c44c45-a3a5-4baa-a6fe-baacde3a0205", "summary": "Engine stopped. Recent activity:", "metadata": {"process_count": 0}}

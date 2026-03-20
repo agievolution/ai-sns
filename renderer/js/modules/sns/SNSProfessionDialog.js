@@ -267,7 +267,7 @@ export class SNSProfessionDialog {
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-secondary" onclick="document.getElementById('snsProfessionDialog').remove()">Cancel</button>
-                        <button class="btn btn-primary" id="saveProfessionBtn">Save</button>
+                        <button class="btn btn-primary" id="saveProfessionBtn">Ok</button>
                     </div>
                 </div>
             </div>

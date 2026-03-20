@@ -8,10 +8,12 @@ import httpx
 from datetime import datetime
 from pathlib import Path
 import json
+import inspect
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 from fastapi import HTTPException
 from backend.database.models.chat import AIFriend, AIChatMessages, AiChatCfg
 from backend.database.models.system import Prompt
@@ -32,6 +34,88 @@ AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 _social_engine_instance = None
 _social_engine_running = False
 _social_engine_op_lock = asyncio.Lock()
+
+
+_ENGINE_INSPECT_PATH_RE = re.compile(r"^[a-zA-Z0-9_\.]+$")
+
+
+def _engine_inspect_not_started_payload() -> dict:
+    return {
+        "success": False,
+        "message": "Engine is not started. Please click Start in the SNS UI.",
+    }
+
+
+def _get_running_engine_or_error() -> tuple[Optional[object], Optional[dict]]:
+    global _social_engine_instance
+
+    if _social_engine_instance is None:
+        return None, _engine_inspect_not_started_payload()
+    try:
+        started_flag = bool(getattr(_social_engine_instance, "started_flag", False))
+    except Exception:
+        started_flag = False
+    if not started_flag:
+        return None, _engine_inspect_not_started_payload()
+    return _social_engine_instance, None
+
+
+def _validate_engine_inspect_path(name: str, *, max_depth: int = 6) -> Optional[str]:
+    raw = str(name or "").strip()
+    if not raw:
+        return None
+    if len(raw) > 200:
+        return None
+    if not _ENGINE_INSPECT_PATH_RE.match(raw):
+        return None
+
+    parts = [p for p in raw.split(".") if p]
+    if not parts or len(parts) > max_depth:
+        return None
+
+    for p in parts:
+        if "__" in p:
+            return None
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", p):
+            return None
+    return ".".join(parts)
+
+
+def _resolve_engine_inspect_path(root: object, path: str):
+    cur = root
+    for seg in path.split("."):
+        cur = getattr(cur, seg)
+    return cur
+
+
+def _safe_json_value(value: Any, *, depth: int = 4, max_items: int = 200, max_chars: int = 8192):
+    if depth <= 0:
+        s = repr(value)
+        return s[:max_chars]
+
+    if value is None or isinstance(value, (bool, int, float, str)):
+        if isinstance(value, str) and len(value) > max_chars:
+            return value[:max_chars]
+        return value
+
+    if isinstance(value, dict):
+        out: Dict[str, Any] = {}
+        for idx, (k, v) in enumerate(value.items()):
+            if idx >= max_items:
+                break
+            out[str(k)[:256]] = _safe_json_value(v, depth=depth - 1, max_items=max_items, max_chars=max_chars)
+        return out
+
+    if isinstance(value, (list, tuple, set)):
+        out_list = []
+        for idx, item in enumerate(list(value)):
+            if idx >= max_items:
+                break
+            out_list.append(_safe_json_value(item, depth=depth - 1, max_items=max_items, max_chars=max_chars))
+        return out_list
+
+    s = repr(value)
+    return s[:max_chars]
 
 
 def apply_runtime_system_config(payload: dict) -> bool:
@@ -699,6 +783,134 @@ class SNSService:
             "started": started_flag,
             "task_status": task_status,
         }
+
+
+    async def engine_inspect_default(self) -> dict:
+        engine, err = _get_running_engine_or_error()
+        if err:
+            return err
+
+        snapshot = {
+            "service_running": bool(_social_engine_running),
+        }
+
+        keys = [
+            "started_flag",
+            "map_task_status",
+            "command_status",
+            "human_take_over",
+            "human_talk_type",
+            "current_place",
+            "current_position",
+            "target_place",
+            "target_position",
+            "pause_flag",
+            "agent_replying_flag",
+            "_rebirth_count",
+            "_instruction_total_count",
+            "_instruction_invalid_count",
+        ]
+
+        for k in keys:
+            try:
+                snapshot[k] = _safe_json_value(getattr(engine, k, None))
+            except Exception:
+                snapshot[k] = None
+
+        return {
+            "success": True,
+            "data": snapshot,
+        }
+
+
+    async def engine_inspect_var(self, name: str) -> dict:
+        engine, err = _get_running_engine_or_error()
+        if err:
+            return err
+
+        path = _validate_engine_inspect_path(name)
+        if not path:
+            return {
+                "success": False,
+                "message": "Invalid variable path",
+            }
+
+        try:
+            value = _resolve_engine_inspect_path(engine, path)
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Failed to read variable: {str(e)}",
+            }
+
+        try:
+            value_type = type(value).__name__
+        except Exception:
+            value_type = "unknown"
+
+        return {
+            "success": True,
+            "name": path,
+            "value": _safe_json_value(value),
+            "value_type": value_type,
+        }
+
+
+    async def engine_inspect_call(self, name: str, args: Any = None, kwargs: Any = None) -> dict:
+        engine, err = _get_running_engine_or_error()
+        if err:
+            return err
+
+        path = _validate_engine_inspect_path(name)
+        if not path:
+            return {
+                "success": False,
+                "message": "Invalid function path",
+            }
+
+        if args is None:
+            args = []
+        if kwargs is None:
+            kwargs = {}
+        if not isinstance(args, list):
+            return {"success": False, "message": "args must be a list"}
+        if not isinstance(kwargs, dict):
+            return {"success": False, "message": "kwargs must be an object"}
+
+        try:
+            fn = _resolve_engine_inspect_path(engine, path)
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Failed to resolve function: {str(e)}",
+            }
+
+        if not callable(fn):
+            return {
+                "success": False,
+                "message": "Target is not callable",
+            }
+
+        timeout_seconds = 5.0
+        try:
+            result = fn(*args, **kwargs)
+            if inspect.isawaitable(result):
+                result = await asyncio.wait_for(result, timeout=timeout_seconds)
+            return {
+                "success": True,
+                "name": path,
+                "result": _safe_json_value(result),
+            }
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "message": f"Function call timed out after {timeout_seconds:.0f}s",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Function call failed: {str(e)}",
+            }
 
 
     async def set_human_control_state(self, human_take_over: bool, human_talk_type: int = None) -> dict:

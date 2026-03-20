@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """LLM configuration service layer."""
+import asyncio
 import json
+import re
+import time
 import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -8,6 +11,7 @@ from sqlalchemy.orm import Session
 from backend.database.base import get_session
 from backend.database.models.system import LlmConfig
 from .llm_schemas import LlmConfigCreate, LlmConfigUpdate, LlmTestRequest
+from openai import AsyncOpenAI
 
 
 class LlmConfigService:
@@ -100,21 +104,54 @@ class LlmConfigService:
 
     async def test_connection(self, test_data: LlmTestRequest) -> Dict[str, Any]:
         """Test LLM connection."""
-        # Implementation depends on your LLM client setup
-        # This is a placeholder that simulates a connection test
+        raw_endpoint = str(test_data.api_endpoint or '').strip()
+        if not raw_endpoint:
+            raise ValueError('api_endpoint is required')
+
+        base_url = raw_endpoint
+        base_url = re.sub(r"/chat/completions/?$", "", base_url, flags=re.IGNORECASE)
+        base_url = re.sub(r"/v1/?$", "/v1", base_url, flags=re.IGNORECASE)
+        base_url = base_url.rstrip('/')
+
+        client = AsyncOpenAI(api_key=test_data.api_key, base_url=base_url)
+
+        t0 = time.perf_counter()
+        messages = [{"role": "user", "content": "hello"}]
         try:
-            # TODO: Implement actual connection test based on provider
-            # For now, just return success
-            return {
-                "status": "success",
-                "message": "Connection test successful",
-                "latency_ms": 120
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": str(e)
-            }
+            resp = await asyncio.wait_for(
+                client.chat.completions.create(
+                    model=test_data.model_name,
+                    messages=messages,
+                    temperature=0,
+                    max_tokens=32,
+                ),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError as e:
+            raise TimeoutError('Connection test timed out') from e
+        finally:
+            try:
+                await client.close()
+            except Exception:
+                pass
+
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        reply = ''
+        try:
+            reply = (resp.choices[0].message.content or '').strip()
+        except Exception:
+            reply = ''
+        if not reply:
+            raise RuntimeError('Empty response from model')
+
+        return {
+            "status": "success",
+            "message": "Connection test succeeded",
+            "latency_ms": latency_ms,
+            "reply": reply,
+            "model": test_data.model_name,
+            "base_url": base_url,
+        }
 
     def import_configs(self, configs: List[LlmConfigCreate]) -> Dict[str, Any]:
         """Import multiple configurations."""

@@ -107,16 +107,32 @@ const AgentPage = {
                         <!-- Welcome message -->
                         <div class="welcome-message">
                             <div class="welcome-icon">
-                                <svg viewBox="0 0 48 48" width="64" height="64">
-                                    <defs>
-                                        <linearGradient id="welcomeGrad-${agent.id}" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" style="stop-color:#11998e"/>
-                                            <stop offset="100%" style="stop-color:#38ef7d"/>
-                                        </linearGradient>
-                                    </defs>
-                                    <circle cx="24" cy="24" r="22" fill="url(#welcomeGrad-${agent.id})" opacity="0.1"/>
-                                    <path d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4zm-4 30l-10-10 2.82-2.82L20 28.34l15.18-15.18L38 16l-18 18z" fill="url(#welcomeGrad-${agent.id})"/>
-                                </svg>
+<svg viewBox="0 0 48 48" width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="robotGrad-${agent.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#11998e"/>
+            <stop offset="100%" style="stop-color:#38ef7d"/>
+        </linearGradient>
+    </defs>
+    
+ 
+    <circle cx="24" cy="24" r="22" fill="url(#robotGrad-${agent.id})" opacity="0.1"/>
+    
+
+    <g transform="translate(4.8, 4.8) scale(0.8)">
+       
+        <path d="
+            M24 7v3 M21 7h6 
+            M16 12h16a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3z
+            M19 19h2 M27 19h2
+            M11 34c0-3 3-5 6-5h14c3 0 6 2 6 5v4H11v-4z
+        " fill="none" stroke="url(#robotGrad-${agent.id})" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        
+        
+        <circle cx="20" cy="19" r="1.5" fill="url(#robotGrad-${agent.id})"/>
+        <circle cx="28" cy="19" r="1.5" fill="url(#robotGrad-${agent.id})"/>
+    </g>
+</svg>
                             </div>
                             <h2 class="welcome-title">${agent.name || 'AI Assistant'}</h2>
                             <p class="welcome-subtitle">${agent.description || 'Powered by OpenAI GPT'}</p>
@@ -137,23 +153,24 @@ const AgentPage = {
                                     </svg>
                                 </button>
                                 <button class="toolbar-icon-btn" title="Configure knowledge base" data-action="kb-config" data-agent-id="${agent.id}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-  <path d="M12 2C7.58 2 4 3.79 4 6v12c0 2.21 3.58 4 8 4s8-1.79 8-4V6c0-2.21-3.58-4-8-4zm0 2c3.87 0 6 .99 6 2s-2.13 2-6 2-6-.99-6-2 2.13-2 6-2zm0 14c-3.87 0-6-.99-6-2v-2c1.46 1.01 4.05 1.5 6 1.5s4.54-.49 6-1.5v2c0 1.01-2.13 2-6 2zm0-6c-3.87 0-6-.99-6-2V8c1.46 1.01 4.05 1.5 6 1.5S16.54 9.01 18 8v2c0 1.01-2.13 2-6 2z"/>
-</svg>
-</button>
+                                  <path d="M12 2C7.58 2 4 3.79 4 6v12c0 2.21 3.58 4 8 4s8-1.79 8-4V6c0-2.21-3.58-4-8-4zm0 2c3.87 0 6 .99 6 2s-2.13 2-6 2-6-.99-6-2 2.13-2 6-2zm0 14c-3.87 0-6-.99-6-2v-2c1.46 1.01 4.05 1.5 6 1.5s4.54-.49 6-1.5v2c0 1.01-2.13 2-6 2zm0-6c-3.87 0-6-.99-6-2V8c1.46 1.01 4.05 1.5 6 1.5S16.54 9.01 18 8v2c0 1.01-2.13 2-6 2z"/>
+                                </svg>
+                                </button>
                                 <button class="toolbar-icon-btn" title="Attachment" data-action="attachment" data-agent-id="${agent.id}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg></button>
                                 
-                                <button class="toolbar-icon-btn" title="Add" data-action="add-plugin" data-agent-id="${agent.id}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-  <path d="M19 11h-2v2h2v-2zm-4 0h-2v2h2v-2zm-4 0H9v2h2v-2zm8 4h-2v2h2v-2zm-4 0h-2v2h2v-2zm-4 0H9v2h2v-2zm8-8h-2v2h2V7zm-4 0h-2v2h2V7zm-4 0H9v2h2V7z"/>
-</svg>
+                                <button class="toolbar-icon-btn" title="Add Plugin" data-action="add-plugin" data-agent-id="${agent.id}">
 
-</button>
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M19.439 7.85c.157-.24.245-.525.245-.814V3a1 1 0 0 0-1-1h-3.95c-.289 0-.574.088-.814.245a2.5 2.5 0 1 1-3.84 0A1.5 1.5 0 0 0 9.266 2H5.316a1 1 0 0 0-1 1v3.95c0 .289-.088.574-.245.814a2.5 2.5 0 1 1 0 3.84c.157.24.245.525.245.814V20a1 1 0 0 0 1 1h3.95c.289 0 .574-.088.814-.245a2.5 2.5 0 1 1 3.84 0c.24.157.525.245.814.245h3.95a1 1 0 0 0 1-1v-3.95c0-.289.088-.574.245-.814a2.5 2.5 0 1 1 0-3.84Z"/>
+                                    </svg>
+                                </button>
 
-                                <button class="toolbar-icon-btn" title="3D Avatar" data-agent-id="${agent.id}">
-                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                                            <line x1="8" y1="21" x2="16" y2="21"/>
-                                            <line x1="12" y1="17" x2="12" y2="21"/>
-                                        </svg>
+                                <button class="toolbar-icon-btn" title="3D Avatar" data-agent-id="${agent.id}">       
+                                        
+                                        <svg height="22" viewBox="0 -960 960 960" width="22" fill="currentColor">
+                                            <path d="M664-121q-8-2-15-7l-120-70q-14-8-21.5-21.5T500-249v-141q0-16 7.5-29.5T529-441l120-70q7-5 15-7t16-2q8 0 15.5 2.5T710-511l120 70q14 8 22 21.5t8 29.5v141q0 16-8 29.5T830-198l-120 70q-7 4-14.5 6.5T680-119q-8 0-16-2ZM287-527q-47-47-47-113t47-113q47-47 113-47t113 47q47 47 47 113t-47 113q-47 47-113 47t-113-47ZM80-160v-112q0-33 17-62t47-44q51-26 115-44t141-18h14q6 0 12 2-8 18-13.5 37.5T404-360h-4q-71 0-127.5 18T180-306q-9 5-14.5 14t-5.5 20v32h252q6 21 16 41.5t22 38.5H80Zm376.5-423.5Q480-607 480-640t-23.5-56.5Q433-720 400-720t-56.5 23.5Q320-673 320-640t23.5 56.5Q367-560 400-560t56.5-23.5ZM400-640Zm12 400Zm174-166 94 55 94-55-94-54-94 54Zm124 208 90-52v-110l-90 53v109Zm-150-52 90 53v-109l-90-53v109Z"/>
+                                        </svg>                                      
+                                                                               
                                 </button>
 
                             </div>
@@ -216,9 +233,17 @@ const AgentPage = {
                             </div>
                             <div class="settings-section">
                                 <div class="settings-section-title">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
-                                        <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>
-                                    </svg>
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="4" y1="21" x2="4" y2="14"></line>
+                                        <line x1="4" y1="10" x2="4" y2="3"></line>
+                                        <line x1="12" y1="21" x2="12" y2="12"></line>
+                                        <line x1="12" y1="8" x2="12" y2="3"></line>
+                                        <line x1="20" y1="21" x2="20" y2="16"></line>
+                                        <line x1="20" y1="12" x2="20" y2="3"></line>
+                                        <line x1="1" y1="14" x2="7" y2="14"></line>
+                                        <line x1="9" y1="8" x2="15" y2="8"></line>
+                                        <line x1="17" y1="16" x2="23" y2="16"></line>
+                                    </svg>                                    
                                     <span>Advanced settings</span>
                                 </div>
                                 <div class="param-group">

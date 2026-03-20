@@ -71,7 +71,34 @@ class ToolsService:
             q = q.filter(PluginMng.used_in_sns == used_in_sns)
 
         db_plugins = q.order_by(PluginMng.create_time.desc()).all()
-        return [PluginResponse.model_validate(p) for p in db_plugins]
+        items = [PluginResponse.model_validate(p) for p in db_plugins]
+
+        if used_in_sns is True:
+            try:
+                builtin_id = 'PL_BUILTIN_INSPECT_ENGINE_STATUS'
+                builtin = PluginResponse(
+                    id=0,
+                    plugin_id=builtin_id,
+                    name='Inspect Engine Status',
+                    version='1.0.0',
+                    alias_name='inspect-engine-status',
+                    description='Inspect SNS engine variables and call engine functions.',
+                    filename='/scripts/builtin_plugins/inspect_engine_status/index.js',
+                    plugin_type='renderer',
+                    used_in_sns=True,
+                    confirm_needed=False,
+                    can_be_sold=False,
+                    is_delete=False,
+                    create_time=datetime.now(),
+                )
+
+                exists = any(str(getattr(p, 'plugin_id', '')) == builtin_id for p in items)
+                if not exists:
+                    items.insert(0, builtin)
+            except Exception as e:
+                logger.warning(f"Failed to inject built-in SNS plugin: {e}")
+
+        return items
 
     def update_plugin(self, plugin_id: str, plugin: PluginUpdate) -> Optional[PluginResponse]:
         """Update plugin"""

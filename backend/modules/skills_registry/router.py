@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 
 from backend.modules.skills_registry.service import DocSkillsService, get_docskills_service
 
@@ -113,6 +113,22 @@ async def run_docskill(
         return res
     except Exception as e:
         logger.error(f"Error running docskill: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/import")
+async def import_docskill_zip(
+    file: UploadFile = File(...),
+    service: DocSkillsService = Depends(get_docskills_service),
+):
+    """Import a DocSkill from a zip upload into workspace skills/"""
+    try:
+        data = service.import_skill_zip(file)
+        return {"success": True, "data": data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error importing docskill zip: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

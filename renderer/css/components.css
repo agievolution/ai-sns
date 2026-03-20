@@ -1093,6 +1093,17 @@
     transition: border-color 0.2s ease;
 }
 
+select.form-input.is-placeholder,
+select.form-select.is-placeholder,
+.form-select.is-placeholder {
+    color: var(--text-muted);
+}
+
+select.form-input optgroup,
+select.form-select optgroup {
+    font-weight: 600;
+}
+
 .form-input:focus,
 .form-textarea:focus,
 .form-select:focus {
@@ -3188,6 +3199,52 @@ body.theme-dark .chat-tree .tree-item.active {
 .chat-list-container {
     max-height: 280px;
     overflow-y: auto;
+}
+
+/* Keep a stable area height for agent chat list (even with few items) */
+.chat-list-container[id^="chatListContainer-"] {
+    min-height: 200px;
+}
+
+.chat-list-container[id^="chatListContainer-"].chat-list-empty {
+    overflow-y: hidden;
+}
+
+.chat-list-container[id^="tagListContainer-"] {
+    min-height: 200px;
+}
+
+.chat-list-container[id^="tagListContainer-"].chat-list-empty {
+    overflow-y: hidden;
+}
+
+/* Keep empty states consistent in sidebar list areas (avoid padding/margins changing height) */
+.chat-list-container[id^="chatListContainer-"] .empty-state,
+.chat-list-container[id^="tagListContainer-"] .empty-state,
+.chat-list-container[id^="kmNoteTagList-"] .empty-state {
+    min-height: 200px;
+    padding: 0 16px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.km-note-container[id^="noteContainer-"] .km-empty-state,
+.km-file-container[id^="fileContainer-"] .km-empty-state,
+.km-kv-container[id^="kvContainer-"] .km-empty-state {
+    min-height: 200px;
+    padding: 16px !important;
+    box-sizing: border-box;
+}
+
+.km-note-container[id^="noteContainer-"] .km-empty-state svg,
+.km-file-container[id^="fileContainer-"] .km-empty-state svg,
+.km-kv-container[id^="kvContainer-"] .km-empty-state svg {
+    width: 48px !important;
+    height: 48px !important;
+    margin-bottom: 12px !important;
 }
 
 /* Agent list */
@@ -7504,6 +7561,42 @@ body.theme-dark .form-select:focus {
     gap: var(--spacing-md);
 }
 
+.btn.btn-secondary.page-back-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    overflow: visible;
+}
+
+.btn.btn-secondary.page-back-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+
+.page-back-btn svg {
+    display: block;
+    width: 24px;
+    height: 24px;
+    color: var(--text-primary);
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(1px);
+}
+
+ .page-back-btn svg path {
+     stroke: var(--text-primary) !important;
+     fill: none !important;
+     opacity: 1;
+     visibility: visible;
+ }
+
 .empty-state {
     text-align: center;
     padding: var(--spacing-3xl) var(--spacing-xl);
@@ -7521,7 +7614,7 @@ body.theme-dark .form-select:focus {
 
 .model-card,
 .role-card {
-    background: var(--bg-content);
+    background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: var(--spacing-lg);
@@ -7541,6 +7634,95 @@ body.theme-dark .form-select:focus {
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: var(--spacing-md);
+}
+
+.mgmt-card__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+}
+
+.mgmt-card__top-left {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    min-width: 0;
+}
+
+.mgmt-card__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--color-accent);
+    flex-shrink: 0;
+}
+
+.mgmt-card__icon .material-icons-round {
+    font-size: 20px;
+    color: currentColor;
+}
+
+.mgmt-card__meta {
+    min-width: 0;
+    flex: 1;
+}
+
+.mgmt-card__title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    min-width: 0;
+}
+
+.mgmt-card__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.mgmt-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.mgmt-pill--provider,
+.mgmt-pill--category {
+    background: var(--color-accent);
+    color: var(--text-inverse);
+    border-color: transparent;
+}
+
+.mgmt-pill--default {
+    background: var(--color-primary);
+    color: var(--text-inverse);
+    border-color: transparent;
+}
+
+.mgmt-pill--preset {
+    background: var(--color-warning);
+    color: var(--text-inverse);
+    border-color: transparent;
+}
+
+.mgmt-card__actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .model-info,
@@ -7608,16 +7790,68 @@ body.theme-dark .form-select:focus {
     font-size: var(--font-size-lg);
     padding: var(--spacing-xs);
     border-radius: var(--radius-sm);
-    transition: background 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon .material-icons-round {
+    font-size: 20px;
+    color: currentColor;
 }
 
 .btn-icon:hover {
     background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.btn-icon:disabled,
+.btn-icon[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .model-card-body,
 .role-card-body {
     margin-top: var(--spacing-md);
+}
+
+.mgmt-card__body {
+    margin-top: var(--spacing-md);
+    display: grid;
+    gap: var(--spacing-sm);
+}
+
+.mgmt-field {
+    display: grid;
+    gap: 6px;
+}
+
+.mgmt-field__label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.mgmt-field__value {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mgmt-field__value.is-empty {
+    color: var(--text-muted);
+    font-family: inherit;
 }
 
 .model-detail,
@@ -7661,6 +7895,10 @@ body.theme-dark .form-select:focus {
     align-items: center;
     justify-content: center;
     z-index: 1000001;
+}
+
+.modal-overlay--top {
+    z-index: 1000010;
 }
 
 .modal-dialog {
@@ -7782,14 +8020,14 @@ body.theme-dark .form-select:focus {
     border-radius: var(--radius-md);
     font-size: var(--font-size-sm);
     color: var(--text-primary);
-    background: #ffffff;
+    background: var(--bg-content);
     transition: border-color 0.2s ease;
 }
 
 .form-control:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    box-shadow: 0 0 0 3px var(--color-primary-bg);
 }
 
 .form-control:disabled {
@@ -8423,16 +8661,48 @@ body.theme-dark .control-send-btn:hover {
     overflow-y: auto;
 }
 
+.km-note-container[id^="noteContainer-"] {
+    min-height: 200px;
+}
+
+.km-note-container[id^="noteContainer-"].km-list-empty {
+    overflow-y: hidden;
+}
+
 /* KM File Container */
 .km-file-container {
     max-height: 300px;
     overflow-y: auto;
 }
 
+.km-file-container[id^="fileContainer-"] {
+    min-height: 200px;
+}
+
+.km-file-container[id^="fileContainer-"].km-list-empty {
+    overflow-y: hidden;
+}
+
 /* KM KV Container */
 .km-kv-container {
     max-height: 300px;
     overflow-y: auto;
+}
+
+.km-kv-container[id^="kvContainer-"] {
+    min-height: 200px;
+}
+
+.km-kv-container[id^="kvContainer-"].km-list-empty {
+    overflow-y: hidden;
+}
+
+.chat-list-container[id^="kmNoteTagList-"] {
+    min-height: 200px;
+}
+
+.chat-list-container[id^="kmNoteTagList-"].km-list-empty {
+    overflow-y: hidden;
 }
 
 /* ============================================

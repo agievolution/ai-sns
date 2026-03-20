@@ -47,6 +47,10 @@ logger = logging.getLogger(__name__)
 
 class ToolsMixin:
 
+    _WEB_SERVICE_TIMEOUT = (3, 15)
+    _WEB_SERVICE_MAX_RETRIES = 3
+    _WEB_SERVICE_RETRY_BACKOFF = (0.5, 1.0, 2.0)
+
     def _get_ai_sns_server_base(self):
         try:
             from db.DBFactory import query_SystemCfg
@@ -122,48 +126,207 @@ class ToolsMixin:
         await self.ask_agent_and_get_instruction(question, role_prompt)
 
     def on_ask_agent_to_use_service_return(self, content):
-        self.parse_content_to_call_service(content)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._handle_service_selection_and_call_async(content))
+        except RuntimeError:
+            asyncio.run(self._handle_service_selection_and_call_async(content))
 
 
     def parse_content_to_call_service(self, content):
         try:
-            data = robust_json_loads(content, default=None)
-            if not isinstance(data, dict):
-                raise ValueError("Invalid service selection payload (not a JSON object)")
-
-            url = data.get("address")
-            method = (data.get("method") or "get").lower()
-            params = data.get("parameter")
-            if params is None:
-                params = data.get("Parameter", {})
-            if params is None:
-                params = {}
-
-            if not isinstance(url, str) or not url.startswith("http"):
-                raise ValueError("Invalid 'address' value. Must be a valid URL.")
-
-            if method not in ["get", "post", "put", "delete", "patch"]:  # Validate method
-                raise ValueError("Invalid 'method' value. Supported methods: get, post, put, delete, patch")
-
+            url, method, params = self._parse_service_call_payload(content)
             response = self.call_service(url, method, **params)
-            return response  # Return the response
-
+            return response
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"Error processing content: {e}")
-            return None  # or raise the exception, depending on desired behavior
+            return None
+
+    def _parse_service_call_payload(self, content):
+        data = robust_json_loads(content, default=None)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid service selection payload (not a JSON object)")
+
+        url = data.get("address")
+        method = (data.get("method") or "get").lower()
+        params = data.get("parameter")
+        if params is None:
+            params = data.get("Parameter", {})
+        if params is None:
+            params = {}
+
+        if not isinstance(url, str) or not url.startswith("http"):
+            raise ValueError("Invalid 'address' value. Must be a valid URL.")
+
+        if method not in ["get", "post", "put", "delete", "patch"]:
+            raise ValueError("Invalid 'method' value. Supported methods: get, post, put, delete, patch")
+
+        if not isinstance(params, dict):
+            raise ValueError("Invalid 'parameter' value. Must be a JSON object.")
+
+        return url, method, params
+
+    async def _handle_service_selection_and_call_async(self, content: str):
+        url = ""
+        method = ""
+        params = {}
+        try:
+            url, method, params = self._parse_service_call_payload(content)
+        except Exception as e:
+            msg = f"Invalid service payload: {e}"
+            try:
+                self.show_alert_on_map(msg, is_error=True)
+            except Exception:
+                pass
+            try:
+                self.taskmng.add_process_info_to_list(f"system: {msg}")
+            except Exception:
+                pass
+            try:
+                self.write_thinking_process_to_pane("Service selection parse failed", msg)
+            except Exception:
+                pass
+            try:
+                self.show_status_on_map("idle")
+            except Exception:
+                pass
+            return
+
+        try:
+            self.command_status = ""
+        except Exception:
+            pass
+
+        response_text = await self._call_web_service_with_retry_async(url, method, params)
+        if response_text is not None:
+            try:
+                self.handle_service_called_result(response_text)
+            except Exception as e:
+                msg = f"Service call returned but handling failed: {e}"
+                try:
+                    self.show_alert_on_map(msg, is_error=True)
+                except Exception:
+                    pass
+                try:
+                    self.taskmng.add_process_info_to_list(f"system: {msg}")
+                except Exception:
+                    pass
+                try:
+                    self.write_thinking_process_to_pane("Service call handling failed", msg)
+                except Exception:
+                    pass
+            return
+
+        final_msg = f"Web service call failed after retries: {method.upper()} {url}"
+        try:
+            self.show_alert_on_map(final_msg, is_error=True)
+        except Exception:
+            pass
+        try:
+            self.taskmng.add_process_info_to_list(f"system: {final_msg}")
+        except Exception:
+            pass
+        try:
+            self.write_thinking_process_to_pane("Web service call failed", final_msg)
+        except Exception:
+            pass
+        try:
+            self.show_status_on_map("idle")
+        except Exception:
+            pass
+
+        try:
+            asyncio.create_task(self.taskmng.process_task(action="process_activity", ask_content=""))
+        except Exception:
+            pass
+
+    async def _call_web_service_with_retry_async(self, url: str, method: str, params: dict):
+        max_retries = int(getattr(self, "_WEB_SERVICE_MAX_RETRIES", self._WEB_SERVICE_MAX_RETRIES) or 3)
+        backoffs = getattr(self, "_WEB_SERVICE_RETRY_BACKOFF", self._WEB_SERVICE_RETRY_BACKOFF) or (0.5, 1.0, 2.0)
+        timeout = getattr(self, "_WEB_SERVICE_TIMEOUT", self._WEB_SERVICE_TIMEOUT) or (3, 15)
+
+        try:
+            self.show_status_on_map("using-tool")
+        except Exception:
+            pass
+
+        last_err = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                def _do_request():
+                    m = (method or "get").lower()
+                    if m in ["get", "delete"]:
+                        resp = requests.request(m, url, params=params, timeout=timeout)
+                    else:
+                        resp = requests.request(m, url, json=params, timeout=timeout)
+                    resp.raise_for_status()
+                    return resp.text
+
+                if hasattr(asyncio, "to_thread"):
+                    result = await asyncio.to_thread(_do_request)
+                else:
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, _do_request)
+                try:
+                    self.show_status_on_map("idle")
+                except Exception:
+                    pass
+                return result
+            except requests.exceptions.RequestException as e:
+                last_err = e
+                msg = f"Web service call failed (attempt {attempt}/{max_retries}): {e}"
+                try:
+                    self.taskmng.add_process_info_to_list(f"system: {msg}")
+                except Exception:
+                    pass
+                try:
+                    self.write_thinking_process_to_pane("Web service call failed", msg)
+                except Exception:
+                    pass
+            except Exception as e:
+                last_err = e
+                msg = f"Web service call error (attempt {attempt}/{max_retries}): {e}"
+                try:
+                    self.taskmng.add_process_info_to_list(f"system: {msg}")
+                except Exception:
+                    pass
+                try:
+                    self.write_thinking_process_to_pane("Web service call error", msg)
+                except Exception:
+                    pass
+
+            if attempt < max_retries:
+                try:
+                    backoff = float(backoffs[attempt - 1]) if attempt - 1 < len(backoffs) else float(backoffs[-1])
+                except Exception:
+                    backoff = 0.5
+                await asyncio.sleep(max(0.0, backoff))
+
+        try:
+            self.show_status_on_map("idle")
+        except Exception:
+            pass
+
+        try:
+            if last_err is not None:
+                logger.warning("Web service call failed after retries: %s %s, last_err=%s", method, url, last_err)
+        except Exception:
+            pass
+        return None
 
     def call_service(self, url, method, **params):
         try:
+            timeout = getattr(self, "_WEB_SERVICE_TIMEOUT", None) or (3, 15)
             if method == "get":
-                response = requests.get(url, params=params)
+                response = requests.get(url, params=params, timeout=timeout)
             elif method == "post":
-                response = requests.post(url, json=params)  # Use 'data' for post
+                response = requests.post(url, json=params, timeout=timeout)  # Use 'data' for post
             elif method == "put":
-                response = requests.put(url, json=params)
+                response = requests.put(url, json=params, timeout=timeout)
             elif method == "delete":
-                response = requests.delete(url, params=params)
+                response = requests.delete(url, params=params, timeout=timeout)
             elif method == "patch":
-                response = requests.patch(url, json=params)
+                response = requests.patch(url, json=params, timeout=timeout)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
 

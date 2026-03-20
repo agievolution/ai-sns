@@ -4,6 +4,105 @@
  */
 
 const AgentSidebar = {
+    clearAgentListActiveState() {
+        document.querySelectorAll('#agentList .agent-item').forEach(item => {
+            item.classList.remove('active');
+        });
+    },
+
+    collapseAllAgentSections() {
+        document.querySelectorAll('.agent-section-container').forEach(container => {
+            container.style.display = 'none';
+        });
+    },
+
+    hideAllAgentPages() {
+        document.querySelectorAll('.agent-page-layout').forEach(page => {
+            page.style.display = 'none';
+        });
+    },
+
+    showAgentPage(agentId) {
+        const targetPage = document.getElementById(`page-agent-${agentId}`);
+        if (targetPage) {
+            targetPage.style.display = 'flex';
+            console.log('[AgentSidebar] Agent page shown:', agentId);
+        }
+    },
+
+    ensureManagementBackHandler() {
+        if (this._managementBackHandlerBound) return;
+        this._managementBackHandlerBound = true;
+
+        document.addEventListener('click', (e) => {
+            const t = e && e.target ? e.target : null;
+            if (!t || !t.closest) return;
+
+            const isBack = t.closest('#closeModelManagementBtn') || t.closest('#closeRoleManagementBtn');
+            if (!isBack) return;
+
+            const currentId = window.agentState?.currentAgentId;
+            if (!currentId) return;
+
+            setTimeout(() => {
+                try {
+                    this.switchAgent(parseInt(currentId));
+                } catch (err) {
+                    console.warn('[AgentSidebar] Failed to restore agent view after management back:', err);
+                }
+            }, 0);
+        }, true);
+    },
+
+    restoreAfterPageSwitch() {
+        try {
+            const activeManagementEl = document.querySelector('.agent-management.active');
+            const activeManagementPage = activeManagementEl && activeManagementEl.dataset ? activeManagementEl.dataset.page : null;
+
+            if (activeManagementPage === 'model-management' || activeManagementPage === 'role-management') {
+                const mainContent = document.getElementById('mainContent');
+                const mgmtSelector = activeManagementPage === 'model-management'
+                    ? '.model-management-page-container'
+                    : '.role-management-page-container';
+                const mgmtContainer = mainContent ? mainContent.querySelector(mgmtSelector) : null;
+
+                if (mainContent && mgmtContainer) {
+                    mainContent.querySelectorAll('.page-container').forEach(page => {
+                        page.style.display = 'none';
+                    });
+                    mgmtContainer.style.display = 'block';
+                } else {
+                    this.navigateToManagementPage(activeManagementPage, activeManagementEl);
+                }
+
+                this.collapseAllAgentSections();
+                this.hideAllAgentPages();
+                return;
+            }
+
+            const currentId = window.agentState?.currentAgentId;
+            if (!currentId) return;
+
+            this.collapseAllAgentSections();
+
+            const targetContainer = document.querySelector(`.agent-section-container[data-agent-id="${currentId}"]`);
+            if (targetContainer) {
+                targetContainer.style.display = 'block';
+            }
+
+            this.hideAllAgentPages();
+            this.showAgentPage(parseInt(currentId));
+
+            this.clearAgentListActiveState();
+            const activeItem = document.querySelector(`#agentList .agent-item[data-agent-id="${currentId}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
+        } catch (err) {
+            console.warn('[AgentSidebar] Failed to restore view after page switch:', err);
+        }
+    },
+
     resolve(urlOrPath) {
         try {
             if (typeof window !== 'undefined' && typeof window.resolveAgentServerUrl === 'function') {
@@ -136,9 +235,19 @@ const AgentSidebar = {
         // Add management buttons
         const managementButtons = `
             <div class="agent-item agent-management" data-page="model-management">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <circle cx="19" cy="5" r="2"></circle>
+                    <circle cx="5" cy="19" r="2"></circle>
+                    <circle cx="19" cy="19" r="2"></circle>
+                    <circle cx="5" cy="5" r="2"></circle>
+                    <line x1="7" y1="7" x2="10" y2="10"></line>
+                    <line x1="14" y1="14" x2="17" y2="17"></line>
+                    <line x1="17" y1="7" x2="14" y2="10"></line>
+                    <line x1="10" y1="14" x2="7" y2="17"></line>
                 </svg>
+                
                 <span class="web-section-title">LLM Setting</span>
             </div>
             <div class="agent-item agent-management" data-page="role-management">
@@ -367,7 +476,7 @@ const AgentSidebar = {
             btn.addEventListener('click', () => {
                 const page = btn.dataset.page;
                 console.log('[AgentSidebar] Clicked management button:', page);
-                this.navigateToManagementPage(page);
+                this.navigateToManagementPage(page, btn);
             });
         });
 
@@ -387,9 +496,7 @@ const AgentSidebar = {
         }
 
         // 1. Collapse all agent-section-containers
-        document.querySelectorAll('.agent-section-container').forEach(container => {
-            container.style.display = 'none';
-        });
+        this.collapseAllAgentSections();
 
         // 2. Expand selected agent's section-container
         const targetContainer = document.querySelector(`.agent-section-container[data-agent-id="${agentId}"]`);
@@ -399,21 +506,13 @@ const AgentSidebar = {
         }
 
         // 3. Hide all agent pages
-        document.querySelectorAll('.agent-page-layout').forEach(page => {
-            page.style.display = 'none';
-        });
+        this.hideAllAgentPages();
 
         // 4. Show selected agent page
-        const targetPage = document.getElementById(`page-agent-${agentId}`);
-        if (targetPage) {
-            targetPage.style.display = 'flex'; // Use flex instead of block to preserve layout
-            console.log('[AgentSidebar] Agent page shown:', agentId);
-        }
+        this.showAgentPage(agentId);
 
         // 5. Update agent list active state
-        document.querySelectorAll('#agentList .agent-item[data-agent-id]').forEach(item => {
-            item.classList.remove('active');
-        });
+        this.clearAgentListActiveState();
         const activeItem = document.querySelector(`#agentList .agent-item[data-agent-id="${agentId}"]`);
         if (activeItem) {
             activeItem.classList.add('active');
@@ -479,14 +578,31 @@ const AgentSidebar = {
     /**
      * Navigate to management page
      */
-    async navigateToManagementPage(page) {
+    async navigateToManagementPage(page, sourceEl = null) {
         try {
             console.log('[AgentSidebar] Navigating to management page:', page);
 
             if (page === 'agent-management') {
+                const activeManagementEl = document.querySelector('.agent-management.active');
+                const activeManagementPage = activeManagementEl && activeManagementEl.dataset ? activeManagementEl.dataset.page : null;
+                if (activeManagementPage === 'model-management' || activeManagementPage === 'role-management') {
+                    this._agentManageReturnPage = activeManagementPage;
+                } else {
+                    this._agentManageReturnPage = null;
+                }
                 await this.showAgentManageDialog();
                 return;
             }
+
+            this.collapseAllAgentSections();
+            this.hideAllAgentPages();
+            this.clearAgentListActiveState();
+
+            if (sourceEl && sourceEl.classList) {
+                sourceEl.classList.add('active');
+            }
+
+            this.ensureManagementBackHandler();
 
             // Import management pages dynamically
             const module = await import('./index.js');
@@ -707,7 +823,15 @@ const AgentSidebar = {
             window.electronAPI.showBrowserView();
         }
 
+        const returnPage = this._agentManageReturnPage;
+        this._agentManageReturnPage = null;
+
         await this.reload();
+
+        if (returnPage === 'model-management' || returnPage === 'role-management') {
+            const btn = document.querySelector(`.agent-management[data-page="${returnPage}"]`);
+            await this.navigateToManagementPage(returnPage, btn);
+        }
     },
 
     initAgentDragAndDrop() {

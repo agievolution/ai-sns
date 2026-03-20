@@ -91,20 +91,9 @@ const RoleManagementPage = {
         return `
             <div class="page-header">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <button class="btn btn-secondary" id="closeRoleManagementBtn" title="Back">
-                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M20 12H4M10 18L4 12L10 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg> Back
-                    </button>
                     <h2>Roles</h2>
                 </div>
                 <div class="header-actions">
-                    <button class="btn btn-secondary" id="importRolesBtn">
-                        <span>📥</span> Import
-                    </button>
-                    <button class="btn btn-secondary" id="exportRolesBtn">
-                        <span>📤</span> Export
-                    </button>
                     <button class="btn btn-secondary" id="fromPresetBtn" style="display:none">
                         <span>📋</span> Template
                     </button>
@@ -141,35 +130,41 @@ const RoleManagementPage = {
             role.is_preset === '1'
         );
 
+        const name = role.display_name || role.name;
+        const preview = role.system_prompt
+            ? `${role.system_prompt.substring(0, 100)}${role.system_prompt.length > 100 ? '...' : ''}`
+            : '';
+
         return `
             <div class="role-card" data-id="${role.role_id}">
-                <div class="role-card-header">
-                    <div class="role-info">
-                        <h3 class="role-name">${role.display_name || role.name}</h3>
-                        <span class="role-category ${role.category}">${categoryLabel}</span>
-                        ${role.is_default ? '<span class="badge badge-primary">Default</span>' : ''}
-                        ${isPreset ? '<span class="badge badge-info">Preset</span>' : ''}
+                <div class="mgmt-card__top">
+                    <div class="mgmt-card__top-left">
+                        <div class="mgmt-card__icon" aria-hidden="true">
+                            <span class="material-icons-round">badge</span>
+                        </div>
+                        <div class="mgmt-card__meta">
+                            <div class="mgmt-card__title-row">
+                                <h3 class="role-name">${name}</h3>
+                            </div>
+                            <div class="mgmt-card__badges">
+                                <span class="mgmt-pill mgmt-pill--category">${String(categoryLabel).toUpperCase()}</span>
+                                ${role.is_default ? '<span class="mgmt-pill mgmt-pill--default">DEFAULT</span>' : ''}
+                                ${isPreset ? '<span class="mgmt-pill mgmt-pill--preset">PRESET</span>' : ''}
+                            </div>
+                        </div>
                     </div>
-                    <div class="role-actions">
-                        <button class="btn-icon" data-action="edit" data-id="${role.role_id}" title="Edit">
-                            ✏️
+                    <div class="role-actions mgmt-card__actions">
+                        <button class="btn-icon" type="button" data-action="edit" data-id="${role.role_id}" title="Edit">
+                            <span class="material-icons-round">edit</span>
                         </button>
-                        <button class="btn-icon" data-action="delete" data-id="${role.role_id}" title="${isPreset ? 'Preset roles cannot be deleted' : 'Delete'}" ${isPreset ? 'disabled aria-disabled="true"' : ''}>
-                            🗑️
+                        <button class="btn-icon" type="button" data-action="delete" data-id="${role.role_id}" title="${isPreset ? 'Preset roles cannot be deleted' : 'Delete'}" ${isPreset ? 'disabled aria-disabled="true"' : ''}>
+                            <span class="material-icons-round">delete</span>
                         </button>
                     </div>
                 </div>
-                <div class="role-card-body">
-                    <div class="role-detail">
-                        <span class="detail-label">Usage:</span>
-                        <span class="detail-value">${role.usage_count || 0}</span>
-                    </div>
+                <div class="role-card-body mgmt-card__body">
                     ${role.description ? `<div class="role-description">${role.description}</div>` : ''}
-                    ${role.system_prompt ? `
-                    <div class="role-prompt-preview">
-                        ${role.system_prompt.substring(0, 100)}${role.system_prompt.length > 100 ? '...' : ''}
-                    </div>
-                    ` : ''}
+                    ${preview ? `<div class="role-prompt-preview">${preview}</div>` : ''}
                 </div>
             </div>
         `;
@@ -184,24 +179,15 @@ const RoleManagementPage = {
             this.showPresetDialog();
         });
 
-        document.getElementById('importRolesBtn')?.addEventListener('click', () => {
-            this.showImportDialog();
-        });
-
-        document.getElementById('exportRolesBtn')?.addEventListener('click', () => {
-            this.exportRoles();
-        });
-
-        document.getElementById('closeRoleManagementBtn')?.addEventListener('click', () => {
-            this.destroy();
-        });
-
-        // Delegate events for role cards
-        document.querySelectorAll('[data-action]').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const action = button.dataset.action;
-                const id = button.dataset.id;
-
+        const container = document.querySelector('.role-management-page-container');
+        if (container && !container.__roleActionsBound) {
+            container.__roleActionsBound = true;
+            container.addEventListener('click', (e) => {
+                const btn = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
+                if (!btn) return;
+                const action = btn.dataset.action;
+                const id = btn.dataset.id;
+                if (!action || !id) return;
                 switch (action) {
                     case 'edit':
                         this.editRole(id);
@@ -211,7 +197,7 @@ const RoleManagementPage = {
                         break;
                 }
             });
-        });
+        }
     },
 
     showPresetDialog() {
@@ -453,7 +439,7 @@ const RoleManagementPage = {
     },
 
     editRole(roleId) {
-        const role = this.state.roles.find(r => r.role_id === roleId);
+        const role = this.state.roles.find(r => String(r.role_id) === String(roleId));
         if (role) {
             this.showRoleDialog(role);
         }

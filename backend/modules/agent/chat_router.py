@@ -8,6 +8,7 @@ import json
 import base64
 import uuid
 import time
+from datetime import datetime
 from typing import Optional
 from typing import List
 import httpx
@@ -18,6 +19,7 @@ from pydantic import BaseModel
 from .agent_manager import agent_manager
 from backend.database.base import get_session
 from backend.database.models.agent import AgentCfg
+from backend.database.models.chat import AIChatMessages
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,94 @@ def _load_agent_cfg_by_name(agent_name: str) -> Optional[dict]:
     finally:
         try:
             db.close()
+        except Exception:
+            pass
+
+
+def _save_chat_messages_to_db(
+    *,
+    conversation_id: str,
+    agent_id: Optional[int],
+    agent_name: str,
+    user_message: str,
+    assistant_reply: str,
+) -> None:
+    if not conversation_id:
+        return
+
+    session = get_session()
+    try:
+        is_new_conversation = not session.query(AIChatMessages).filter_by(
+            conversation_id=conversation_id,
+            is_first=True,
+        ).first()
+
+        now = datetime.now()
+        messages_to_save = []
+
+        friend_account = str(agent_id) if agent_id is not None else ''
+
+        if is_new_conversation:
+            messages_to_save.append(
+                AIChatMessages(
+                    conversation_id=conversation_id,
+                    agent_id=agent_id,
+                    flag=0,
+                    title=user_message[:50] if len(user_message) > 50 else user_message,
+                    content=user_message,
+                    attachment_list=None,
+                    owner_name="User",
+                    owner_account="user",
+                    friend_name=agent_name,
+                    friend_account=friend_account,
+                    is_first=True,
+                    create_time=now,
+                )
+            )
+        else:
+            messages_to_save.append(
+                AIChatMessages(
+                    conversation_id=conversation_id,
+                    agent_id=agent_id,
+                    flag=0,
+                    content=user_message,
+                    attachment_list=None,
+                    owner_name="User",
+                    owner_account="user",
+                    friend_name=agent_name,
+                    friend_account=friend_account,
+                    is_first=False,
+                    create_time=now,
+                )
+            )
+
+        messages_to_save.append(
+            AIChatMessages(
+                conversation_id=conversation_id,
+                agent_id=agent_id,
+                flag=1,
+                content=assistant_reply,
+                attachment_list=None,
+                owner_name="User",
+                owner_account="user",
+                friend_name=agent_name,
+                friend_account=friend_account,
+                is_first=False,
+                create_time=now,
+            )
+        )
+
+        session.add_all(messages_to_save)
+        session.commit()
+    except Exception as e:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        logger.error(f"Failed to save chat messages: {e}", exc_info=True)
+    finally:
+        try:
+            session.close()
         except Exception:
             pass
 
@@ -618,6 +708,18 @@ async def agent_chat_by_id(
                 context_id=context_id,
                 stream=False
             )
+
+            try:
+                _save_chat_messages_to_db(
+                    conversation_id=context_id,
+                    agent_id=agent_id,
+                    agent_name=(cfg or {}).get('name') or str(agent_id),
+                    user_message=request.message,
+                    assistant_reply=reply,
+                )
+            except Exception:
+                pass
+
             return {
                 'success': True,
                 'data': {
@@ -643,13 +745,26 @@ async def agent_chat_by_id(
             show_token_usage=request.show_token_usage,
         )
 
+        # Persist messages for local (non-streaming) chat
+        conv_id = request.conversation_id or "default"
+        try:
+            _save_chat_messages_to_db(
+                conversation_id=conv_id,
+                agent_id=agent_id,
+                agent_name=agent.name,
+                user_message=request.message,
+                assistant_reply=reply,
+            )
+        except Exception:
+            logger.warning("Failed to persist non-streaming chat messages", exc_info=True)
+
         usage = agent.get_last_usage(request.conversation_id) if request.show_token_usage else None
 
         return {
             "success": True,
             "data": {
                 "reply": reply,
-                "conversation_id": request.conversation_id or "default",
+                "conversation_id": conv_id,
                 "agent_id": agent_id,
                 "agent_name": agent.name,
                 "usage": usage,
@@ -873,12 +988,35 @@ async def agent_chat_stream_by_id(
             context_id = request.conversation_id or 'default'
 
             async def generate_remote():
+                parts: List[str] = []
                 async for sse in _remote_agent_stream(
                     rpc_url=rpc_url,
                     text=request.message,
                     context_id=context_id,
                 ):
+                    try:
+                        line = str(sse or '')
+                        if line.startswith('data:'):
+                            payload = line[len('data:'):].strip()
+                            obj = json.loads(payload)
+                            c = obj.get('content') if isinstance(obj, dict) else None
+                            if isinstance(c, str) and c:
+                                parts.append(c)
+                    except Exception:
+                        pass
                     yield sse
+
+                try:
+                    _save_chat_messages_to_db(
+                        conversation_id=context_id,
+                        agent_id=agent_id,
+                        agent_name=(cfg or {}).get('name') or str(agent_id),
+                        user_message=request.message,
+                        assistant_reply=''.join(parts),
+                    )
+                except Exception:
+                    pass
+
                 yield f"data: {json.dumps({'done': True})}\n\n"
 
             return StreamingResponse(
@@ -966,6 +1104,18 @@ async def agent_chat_by_name(
                 context_id=context_id,
                 stream=False
             )
+
+            try:
+                _save_chat_messages_to_db(
+                    conversation_id=context_id,
+                    agent_id=(cfg or {}).get('id'),
+                    agent_name=(cfg or {}).get('name') or agent_name,
+                    user_message=request.message,
+                    assistant_reply=reply,
+                )
+            except Exception:
+                pass
+
             return {
                 'success': True,
                 'data': {
@@ -991,13 +1141,26 @@ async def agent_chat_by_name(
             show_token_usage=request.show_token_usage,
         )
 
+        # Persist messages for local (non-streaming) chat
+        conv_id = request.conversation_id or "default"
+        try:
+            _save_chat_messages_to_db(
+                conversation_id=conv_id,
+                agent_id=agent.agent_id,
+                agent_name=agent.name,
+                user_message=request.message,
+                assistant_reply=reply,
+            )
+        except Exception:
+            logger.warning("Failed to persist non-streaming chat messages", exc_info=True)
+
         usage = agent.get_last_usage(request.conversation_id) if request.show_token_usage else None
 
         return {
             "success": True,
             "data": {
                 "reply": reply,
-                "conversation_id": request.conversation_id or "default",
+                "conversation_id": conv_id,
                 "agent_id": agent.agent_id,
                 "agent_name": agent.name,
                 "usage": usage,
@@ -1034,12 +1197,34 @@ async def agent_chat_stream_by_name(
             context_id = request.conversation_id or 'default'
 
             async def generate_remote():
+                parts: List[str] = []
                 async for sse in _remote_agent_stream(
                     rpc_url=rpc_url,
                     text=request.message,
                     context_id=context_id,
                 ):
+                    try:
+                        line = str(sse or '')
+                        if line.startswith('data:'):
+                            payload = line[len('data:'):].strip()
+                            obj = json.loads(payload)
+                            c = obj.get('content') if isinstance(obj, dict) else None
+                            if isinstance(c, str) and c:
+                                parts.append(c)
+                    except Exception:
+                        pass
                     yield sse
+
+                try:
+                    _save_chat_messages_to_db(
+                        conversation_id=context_id,
+                        agent_id=(cfg or {}).get('id'),
+                        agent_name=(cfg or {}).get('name') or agent_name,
+                        user_message=request.message,
+                        assistant_reply=''.join(parts),
+                    )
+                except Exception:
+                    pass
                 yield f"data: {json.dumps({'done': True})}\n\n"
 
             return StreamingResponse(

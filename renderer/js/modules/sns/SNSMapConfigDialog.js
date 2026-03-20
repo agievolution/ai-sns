@@ -81,7 +81,7 @@ export class SNSMapConfigDialog {
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-secondary" id="snsMapConfigDialogCancelBtn">Cancel</button>
-                        <button class="btn btn-primary" id="saveMapConfigBtn">Save</button>
+                        <button class="btn btn-primary" id="saveMapConfigBtn">Ok</button>
                     </div>
                 </div>
             </div>

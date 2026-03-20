@@ -9,6 +9,95 @@ const ModelManagementPage = {
         }
         return urlOrPath;
     },
+    notify(message, type = 'info') {
+        const msg = String(message ?? '');
+        const t = String(type || 'info');
+        try {
+            if (typeof window !== 'undefined' && typeof window.showNotification === 'function') {
+                window.showNotification(msg, t);
+                return;
+            }
+        } catch (e) {
+        }
+        try {
+            if (typeof window !== 'undefined' && window.Toast && typeof window.Toast.show === 'function') {
+                window.Toast.show(msg, t, 4000);
+                return;
+            }
+        } catch (e) {
+        }
+        try {
+            alert(msg);
+        } catch (e) {
+        }
+    },
+    showTestResultDialog(payload, rawResponse = null) {
+        const data = payload && typeof payload === 'object' ? payload : {};
+        const status = String(data.status || 'error');
+        const latency = data.latency_ms != null ? String(data.latency_ms) : '';
+        const reply = data.reply != null ? String(data.reply) : '';
+        const baseUrl = data.base_url != null ? String(data.base_url) : '';
+        const model = data.model != null ? String(data.model) : '';
+
+        const overlayId = 'llmTestConnectionResultModal';
+        try {
+            const existing = document.getElementById(overlayId);
+            if (existing) existing.remove();
+        } catch (e) {
+        }
+
+        const safeReply = String(reply || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const contentHtml = `
+            <div class="llm-test-result" style="display:flex; flex-direction:column; gap:10px;">
+                <div><b>Status:</b> ${status}</div>
+                ${model ? `<div><b>Model:</b> ${model}</div>` : ''}
+                ${baseUrl ? `<div><b>Base URL:</b> ${baseUrl}</div>` : ''}
+                ${latency ? `<div><b>Latency:</b> ${latency} ms</div>` : ''}
+                ${safeReply ? `<div><b>Reply:</b><div class="llm-test-result__reply" style="margin-top:6px; padding:10px; border:1px solid var(--border-color); border-radius:8px; white-space:pre-wrap;">${safeReply}</div></div>` : ''}
+            </div>
+        `;
+
+        const html = `
+            <div class="modal-overlay modal-overlay--top" id="${overlayId}" style="z-index: 1000010;">
+                <div class="modal-dialog" style="max-width: 720px;">
+                    <div class="modal-header">
+                        <h3>Test connection</h3>
+                        <button class="modal-close" type="button" data-close="1">×</button>
+                    </div>
+                    <div class="modal-body">
+                        ${contentHtml}
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-primary" type="button" data-close="1">OK</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        try {
+            document.body.insertAdjacentHTML('beforeend', html);
+            const el = document.getElementById(overlayId);
+            if (el) {
+                el.addEventListener('click', (e) => {
+                    const t = e.target;
+                    if (!t) return;
+                    if (t.id === overlayId) {
+                        try { el.remove(); } catch (e) {}
+                        return;
+                    }
+                    if (t.closest && t.closest('[data-close]')) {
+                        try { el.remove(); } catch (e) {}
+                    }
+                });
+                return;
+            }
+        } catch (e) {
+        }
+
+        const fallbackMsg = safeReply
+            ? `Reply: ${safeReply}${latency ? `\nLatency: ${latency} ms` : ''}`
+            : (rawResponse && rawResponse.error ? String(rawResponse.error) : 'No response');
+        this.notify(fallbackMsg, status === 'success' ? 'success' : 'error');
+    },
     state: {
         models: [],
         selectedModel: null,
@@ -76,20 +165,9 @@ const ModelManagementPage = {
         return `
             <div class="page-header">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <button class="btn btn-secondary" id="closeModelManagementBtn" title="Back">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M20 12H4M10 18L4 12L10 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg> Back
-                    </button>
                     <h2>LLM</h2>
                 </div>
                 <div class="header-actions">
-                    <button class="btn btn-secondary" id="importModelsBtn">
-                        <span>📥</span> Import
-                    </button>
-                    <button class="btn btn-secondary" id="exportModelsBtn">
-                        <span>📤</span> Export
-                    </button>
                     <button class="btn btn-primary" id="addModelBtn">
                         <span>+</span> New LLM
                     </button>
@@ -116,35 +194,48 @@ const ModelManagementPage = {
 
     renderModelCard(model) {
         const providerLabel = this.state.providers.find(p => p.value === model.provider)?.label || model.provider;
+        const modelId = model.model_name || 'N/A';
+        const apiEndpoint = model.api_endpoint || 'N/A';
+        const hasModelId = !!(model.model_name && String(model.model_name).trim());
+        const hasApiEndpoint = !!(model.api_endpoint && String(model.api_endpoint).trim());
 
         return `
             <div class="model-card" data-id="${model.config_id}">
-                <div class="model-card-header">
-                    <div class="model-info">
-                        <h3 class="model-name">${model.name}</h3>
-                        <span class="model-provider ${model.provider}">${providerLabel}</span>
-                        ${model.is_default ? '<span class="badge badge-primary">Default</span>' : ''}
+                <div class="mgmt-card__top">
+                    <div class="mgmt-card__top-left">
+                        <div class="mgmt-card__icon" aria-hidden="true">
+                            <span class="material-icons-round">hub</span>
+                        </div>
+                        <div class="mgmt-card__meta">
+                            <div class="mgmt-card__title-row">
+                                <h3 class="model-name">${model.name}</h3>
+                            </div>
+                            <div class="mgmt-card__badges">
+                                <span class="mgmt-pill mgmt-pill--provider">${String(providerLabel).toUpperCase()}</span>
+                                ${model.is_default ? '<span class="mgmt-pill mgmt-pill--default">DEFAULT</span>' : ''}
+                            </div>
+                        </div>
                     </div>
-                    <div class="model-actions">
-                        <button class="btn-icon" data-action="test" data-id="${model.config_id}" title="Test connection">
-                            🔍
+                    <div class="model-actions mgmt-card__actions">
+                        <button class="btn-icon" type="button" data-action="test" data-id="${model.config_id}" title="Test connection">
+                            <span class="material-icons-round">play_arrow</span>
                         </button>
-                        <button class="btn-icon" data-action="edit" data-id="${model.config_id}" title="Edit">
-                            ✏️
+                        <button class="btn-icon" type="button" data-action="edit" data-id="${model.config_id}" title="Edit">
+                            <span class="material-icons-round">edit</span>
                         </button>
-                        <button class="btn-icon" data-action="delete" data-id="${model.config_id}" title="Delete">
-                            🗑️
+                        <button class="btn-icon" type="button" data-action="delete" data-id="${model.config_id}" title="Delete">
+                            <span class="material-icons-round">delete</span>
                         </button>
                     </div>
                 </div>
-                <div class="model-card-body">
-                    <div class="model-detail">
-                        <span class="detail-label">Model ID:</span>
-                        <span class="detail-value">${model.model_name || 'N/A'}</span>
+                <div class="model-card-body mgmt-card__body">
+                    <div class="mgmt-field">
+                        <div class="mgmt-field__label">MODEL ID</div>
+                        <div class="mgmt-field__value ${hasModelId ? '' : 'is-empty'}">${modelId}</div>
                     </div>
-                    <div class="model-detail">
-                        <span class="detail-label">API Endpoint:</span>
-                        <span class="detail-value">${model.api_endpoint || 'N/A'}</span>
+                    <div class="mgmt-field">
+                        <div class="mgmt-field__label">API ENDPOINT</div>
+                        <div class="mgmt-field__value ${hasApiEndpoint ? '' : 'is-empty'}">${apiEndpoint}</div>
                     </div>
                     ${model.description ? `<div class="model-description">${model.description}</div>` : ''}
                 </div>
@@ -157,23 +248,15 @@ const ModelManagementPage = {
             this.showModelDialog();
         });
 
-        document.getElementById('importModelsBtn')?.addEventListener('click', () => {
-            this.showImportDialog();
-        });
-
-        document.getElementById('exportModelsBtn')?.addEventListener('click', () => {
-            this.exportModels();
-        });
-
-        document.getElementById('closeModelManagementBtn')?.addEventListener('click', () => {
-            this.destroy();
-        });
-
-        // Delegate events for model cards
-        document.querySelectorAll('[data-action]').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const action = button.dataset.action;
-                const id = button.dataset.id;
+        const container = document.querySelector('.model-management-page-container');
+        if (container && !container.__modelActionsBound) {
+            container.__modelActionsBound = true;
+            container.addEventListener('click', (e) => {
+                const btn = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
+                if (!btn) return;
+                const action = btn.dataset.action;
+                const id = btn.dataset.id;
+                if (!action || !id) return;
 
                 switch (action) {
                     case 'edit':
@@ -183,11 +266,11 @@ const ModelManagementPage = {
                         this.deleteModel(id);
                         break;
                     case 'test':
-                        this.testConnection(id);
+                        this.testConnection(id, null, btn);
                         break;
                 }
             });
-        });
+        }
     },
 
     showModelDialog(model = null) {
@@ -247,12 +330,13 @@ const ModelManagementPage = {
         // Test connection button
         modal.querySelector('.test-connection-btn')?.addEventListener('click', async () => {
             const formData = this.getFormData(modal);
+            const btn = modal.querySelector('.test-connection-btn');
             await this.testConnection(null, {
                 api_endpoint: formData.api_endpoint,
                 api_key: formData.api_key,
                 model_name: formData.model_name,
                 provider: formData.provider
-            });
+            }, btn);
         });
     },
 
@@ -313,7 +397,8 @@ const ModelManagementPage = {
                                        value="${model?.api_key || ''}"
                                        placeholder="sk-..." required>
                                 <button type="button" class="btn btn-secondary test-connection-btn">
-                                    Test connection
+                                    <span class="material-icons-round" aria-hidden="true">play_arrow</span>
+                                    <span>Test connection</span>
                                 </button>
                             </div>
                         </div>
@@ -471,7 +556,7 @@ const ModelManagementPage = {
         }
     },
 
-    async testConnection(configId, data = null) {
+    async testConnection(configId, data = null, btnEl = null) {
         let payload = data;
         if (!payload) {
             const model = this.state.models.find(m => m.config_id === configId);
@@ -485,20 +570,29 @@ const ModelManagementPage = {
         }
 
         try {
-            window.showNotification?.('Testing connection...', 'info');
+            if (btnEl) {
+                try { btnEl.disabled = true; } catch (e) {}
+            }
+            this.notify('Testing connection...', 'info');
             const response = await fetch(this.resolve('/api/agent/llm-configs/test'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const result = await response.json();
-            if (result.success) {
-                window.showNotification?.('Connection test succeeded!', 'success');
-            } else {
-                window.showNotification?.('Connection test failed: ' + (result.error || 'Unknown error'), 'error');
+            if (result && result.success && result.data && String(result.data.status || '').toLowerCase() === 'success') {
+                this.notify('Connection test succeeded', 'success');
+                this.showTestResultDialog(result.data, result);
+                return;
             }
+            const errMsg = (result && (result.error || (result.data && result.data.message))) ? String(result.error || result.data.message) : 'Unknown error';
+            this.notify('Connection test failed: ' + errMsg, 'error');
         } catch (error) {
-            window.showNotification?.('Connection test failed: ' + error.message, 'error');
+            this.notify('Connection test failed: ' + error.message, 'error');
+        } finally {
+            if (btnEl) {
+                try { btnEl.disabled = false; } catch (e) {}
+            }
         }
     },
 

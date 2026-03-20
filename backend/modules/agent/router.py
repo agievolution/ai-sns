@@ -5,16 +5,22 @@ Agent module - API router
 import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends, Request
+from pydantic import BaseModel
 
 from .schemas import AgentConfig, AgentResponse, AgentUpdateConfig, AgentModelParamsUpdate
 from .service import AgentService
 from .dependencies import get_agent_service
 from .agent_manager import AgentManager
+from .code_executor import CodeExecutor
 from db.DBFactory import Session, AgentCfg
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+class ExecutePythonRequest(BaseModel):
+    code: str
 
 
 @router.put("/reorder", response_model=dict)
@@ -51,6 +57,24 @@ async def reorder_agents(request: Request):
         raise
     except Exception as e:
         logger.error(f"Error reordering agents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/execute-python", response_model=dict)
+async def execute_python(payload: ExecutePythonRequest):
+    try:
+        code = (payload.code or "").strip()
+        if not code:
+            raise HTTPException(status_code=422, detail="Code is required")
+
+        executor = CodeExecutor(timeout=30, max_output_size=20000)
+        result = executor.execute_python(code)
+
+        return {"success": True, "data": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error executing python: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

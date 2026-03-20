@@ -5,13 +5,13 @@ Executes plugins, MCPs, functions, and skills with actual code execution
 """
 import os
 import sys
-import json
-import logging
-import subprocess
 import asyncio
-import tempfile
+import logging
+import json
 import shutil
-from pathlib import Path
+import subprocess
+import platform
+from datetime import datetime
 from typing import Dict, Any, Optional
 from datetime import datetime
 import traceback
@@ -19,10 +19,23 @@ from contextlib import AsyncExitStack
 
 logger = logging.getLogger(__name__)
 
+try:
+    import httpx
+except Exception:
+    httpx = None
+
+
+def _httpx_client_no_env(**kwargs):
+    if httpx is None:
+        raise ImportError("httpx is required for SSE MCP transport")
+    return httpx.AsyncClient(trust_env=False, **kwargs)
+
 # MCP client imports
 try:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
+    from mcp.client.sse import sse_client
+    from mcp.client.streamable_http import streamablehttp_client
     MCP_AVAILABLE = True
 except ImportError:
     MCP_AVAILABLE = False
@@ -197,29 +210,50 @@ class ToolExecutor:
             mcp_type = mcp_data.get('mcp_type', 'stdio')
             parameter = mcp_data.get('parameter', '{}')
 
-            if not file_path or not os.path.exists(file_path):
-                # If file doesn't exist, return connection test status
-                self.log_execution("mcp", mcp_id, "warning", f"MCP file not found: {file_path}")
+            mcp_type_norm = str(mcp_type or 'stdio').lower().strip()
+            is_http_transport = mcp_type_norm in ('sse', 'streamable-http')
 
+            if not file_path:
+                self.log_execution("mcp", mcp_id, "warning", "MCP file_path missing")
                 return {
-                    "status": "partial_success",
+                    "status": "error",
                     "mcp_id": mcp_id,
                     "mcp_name": mcp_name,
                     "mcp_type": mcp_type,
-                    "message": f"MCP '{mcp_name}' configuration valid (file not found for actual execution)",
+                    "message": "MCP file_path is required",
                     "timestamp": datetime.now().isoformat(),
-                    "connection": {
-                        "status": "configured",
-                        "file_path": file_path,
-                        "mcp_type": mcp_type,
-                        "note": "MCP server file not found, but configuration is valid"
-                    }
                 }
+
+            if not is_http_transport:
+                is_file = os.path.exists(file_path)
+                is_command = False
+                if not is_file:
+                    # stdio may use a command (e.g. npx) instead of a script path
+                    is_command = shutil.which(str(file_path)) is not None
+
+                if (not is_file) and (not is_command):
+                    # If neither file nor command exists, return configuration status
+                    self.log_execution("mcp", mcp_id, "warning", f"MCP stdio target not found: {file_path}")
+
+                    return {
+                        "status": "partial_success",
+                        "mcp_id": mcp_id,
+                        "mcp_name": mcp_name,
+                        "mcp_type": mcp_type,
+                        "message": f"MCP '{mcp_name}' configuration valid (file not found for actual execution)",
+                        "timestamp": datetime.now().isoformat(),
+                        "connection": {
+                            "status": "configured",
+                            "file_path": file_path,
+                            "mcp_type": mcp_type,
+                            "note": "MCP server file/command not found, but configuration is valid"
+                        }
+                    }
 
             # Real MCP server test
             self.log_execution("mcp", mcp_id, "testing", f"Testing MCP server: {file_path}")
 
-            result = await self._test_mcp_server(file_path, mcp_type, parameter)
+            result = await self._test_mcp_server(file_path, mcp_type_norm, parameter)
 
             self.log_execution("mcp", mcp_id, "completed", "MCP test completed", result)
 
@@ -609,110 +643,179 @@ if 'main' in dir():
             }
 
         try:
-            # Prepare environment with UTF-8 encoding (for Windows compatibility)
-            env = os.environ.copy()
-            env['PYTHONIOENCODING'] = 'utf-8'
+            mcp_type_norm = str(mcp_type or 'stdio').lower().strip()
 
-            # Determine command to start server
-            if file_path.endswith('.py'):
-                cmd = [get_python_executable(), file_path]
-            else:
-                cmd = [file_path]
+            stdio_args: list[str] = []
+            stdio_env: Optional[Dict[str, str]] = None
+            stdio_command_resolved: Optional[str] = None
+            if mcp_type_norm == 'stdio' and parameter:
+                try:
+                    p = json.loads(parameter) if isinstance(parameter, str) else parameter
+                    if isinstance(p, list):
+                        stdio_args = [str(x) for x in p]
+                    elif isinstance(p, dict):
+                        if isinstance(p.get('args'), list):
+                            stdio_args = [str(x) for x in p.get('args')]
+                        if isinstance(p.get('env'), dict):
+                            stdio_env = {str(k): str(v) for k, v in p.get('env').items()}
+                except Exception:
+                    # Ignore parameter parse errors for backward compatibility
+                    pass
 
-            # Set up MCP client parameters
-            server_params = StdioServerParameters(
-                command=cmd[0],
-                args=cmd[1:] if len(cmd) > 1 else [],
-                env=env
-            )
+            total_timeout = 30
+            if mcp_type_norm in ('sse', 'streamable-http'):
+                total_timeout = 60
+            if mcp_type_norm == 'stdio':
+                # If file_path is a command (e.g., npx) rather than a script path, startup may be slow.
+                if (not str(file_path).endswith('.py')) and (not os.path.exists(str(file_path))):
+                    resolved = shutil.which(str(file_path))
+                    if resolved:
+                        stdio_command_resolved = resolved
+                        total_timeout = 180
 
-            # Connect to MCP server and test with timeout
-            async with asyncio.timeout(30):  # 30 second timeout
+            async with asyncio.timeout(total_timeout):
                 async with AsyncExitStack() as stack:
-                    # Start stdio transport
-                    stdio_transport = await stack.enter_async_context(
-                        stdio_client(server_params)
-                    )
-                    stdio, write = stdio_transport
+                    if mcp_type_norm == 'stdio':
+                        # Prepare environment with UTF-8 encoding (for Windows compatibility)
+                        env = os.environ.copy()
+                        env['PYTHONIOENCODING'] = 'utf-8'
+                        if stdio_env:
+                            env.update(stdio_env)
 
-                    # Create client session
-                    session = await stack.enter_async_context(
-                        ClientSession(stdio, write)
-                    )
+                        # Determine command to start server
+                        if file_path.endswith('.py'):
+                            cmd = [get_python_executable(), file_path] + (stdio_args or [])
+                        else:
+                            cmd = [stdio_command_resolved or file_path] + (stdio_args or [])
 
-                    # Initialize connection
+                        server_params = StdioServerParameters(
+                            command=cmd[0],
+                            args=cmd[1:] if len(cmd) > 1 else [],
+                            env=env
+                        )
+
+                        stdio_transport = await stack.enter_async_context(stdio_client(server_params))
+                        read_stream, write_stream = stdio_transport
+                        session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
+
+                    elif mcp_type_norm == 'sse':
+                        # file_path is treated as URL
+                        sse_transport = await stack.enter_async_context(
+                            sse_client(
+                                str(file_path),
+                                timeout=30.0,
+                                sse_read_timeout=300.0,
+                                httpx_client_factory=_httpx_client_no_env,
+                            )
+                        )
+                        read_stream, write_stream = sse_transport
+                        session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
+
+                    elif mcp_type_norm == 'streamable-http':
+                        candidates = []
+                        raw_url = str(file_path)
+                        candidates.append(raw_url)
+                        if raw_url.endswith('/'):
+                            candidates.append(raw_url.rstrip('/'))
+                        else:
+                            candidates.append(raw_url + '/')
+                        # keep order but unique
+                        seen = set()
+                        candidates = [u for u in candidates if not (u in seen or seen.add(u))]
+
+                        last_err: Optional[Exception] = None
+                        http_transport = None
+                        for url in candidates:
+                            try:
+                                http_transport = await stack.enter_async_context(
+                                    streamablehttp_client(
+                                        url,
+                                        headers={},
+                                        timeout=60,
+                                        sse_read_timeout=300,
+                                        httpx_client_factory=_httpx_client_no_env,
+                                    )
+                                )
+                                break
+                            except Exception as e:
+                                last_err = e
+                                continue
+
+                        if http_transport is None:
+                            raise last_err or RuntimeError('Failed to connect streamable-http')
+
+                        # streamablehttp_client may return (read, write) or (read, write, get_session_id)
+                        read_stream = http_transport[0]
+                        write_stream = http_transport[1]
+                        session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
+
+                    else:
+                        raise ValueError(f"Unsupported MCP type: {mcp_type_norm}")
+
                     await session.initialize()
 
-                    # List available tools
                     tools_result = await session.list_tools()
-                    tools_list = []
-                    for tool in tools_result.tools:
-                        tools_list.append({
-                            "name": tool.name,
-                            "description": tool.description
-                        })
+                    tools_list = [
+                        {"name": t.name, "description": t.description}
+                        for t in (tools_result.tools or [])
+                    ]
 
-                    # Try to call the first tool (or a specific tool)
                     tool_call_result = None
                     if tools_list:
-                        # Try to find get_weather or use first tool
                         test_tool = None
-                        test_args = {}
+                        test_args: Dict[str, Any] = {}
 
-                        # Look for get_weather tool
-                        for tool in tools_result.tools:
-                            if tool.name == "get_weather":
-                                test_tool = "get_weather"
+                        for t in tools_result.tools:
+                            if t.name == 'get_weather':
+                                test_tool = 'get_weather'
                                 test_args = {"city": "Beijing", "unit": "celsius"}
                                 break
-                            elif tool.name == "get_current_time":
-                                test_tool = "get_current_time"
+                            if t.name == 'get_current_time':
+                                test_tool = 'get_current_time'
                                 test_args = {"timezone": "UTC"}
                                 break
-                            elif tool.name == "calculate":
-                                test_tool = "calculate"
+                            if t.name == 'calculate':
+                                test_tool = 'calculate'
                                 test_args = {"expression": "10 + 20"}
                                 break
+                            if t.name == 'echo':
+                                test_tool = 'echo'
+                                test_args = {"message": "Hello"}
+                                break
 
-                        # If no specific tool found, use first one with empty args
                         if not test_tool and tools_result.tools:
                             test_tool = tools_result.tools[0].name
                             test_args = {}
 
-                        # Call the tool
                         if test_tool:
                             try:
                                 call_result = await session.call_tool(test_tool, test_args)
-
-                                # Extract text content
                                 result_text = ""
                                 for content in call_result.content:
                                     if hasattr(content, 'text'):
                                         result_text += content.text
-
                                 tool_call_result = {
                                     "tool_name": test_tool,
                                     "arguments": test_args,
                                     "success": True,
-                                    "result": result_text[:500]  # Limit to 500 chars
+                                    "result": result_text[:500],
                                 }
                             except Exception as e:
                                 tool_call_result = {
                                     "tool_name": test_tool,
                                     "arguments": test_args,
                                     "success": False,
-                                    "error": str(e)
+                                    "error": str(e),
                                 }
 
-                    # Return success with tool list and call result
                     return {
                         "status": "success",
                         "file_path": file_path,
-                        "mcp_type": mcp_type,
+                        "mcp_type": mcp_type_norm,
                         "message": "MCP server connected and tools tested successfully",
                         "tools_count": len(tools_list),
                         "tools": tools_list,
-                        "tool_call_result": tool_call_result
+                        "tool_call_result": tool_call_result,
                     }
 
         except asyncio.TimeoutError:

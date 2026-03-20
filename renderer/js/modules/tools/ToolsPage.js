@@ -13,9 +13,9 @@ const ToolsPage = {
                                 <h1 class="plugin-list-title">Tools Plugin List</h1>
                                 <p class="tools-main-ref__subtitle">Manage and test here</p>
                             </div>
-                            <button class="tools-add-btn" onclick="toolsHandlers.showAddDialog(toolsHandlers.currentCategory)">
+                            <button class="tools-add-btn">
                                 <span class="material-icons-round tools-main-ref__add-icon">add</span>
-                                Add Tool
+                                Add
                             </button>
                         </header>
                         <div class="plugin-grid" id="pluginGrid">

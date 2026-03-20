@@ -18,14 +18,14 @@ const getApiClient = () => {
 export default {
     userStats: {
         rebirth: 0,
-        level: 3,
-        credit: 100,
-        money: 10996.61,
-        life: 125,
-        iq: 70,
-        energy: 150,
-        move: 187.5,
-        exp: 30
+        level: 0,
+        credit: 0,
+        money: 0,
+        life: 0,
+        iq: 0,
+        energy: 0,
+        move: 0,
+        exp: 0
     },
 
     _themeObserver: null,

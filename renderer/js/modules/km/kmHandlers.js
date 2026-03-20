@@ -347,16 +347,25 @@ const kmHandlers = {
         const noteTree = document.getElementById(`noteTree-${kbId}`);
         if (!noteTree) return;
 
+        const noteContainer = document.getElementById(`noteContainer-${kbId}`);
+
         const notes = this.notes[kbId] || [];
 
         if (notes.length === 0) {
+            if (noteContainer) {
+                noteContainer.classList.add('km-list-empty');
+            }
             noteTree.innerHTML = `
-                <div style="padding: 20px; text-align: center; color: #999;">
-                    No notes<br>
-                    Click "New Note" to create
+                <div class="km-empty-state">
+                    <p>No notes</p>
+                    <p>Click "New Note" to create</p>
                 </div>
             `;
             return;
+        }
+
+        if (noteContainer) {
+            noteContainer.classList.remove('km-list-empty');
         }
 
         const sortedNotes = [...notes].sort((a, b) => {
@@ -429,9 +438,12 @@ const kmHandlers = {
         const notes = this.notes[kbId] || [];
         const taggedNotes = (notes || []).filter(n => Array.isArray(n.tags) && n.tags.length > 0);
         if (taggedNotes.length === 0) {
+            container.classList.add('km-list-empty');
             container.innerHTML = '<div class="empty-state">No tags</div>';
             return;
         }
+
+        container.classList.remove('km-list-empty');
 
         const groups = {};
         for (const note of taggedNotes) {
@@ -461,9 +473,12 @@ const kmHandlers = {
 
         const tags = Object.keys(groups).sort((a, b) => a.localeCompare(b));
         if (tags.length === 0) {
+            container.classList.add('km-list-empty');
             container.innerHTML = '<div class="empty-state">No tags</div>';
             return;
         }
+
+        container.classList.remove('km-list-empty');
 
         container.innerHTML = tags.map(tag => {
             const items = groups[tag] || [];
@@ -841,9 +856,14 @@ const kmHandlers = {
         const fileTree = document.getElementById(`fileTree-${kbId}`);
         if (!fileTree) return;
 
+        const fileContainer = document.getElementById(`fileContainer-${kbId}`);
+
         const files = this.files[kbId] || [];
 
         if (files.length === 0) {
+            if (fileContainer) {
+                fileContainer.classList.add('km-list-empty');
+            }
             fileTree.innerHTML = `
                 <div class="km-empty-state" style="padding: 40px 20px;">
                     <svg viewBox="0 0 24 24" width="48" height="48" fill="#ddd">
@@ -854,6 +874,10 @@ const kmHandlers = {
                 </div>
             `;
             return;
+        }
+
+        if (fileContainer) {
+            fileContainer.classList.remove('km-list-empty');
         }
 
         const html = files.map(file => {
@@ -1082,9 +1106,14 @@ const kmHandlers = {
         const kvTree = document.getElementById(`kvTree-${kbId}`);
         if (!kvTree) return;
 
+        const kvContainer = document.getElementById(`kvContainer-${kbId}`);
+
         const kvs = this.keyValues[kbId] || [];
 
         if (kvs.length === 0) {
+            if (kvContainer) {
+                kvContainer.classList.add('km-list-empty');
+            }
             kvTree.innerHTML = `
                 <div class="km-empty-state" style="padding: 40px 20px;">
                     <svg viewBox="0 0 24 24" width="48" height="48" fill="#ddd">
@@ -1095,6 +1124,10 @@ const kmHandlers = {
                 </div>
             `;
             return;
+        }
+
+        if (kvContainer) {
+            kvContainer.classList.remove('km-list-empty');
         }
 
         const html = kvs.map(kv => {

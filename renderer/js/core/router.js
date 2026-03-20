@@ -131,29 +131,11 @@ class Router {
                 pageSidebar.classList.remove('hidden');
                 console.log(`[Router] Sidebar restored (preserving state): ${page}`);
 
-                // Special case: when restoring Agent page, ensure UI state is synced with agentState
-                if (page === 'agent' && window.agentState && window.AgentSidebar) {
-                    const currentAgentId = window.agentState.currentAgentId;
-                    if (currentAgentId) {
-                        console.log(`[Router] Restoring Agent selection state: ${currentAgentId}`);
-                        // Ensure UI selection state is correct
-                        setTimeout(() => {
-                            // Remove all active classes
-                            document.querySelectorAll('.agent-item').forEach(item => {
-                                item.classList.remove('active');
-                            });
-                            // Add active class for current agent
-                            const currentAgentItem = document.querySelector(`.agent-item[data-agent-id="${currentAgentId}"]`);
-                            if (currentAgentItem) {
-                                currentAgentItem.classList.add('active');
-                            }
-                            // Ensure current agent section is expanded
-                            const currentAgentSection = document.querySelector(`.agent-section-container[data-agent-id="${currentAgentId}"]`);
-                            if (currentAgentSection) {
-                                currentAgentSection.style.display = 'block';
-                            }
-                        }, 50);
-                    }
+                // Special case: when restoring Agent page, ensure UI state is synced
+                if (page === 'agent' && window.AgentSidebar && typeof window.AgentSidebar.restoreAfterPageSwitch === 'function') {
+                    setTimeout(() => {
+                        window.AgentSidebar.restoreAfterPageSwitch();
+                    }, 50);
                 }
             }
         } catch (error) {

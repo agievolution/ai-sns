@@ -110,27 +110,10 @@ class ToolsEditDialog {
                 specificFields = `
                     <div class="form-group">
                         <label for="pluginType">Plugin Type</label>
-                        <select id="pluginType" name="plugin_type" class="form-control">
-                            <option value="tool">General Tool</option>
-                            <option value="api">API</option>
-                            <option value="data">Data Processing</option>
-                            <option value="ai">AI Model</option>
-                            <option value="custom">Custom</option>
+                        <select id="pluginType" name="used_in_sns" class="form-control">
+                            <option value="false">Agent</option>
+                            <option value="true">SNS</option>
                         </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filePath">File Path</label>
-                        <input type="text" id="filePath" name="file_path" class="form-control" placeholder="/path/to/plugin.py">
-                        <small class="form-text">Python or JavaScript file path</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="runtimeMain">Runtime Code (Python)</label>
-                        <textarea id="runtimeMain" name="runtime_main" class="form-control code-editor" rows="8" placeholder="import sys&#10;import json&#10;&#10;# Read params from stdin&#10;params = json.loads(sys.stdin.read())&#10;&#10;# Business logic&#10;result = {'output': 'Hello'}&#10;&#10;# Print result&#10;print(json.dumps(result))"></textarea>
-                        <small class="form-text">Leave empty to run from the file path</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="parameter">Parameters (JSON)</label>
-                        <textarea id="parameter" name="parameter" class="form-control code-editor" rows="4" placeholder='{"arg1": "value1", "arg2": "value2"}'></textarea>
                     </div>
                 `;
                 break;
@@ -143,16 +126,17 @@ class ToolsEditDialog {
                         <select id="mcpType" name="mcp_type" class="form-control">
                             <option value="stdio">stdio</option>
                             <option value="sse">SSE</option>
+                            <option value="streamable-http">Streamable HTTP</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="filePath">Server File Path *</label>
-                        <input type="text" id="filePath" name="file_path" class="form-control" required placeholder="/path/to/mcp_server.py">
-                        <small class="form-text">Path to the MCP server script</small>
+                        <label for="filePath">Server File Path / Endpoint URL *</label>
+                        <input type="text" id="filePath" name="file_path" class="form-control" required placeholder="/path/to/mcp_server.py or http://127.0.0.1:3088/sse or http://127.0.0.1:3089/mcp">
+                        <small class="form-text">For stdio use a local script path or a command (e.g. npx); for SSE/Streamable HTTP use an HTTP URL.</small>
                     </div>
                     <div class="form-group">
                         <label for="parameter">Launch Parameters (JSON)</label>
-                        <textarea id="parameter" name="parameter" class="form-control code-editor" rows="4" placeholder='{"arg": "value"}'></textarea>
+                        <textarea id="parameter" name="parameter" class="form-control code-editor" rows="4" placeholder='{"args": ["-y", "@org/pkg"], "env": {"KEY": "VALUE"}}'></textarea>
                     </div>
                     <div class="form-group">
                         <label for="requirement">Requirements</label>
@@ -231,6 +215,11 @@ class ToolsEditDialog {
             </div>
         `;
 
+        // Plugin editor is intentionally minimal.
+        if (category === 'tools-plugin') {
+            return baseFields + configSection;
+        }
+
         return baseFields + configSection + confirmField;
     }
 
@@ -242,7 +231,11 @@ class ToolsEditDialog {
                 if (input.type === 'checkbox') {
                     input.checked = tool[key];
                 } else {
-                    input.value = tool[key] || '';
+                    if (key === 'used_in_sns') {
+                        input.value = tool[key] ? 'true' : 'false';
+                    } else {
+                        input.value = tool[key] || '';
+                    }
                 }
             }
         });
@@ -262,6 +255,8 @@ class ToolsEditDialog {
         formData.forEach((value, key) => {
             if (key === 'confirm_needed') {
                 data[key] = document.getElementById('confirmNeeded').checked;
+            } else if (key === 'used_in_sns') {
+                data[key] = String(value).toLowerCase() === 'true';
             } else {
                 data[key] = value;
             }

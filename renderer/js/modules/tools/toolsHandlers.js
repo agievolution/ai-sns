@@ -5,7 +5,7 @@
 import ToolsEditDialog from './ToolsEditDialog.js';
 
 const toolsHandlers = {
-    currentCategory: 'tools-plugin',
+    currentCategory: 'mcp',
     apiBaseUrl: '',
     skillsApiBaseUrl: '',
     editDialog: null,
@@ -94,6 +94,244 @@ const toolsHandlers = {
                 if (t.closest('[data-confirm-ok]')) return cleanup(true);
             });
         });
+    },
+
+    showChoiceDialog({ title, message, choices = [], cancelText = 'Cancel' }) {
+        return new Promise((resolve) => {
+            const dialogId = 'choiceDialog_' + Math.random().toString(16).slice(2);
+            const safeChoices = Array.isArray(choices) ? choices.slice(0, 4) : [];
+            const buttonsHtml = safeChoices
+                .map((c, idx) => {
+                    const label = String(c?.label ?? 'Option');
+                    const value = String(c?.value ?? idx);
+                    return `<button type="button" class="btn btn-secondary" data-choice-value="${value}">${label}</button>`;
+                })
+                .join('');
+
+            const html = `
+                <div class="modal-overlay" id="${dialogId}">
+                    <div class="modal-dialog" style="max-width: 520px;">
+                        <div class="modal-header">
+                            <h2>${title || 'Select an option'}</h2>
+                            <button class="modal-close skill-modal__close" data-choice-close="1">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body" style="color: var(--text-primary); font-size: 14px; line-height: 1.7;">
+                            ${message || ''}
+                        </div>
+                        <div class="modal-footer" style="display:flex; gap: 8px; justify-content:flex-end;">
+                            <button type="button" class="btn btn-secondary" data-choice-cancel="1">${cancelText}</button>
+                            ${buttonsHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', html);
+            const el = document.getElementById(dialogId);
+            if (!el) {
+                resolve(null);
+                return;
+            }
+
+            const cleanup = (val) => {
+                try { el.remove(); } catch (e) {}
+                resolve(val);
+            };
+
+            el.addEventListener('click', (e) => {
+                const t = e.target;
+                if (!t) return;
+                if (t.id === dialogId) return cleanup(null);
+                if (t.closest('[data-choice-close]')) return cleanup(null);
+                if (t.closest('[data-choice-cancel]')) return cleanup(null);
+
+                const btn = t.closest('[data-choice-value]');
+                if (btn) return cleanup(btn.getAttribute('data-choice-value'));
+            });
+        });
+    },
+
+    showImportPluginDialog({ title = 'Import Plugin', message = '', confirmText = 'Confirm', cancelText = 'Cancel' } = {}) {
+        return new Promise((resolve) => {
+            const dialogId = 'importPluginDialog_' + Math.random().toString(16).slice(2);
+
+            const html = `
+                <div class="modal-overlay" id="${dialogId}">
+                    <div class="modal-dialog" style="max-width: 520px;">
+                        <div class="modal-header">
+                            <h2>${title}</h2>
+                            <button class="modal-close skill-modal__close" data-import-close="1">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body" style="color: var(--text-primary); font-size: 14px; line-height: 1.7;">
+                            <div>${message || ''}</div>
+                            <div style="margin-top: 12px; display: grid; gap: 10px;">
+                                <label style="display:flex; align-items:center; gap: 10px; cursor: pointer;">
+                                    <input type="radio" name="importPluginTarget" value="agent" checked />
+                                    <span>Use in Agent</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap: 10px; cursor: pointer;">
+                                    <input type="radio" name="importPluginTarget" value="sns" />
+                                    <span>Use in SNS</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="display:flex; gap: 8px; justify-content:flex-end;">
+                            <button type="button" class="btn btn-secondary" data-import-cancel="1">${cancelText}</button>
+                            <button type="button" class="btn btn-primary" data-import-confirm="1">${confirmText}</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', html);
+            const el = document.getElementById(dialogId);
+            if (!el) {
+                resolve(null);
+                return;
+            }
+
+            const cleanup = (val) => {
+                try { el.remove(); } catch (e) {}
+                resolve(val);
+            };
+
+            el.addEventListener('click', (e) => {
+                const t = e.target;
+                if (!t) return;
+                if (t.id === dialogId) return cleanup(null);
+                if (t.closest('[data-import-close]')) return cleanup(null);
+                if (t.closest('[data-import-cancel]')) return cleanup(null);
+                if (t.closest('[data-import-confirm]')) {
+                    const checked = el.querySelector('input[name="importPluginTarget"]:checked');
+                    const val = checked ? String(checked.value || '') : '';
+                    return cleanup(val || null);
+                }
+            });
+        });
+    },
+
+    async selectZipFile({ accept = '.zip' } = {}) {
+        return new Promise((resolve) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = accept;
+            input.style.display = 'none';
+            document.body.appendChild(input);
+
+            input.addEventListener('change', () => {
+                const file = input.files && input.files[0] ? input.files[0] : null;
+                try { input.remove(); } catch (e) {}
+                resolve(file);
+            }, { once: true });
+
+            input.click();
+        });
+    },
+
+    async importRendererPluginZip({ usedInSns }) {
+        const file = await this.selectZipFile({ accept: '.zip' });
+        if (!file) return;
+
+        const fd = new FormData();
+        fd.append('file', file);
+
+        const url = `${this.apiBaseUrl}/plugins/import?used_in_sns=${usedInSns ? 'true' : 'false'}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            body: fd
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || `Import failed: ${response.status}`);
+        }
+        return await response.json();
+    },
+
+    showMcpJsonImportDialog() {
+        return new Promise((resolve) => {
+            const dialogId = 'mcpJsonImportDialog';
+            try {
+                document.getElementById(dialogId)?.remove();
+            } catch (e) {
+            }
+
+            const html = `
+                <div class="modal-overlay" id="${dialogId}">
+                    <div class="modal-dialog test-result-dialog" style="max-width: 900px; max-height: 90vh; overflow: auto;">
+                        <div class="modal-header">
+                            <h2>Import MCP JSON</h2>
+                            <button class="modal-close skill-modal__close" data-mcpjson-close="1">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <textarea id="mcpJsonImportEditor" spellcheck="false" style="width: 100%; min-height: 55vh; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.4; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;" placeholder='{"mcpServers":{"mcpadvisor":{"command":"npx","args":["-y","@xiaohui-wang/mcpadvisor"]}}}'></textarea>
+                            <div style="margin-top: 8px; color: var(--text-secondary); font-size: 12px; line-height: 1.6;">
+                                Paste a JSON object that contains <code>mcpServers</code> or paste the <code>mcpServers</code> object directly.
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="display:flex; justify-content:flex-end; gap: 8px; padding: 12px 16px;">
+                            <button type="button" class="btn btn-secondary" data-mcpjson-cancel="1">Cancel</button>
+                            <button type="button" class="btn btn-primary" data-mcpjson-import="1">Import</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', html);
+            const el = document.getElementById(dialogId);
+            const editor = document.getElementById('mcpJsonImportEditor');
+            if (!el || !editor) {
+                try { el?.remove(); } catch (e) {}
+                resolve(null);
+                return;
+            }
+
+            const cleanup = (val) => {
+                try { el.remove(); } catch (e) {}
+                resolve(val);
+            };
+
+            el.addEventListener('click', (e) => {
+                const t = e.target;
+                if (!t) return;
+                if (t.id === dialogId) return cleanup(null);
+                if (t.closest('[data-mcpjson-close]')) return cleanup(null);
+                if (t.closest('[data-mcpjson-cancel]')) return cleanup(null);
+                if (t.closest('[data-mcpjson-import]')) return cleanup(String(editor.value || ''));
+            });
+        });
+    },
+
+    async importDocSkillZip() {
+        const file = await this.selectZipFile({ accept: '.zip' });
+        if (!file) return;
+
+        const fd = new FormData();
+        fd.append('file', file);
+
+        const response = await fetch(`${this.skillsApiBaseUrl}/import`, {
+            method: 'POST',
+            body: fd
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || `Import failed: ${response.status}`);
+        }
+        return await response.json();
     },
 
     async loadConfig() {
@@ -289,7 +527,13 @@ const toolsHandlers = {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const payload = await response.json();
-                this.currentData = category === 'skill' ? (payload?.data || []) : payload;
+                let items = category === 'skill' ? (payload?.data || []) : payload;
+
+                if (category === 'tools-plugin' && Array.isArray(items)) {
+                    items = items.filter((p) => String(p?.plugin_type || '').toLowerCase() === 'renderer');
+                }
+
+                this.currentData = items;
             }
 
             console.log(`Loaded ${this.currentData.length} total items for ${category}`);
@@ -359,9 +603,26 @@ const toolsHandlers = {
         const description = tool.description || 'No description available';
         const type = this.getCategoryDisplayName(category);
 
-        const statusLabel = category === 'skill'
-            ? (tool.eligible ? 'Eligible' : 'Missing')
-            : (tool.confirm_needed ? 'Confirm Required' : 'Active');
+        const runner = (tool && typeof tool.runner === 'object' && tool.runner) ? tool.runner : {};
+        const runnerKind = runner && typeof runner.kind === 'string' ? runner.kind : '';
+        const runnerTarget = runner && typeof runner.target === 'string' ? runner.target : '';
+        const runnerLabel = [runnerKind, runnerTarget].filter(Boolean).join(' ');
+
+        const mcpType = String(tool?.mcp_type || '').toLowerCase();
+        const mcpTypeLabel = mcpType === 'streamable-http'
+            ? 'Streamable HTTP'
+            : (mcpType === 'sse' ? 'SSE' : (mcpType || 'stdio'));
+
+        const pluginTypeLabel = tool?.used_in_sns ? 'SNS' : 'Agent';
+
+        const statusLabel = category === 'tools-plugin'
+            ? pluginTypeLabel
+            : (category === 'mcp'
+                ? mcpTypeLabel
+                : (category === 'skill'
+                    ? (runnerKind || 'Unknown')
+                    : (tool.confirm_needed ? 'Confirm Required' : 'Active')));
+
         const statusClass = category === 'skill'
             ? (tool.eligible ? 'author-official--active' : 'author-official--confirm')
             : (tool.confirm_needed ? 'author-official--confirm' : 'author-official--active');
@@ -375,7 +636,9 @@ const toolsHandlers = {
         };
         const iconName = categoryIconMap[category] || 'construction';
 
-        const instructionLabel = tool.instruction || name;
+        const instructionLabel = category === 'skill'
+            ? (runnerLabel || name)
+            : (tool.instruction || name);
         const filePath = tool.file_path || tool.location || '';
 
         const actionsHTML = category === 'skill'
@@ -425,7 +688,7 @@ const toolsHandlers = {
                                 <span class="plugin-badge-connector">${type}</span>
                             </div>
                             <div class="plugin-author">
-                                <span class="author-label">AI-SNS</span>
+                                <span class="author-label">Type</span>
                                 <span class="author-official ${statusClass}">${statusLabel}</span>
                             </div>
                         </div>
@@ -511,6 +774,21 @@ const toolsHandlers = {
             return;
         }
 
+        if (category === 'tools-plugin') {
+            // Find the plugin data
+            const tool = (this.currentData || []).find(t => String(t.plugin_id || t.id) === String(id));
+            if (tool) {
+                if (tool.used_in_sns) {
+                    this.showMessage('Please go to the SNS page to test this plugin.', 'info');
+                } else {
+                    this.showMessage('Please go to the Agent chat page to test this plugin.', 'info');
+                }
+            } else {
+                this.showMessage('Plugin not found.', 'error');
+            }
+            return;
+        }
+
         // Show running state
         const originalText = btn.innerHTML;
         btn.innerHTML = '<span class="spinner-small"></span> Running...';
@@ -519,9 +797,6 @@ const toolsHandlers = {
         try {
             let endpoint = '';
             switch(category) {
-                case 'tools-plugin':
-                    endpoint = `/plugins/${id}/execute`;
-                    break;
                 case 'mcp':
                     endpoint = `/mcp/${id}/execute`;
                     break;
@@ -715,13 +990,159 @@ const toolsHandlers = {
     },
 
     showAddDialog(category) {
-        if (category === 'skill') {
-            this.showMessage('Skills does not currently support creating/importing in the UI (import/refresh will be added later).', 'info');
+        if (this._addDialogInFlight) return;
+        this._addDialogInFlight = true;
+        if (category === 'tools-plugin') {
+            (async () => {
+                try {
+                    const choice = await this.showImportPluginDialog({
+                        title: 'Import Plugin',
+                        message: 'Choose where this renderer plugin will be used.'
+                    });
+                    if (!choice) return;
+
+                    const usedInSns = choice === 'sns';
+                    await this.importRendererPluginZip({ usedInSns });
+                    this.showMessage('Imported successfully', 'success');
+                    await this.loadCategoryContent(category);
+                } catch (e) {
+                    console.error('Import plugin zip error:', e);
+                    this.showMessage('Import failed: ' + e.message, 'error');
+                } finally {
+                    this._addDialogInFlight = false;
+                }
+            })();
             return;
         }
-        this.editDialog.show(category, null, () => {
-            this.loadCategoryContent(category);
-        });
+
+        if (category === 'mcp') {
+            (async () => {
+                try {
+                    const choice = await this.showChoiceDialog({
+                        title: 'Add MCP',
+                        message: 'Create an MCP entry manually or import from a common MCP JSON config.',
+                        choices: [
+                            { label: 'Create Manually', value: 'manual' },
+                            { label: 'Import from MCP JSON', value: 'import-json' },
+                        ],
+                        cancelText: 'Cancel'
+                    });
+                    if (!choice) return;
+
+                    if (choice === 'manual') {
+                        this.editDialog.show(category, null, () => {
+                            this.loadCategoryContent(category);
+                        });
+                        return;
+                    }
+
+                    const raw = await this.showMcpJsonImportDialog();
+                    if (!raw) return;
+
+                    let parsed;
+                    try {
+                        parsed = JSON.parse(raw);
+                    } catch (e) {
+                        throw new Error('Invalid JSON');
+                    }
+
+                    const servers = (parsed && typeof parsed === 'object' && parsed.mcpServers && typeof parsed.mcpServers === 'object')
+                        ? parsed.mcpServers
+                        : parsed;
+
+                    if (!servers || typeof servers !== 'object') {
+                        throw new Error('Missing mcpServers');
+                    }
+
+                    const entries = Object.entries(servers);
+                    if (!entries.length) {
+                        throw new Error('No MCP servers found');
+                    }
+
+                    const results = [];
+                    for (const [key, cfg] of entries) {
+                        try {
+                            const c = (cfg && typeof cfg === 'object') ? cfg : {};
+
+                            let mcpType = 'stdio';
+                            let filePath = '';
+                            let parameter = null;
+
+                            if (typeof c.url === 'string' && c.url.trim()) {
+                                filePath = c.url.trim();
+                                const urlLower = filePath.toLowerCase();
+                                mcpType = urlLower.includes('/sse') || urlLower.endsWith('/sse') ? 'sse' : 'streamable-http';
+                            } else if (typeof c.command === 'string' && c.command.trim()) {
+                                filePath = c.command.trim();
+                                const args = Array.isArray(c.args) ? c.args : [];
+                                const env = (c.env && typeof c.env === 'object') ? c.env : undefined;
+                                parameter = JSON.stringify({ args, env }, null, 0);
+                                mcpType = 'stdio';
+                            } else {
+                                throw new Error('Unsupported MCP server config (expected command+args or url)');
+                            }
+
+                            const payload = {
+                                name: String(c.name || key || 'MCP'),
+                                instruction: String(c.instruction || ''),
+                                description: String(c.description || `Imported from MCP JSON: ${key}`),
+                                mcp_type: mcpType,
+                                file_path: filePath,
+                                parameter: parameter,
+                                requirement: String(c.requirement || ''),
+                            };
+
+                            const resp = await fetch(`${this.apiBaseUrl}/mcp`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                            if (!resp.ok) {
+                                const text = await resp.text();
+                                throw new Error(text || `HTTP ${resp.status}`);
+                            }
+                            const created = await resp.json();
+                            results.push({ key, status: 'success', mcp_id: created?.mcp_id || null, name: created?.name || payload.name });
+                        } catch (e) {
+                            results.push({ key, status: 'error', error: String(e?.message || e) });
+                        }
+                    }
+
+                    this.showTestResult({ imported: results });
+                    await this.loadCategoryContent(category);
+                } catch (e) {
+                    console.error('Import MCP JSON error:', e);
+                    this.showMessage('Import failed: ' + e.message, 'error');
+                } finally {
+                    this._addDialogInFlight = false;
+                }
+            })();
+            return;
+        }
+
+        if (category === 'skill') {
+            (async () => {
+                try {
+                    await this.importDocSkillZip();
+                    this.showMessage('Imported successfully', 'success');
+                    await this.loadCategoryContent(category);
+                } catch (e) {
+                    console.error('Import skill zip error:', e);
+                    this.showMessage('Import failed: ' + e.message, 'error');
+                } finally {
+                    this._addDialogInFlight = false;
+                }
+            })();
+            return;
+        }
+
+        try {
+            this.editDialog.show(category, null, () => {
+                this.loadCategoryContent(category);
+            });
+        } finally {
+            this._addDialogInFlight = false;
+        }
     },
 
     getCategoryDisplayName(category) {
@@ -736,6 +1157,11 @@ const toolsHandlers = {
     },
 
     showDocSkillMarkdown(skillKey, markdown) {
+        try {
+            document.getElementById('docSkillMarkdownDialog')?.remove();
+        } catch (e) {
+        }
+
         const html = `
             <div class="modal-overlay" id="docSkillMarkdownDialog">
                 <div class="modal-dialog test-result-dialog" style="max-width: 900px; max-height: 90vh; overflow: auto;">
@@ -749,11 +1175,11 @@ const toolsHandlers = {
                         </button>
                     </div>
                     <div class="modal-body">
-                        <textarea id="docSkillMarkdownEditor" style="width: 100%; min-height: 60vh; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.4; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;"></textarea>
+                        <textarea id="docSkillMarkdownEditor" spellcheck="false" style="width: 100%; min-height: 60vh; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.4; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px;"></textarea>
                     </div>
                     <div class="modal-footer" style="display:flex; justify-content:flex-end; gap: 8px; padding: 12px 16px;">
                         <button type="button" class="btn btn-primary" id="docSkillSaveBtn">Save</button>
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('docSkillMarkdownDialog').remove()">Close</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('docSkillMarkdownDialog').remove()">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -785,6 +1211,7 @@ const toolsHandlers = {
                     }
                     this.showMessage('Saved successfully', 'success');
                     await this.loadCategoryContent('skill');
+                    document.getElementById('docSkillMarkdownDialog')?.remove();
                 } catch (e) {
                     console.error('Save skill error:', e);
                     this.showMessage('Save failed: ' + e.message, 'error');

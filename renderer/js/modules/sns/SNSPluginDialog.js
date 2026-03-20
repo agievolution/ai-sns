@@ -6,6 +6,15 @@ export class SNSPluginDialog {
         this._plugins = [];
     }
 
+    _isBuiltinPlugin(plugin) {
+        try {
+            const id = plugin && plugin.plugin_id ? String(plugin.plugin_id) : '';
+            return id.startsWith('PL_BUILTIN_');
+        } catch (e) {
+            return false;
+        }
+    }
+
     async _getApiBaseUrl() {
         try {
             if (window.electronAPI && typeof window.electronAPI.getApiUrl === 'function') {
@@ -157,6 +166,11 @@ export class SNSPluginDialog {
         if (select && desc) {
             select.addEventListener('change', () => {
                 const id = String(select.value || '').trim();
+                try {
+                    if (id) select.classList.remove('is-placeholder');
+                    else select.classList.add('is-placeholder');
+                } catch (e) {
+                }
                 const plugin = this._plugins.find(p => String(p.plugin_id) === id);
                 if (!plugin) {
                     desc.textContent = 'Select a plugin to view details';
@@ -168,7 +182,7 @@ export class SNSPluginDialog {
                 const detail = plugin.description ? String(plugin.description) : '';
                 desc.textContent = `${name}${version ? ` v${version}` : ''}${detail ? ` - ${detail}` : ''}`;
 
-                if (deleteBtn) deleteBtn.disabled = false;
+                if (deleteBtn) deleteBtn.disabled = this._isBuiltinPlugin(plugin);
             });
         }
 
@@ -233,13 +247,39 @@ export class SNSPluginDialog {
             return;
         }
 
-        select.innerHTML = '<option value="">Please select a plugin...</option>';
-        for (const p of plugins) {
-            const opt = document.createElement('option');
-            opt.value = String(p.plugin_id);
-            const name = p.name ? String(p.name) : String(p.plugin_id);
-            opt.textContent = name;
-            select.appendChild(opt);
+        select.innerHTML = '<option value="" disabled selected>Please select a plugin...</option>';
+        try {
+            select.classList.add('is-placeholder');
+        } catch (e) {
+        }
+
+        const builtin = plugins.filter(p => this._isBuiltinPlugin(p));
+        const imported = plugins.filter(p => !this._isBuiltinPlugin(p));
+
+        if (builtin.length) {
+            const group = document.createElement('optgroup');
+            group.label = 'Built-in';
+            for (const p of builtin) {
+                const opt = document.createElement('option');
+                opt.value = String(p.plugin_id);
+                const name = p.name ? String(p.name) : String(p.plugin_id);
+                opt.textContent = name;
+                group.appendChild(opt);
+            }
+            select.appendChild(group);
+        }
+
+        if (imported.length) {
+            const group = document.createElement('optgroup');
+            group.label = 'Imported plugins';
+            for (const p of imported) {
+                const opt = document.createElement('option');
+                opt.value = String(p.plugin_id);
+                const name = p.name ? String(p.name) : String(p.plugin_id);
+                opt.textContent = name;
+                group.appendChild(opt);
+            }
+            select.appendChild(group);
         }
     }
 

@@ -177,6 +177,50 @@ async def get_social_engine_status(db: AsyncSession = Depends(get_db)):
         }
 
 
+@router.get("/engine-inspect/default")
+async def engine_inspect_default(db: AsyncSession = Depends(get_db)):
+    """Get a default snapshot of key engine variables for debugging."""
+    try:
+        service = SNSService(db)
+        return await service.engine_inspect_default()
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to inspect engine: {str(e)}",
+        }
+
+
+@router.post("/engine-inspect/var")
+async def engine_inspect_var(request: dict, db: AsyncSession = Depends(get_db)):
+    """Read an engine variable by path (e.g. taskmng.current_objective)."""
+    try:
+        name = request.get("name") if isinstance(request, dict) else None
+        service = SNSService(db)
+        return await service.engine_inspect_var(str(name or ""))
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to inspect variable: {str(e)}",
+        }
+
+
+@router.post("/engine-inspect/call")
+async def engine_inspect_call(request: dict, db: AsyncSession = Depends(get_db)):
+    """Call an engine function by path with args/kwargs."""
+    try:
+        payload = request if isinstance(request, dict) else {}
+        name = payload.get("name")
+        args = payload.get("args")
+        kwargs = payload.get("kwargs")
+        service = SNSService(db)
+        return await service.engine_inspect_call(str(name or ""), args=args, kwargs=kwargs)
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to call function: {str(e)}",
+        }
+
+
 @router.get("/config", response_model=AIChatConfigResponse)
 async def get_ai_chat_config(user_id: str = None, db: AsyncSession = Depends(get_db)):
     """Get AI chat configuration"""

@@ -1685,7 +1685,7 @@ function initMap() {
 
             // Load model with retry
 
-            const gltf = await loadModelWithRetry(loader, 'avatar3d/ctgirlschool_0_0_0_0_02_0.glb');
+            const gltf = await loadModelWithRetry(loader, 'avatar3d/lobster_0_0_0_0_1_0.glb');
 
             model2 = gltf.scene;
 
@@ -4786,41 +4786,123 @@ function showprofile3d(geoGroup) {
 
 var auto_navigate_flag = false;
 
+var __sns_landmark_toggle_busy = false;
 
+ var __sns_google_landmark_overlay = null;
+ var __sns_google_landmark_renderer = null;
 
-function toggleNavigate() {
+ function __snsStopGoogleLandmarkAnimation() {
+     try {
+         if (__sns_google_landmark_renderer && typeof __sns_google_landmark_renderer.setAnimationLoop === 'function') {
+             __sns_google_landmark_renderer.setAnimationLoop(null);
+         }
+     } catch (e) {
+     }
 
-    if (auto_navigate_flag) {
+     try {
+         if (__sns_google_landmark_overlay && typeof __sns_google_landmark_overlay.setMap === 'function') {
+             __sns_google_landmark_overlay.setMap(null);
+         }
+     } catch (e) {
+     }
 
-        cancelNavigate();
+     __sns_google_landmark_renderer = null;
+     __sns_google_landmark_overlay = null;
+ }
 
-        auto_navigate_flag = false;
-
-    } else {
-
-        autoNavigate();
-
-        auto_navigate_flag = true;
-
+async function __snsGetEngineStatusForLandmark() {
+    const base = (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? String(API_BASE_URL).replace(/\/+$/, '') : '';
+    const url = base ? `${base}/api/sns/engine-status` : '/api/sns/engine-status';
+    try {
+        const resp = await fetch(url, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store'
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (e) {
+        return { success: false, message: String(e && e.message ? e.message : e) };
     }
-
 }
 
+function __snsIsEngineActiveForLandmark(status) {
+    try {
+        const ok = status && status.success === true;
+        if (!ok) return true;
+        const taskStatus = String(status && status.task_status ? status.task_status : '').toLowerCase();
+        return !!(status.running || status.started || taskStatus === 'started' || taskStatus === 'paused');
+    } catch (e) {
+        return true;
+    }
+}
 
+function __snsConfirmLandmarkStart(onConfirm, onCancel) {
+    const title = 'Landmark Animation';
+    const message = 'This will play a map animation for a while. Click the Landmark button again to stop it. Continue?';
+    try {
+        if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog(title, message, onConfirm, onCancel || function () {});
+            return;
+        }
+    } catch (e) {
+    }
+
+    const ok = window.confirm(`${title}\n\n${message}`);
+    if (ok) {
+        onConfirm();
+    } else if (onCancel) {
+        onCancel();
+    }
+}
+
+async function toggleNavigate() {
+    if (auto_navigate_flag) {
+        cancelNavigate();
+        auto_navigate_flag = false;
+        return;
+    }
+
+    if (__sns_landmark_toggle_busy) return;
+    __sns_landmark_toggle_busy = true;
+    try {
+        const status = await __snsGetEngineStatusForLandmark();
+        if (__snsIsEngineActiveForLandmark(status)) {
+            try {
+                if (typeof showAlert === 'function') {
+                    showAlert('Landmark animation is only available when the engine is stopped. Please stop the engine first.', true);
+                } else {
+                    alert('Landmark animation is only available when the engine is stopped. Please stop the engine first.');
+                }
+            } catch (e) {
+            }
+            return;
+        }
+
+        __snsConfirmLandmarkStart(
+            function () {
+                if (auto_navigate_flag) return;
+                auto_navigate_flag = true;
+                autoNavigate();
+            },
+            function () {
+                auto_navigate_flag = false;
+            }
+        );
+    } finally {
+        __sns_landmark_toggle_busy = false;
+    }
+}
 
 function autoNavigate() {
 
     console.log("auto navigate");
 
-
+     __snsStopGoogleLandmarkAnimation();
 
     // Initialize Street View
 
     let scene, renderer, camera, loader;
-
-
-
-
 
     // Move mapOptions definition inside the function
 
@@ -4846,11 +4928,10 @@ function autoNavigate() {
 
     map.setOptions(mapOptions);
 
-
-
     const webglOverlayView = new google.maps.WebGLOverlayView();
 
-
+     __sns_google_landmark_overlay = webglOverlayView;
+     __sns_google_landmark_renderer = null;
 
     webglOverlayView.onAdd = () => {
 
@@ -4858,13 +4939,9 @@ function autoNavigate() {
 
         camera = new THREE.PerspectiveCamera();
 
-
-
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
 
         scene.add(ambientLight);
-
-
 
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 
@@ -4872,13 +4949,9 @@ function autoNavigate() {
 
         scene.add(directionalLight);
 
-
-
         loader = new THREE.GLTFLoader();
 
         const source = "cbot.glb";
-
-
 
         loader.load(source, function (gltf) {
 
@@ -4891,8 +4964,6 @@ function autoNavigate() {
         });
 
     };
-
-
 
     webglOverlayView.onContextRestored = ({gl}) => {
 
@@ -4910,27 +4981,34 @@ function autoNavigate() {
 
         renderer.autoClear = false;
 
-
+         __sns_google_landmark_renderer = renderer;
 
         renderer.toneMapping = THREE.ACESFilmicToneMapping; // set tone mapping
 
         renderer.toneMappingExposure = 2.0; // set exposure; otherwise colors are too dark
 
-
-
         loader.manager.onLoad = () => {
+
+             if (!auto_navigate_flag) {
+                 __snsStopGoogleLandmarkAnimation();
+                 return;
+             }
 
             renderer.setAnimationLoop(() => {
 
+                 if (!auto_navigate_flag) {
+                     try {
+                         renderer.setAnimationLoop(null);
+                     } catch (e) {
+                     }
+                     return;
+                 }
+
                 webglOverlayView.requestRedraw();
-
-
 
                 const {tilt, heading, zoom} = mapOptions;
 
                 map.moveCamera({tilt, heading, zoom});
-
-
 
                 if (mapOptions.tilt < 67.5) {
 
@@ -4956,8 +5034,6 @@ function autoNavigate() {
 
     };
 
-
-
     webglOverlayView.onDraw = ({gl, transformer}) => {
 
         const latLngAltitudeLiteral = {
@@ -4970,13 +5046,9 @@ function autoNavigate() {
 
         };
 
-
-
         const matrix = transformer.fromLatLngAltitude(latLngAltitudeLiteral);
 
         camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix);
-
-
 
         webglOverlayView.requestRedraw();
 
@@ -4986,13 +5058,7 @@ function autoNavigate() {
 
     };
 
-
-
     webglOverlayView.setMap(map);
-
-
-
-
 
 }
 
@@ -5003,6 +5069,8 @@ function cancelNavigate() {
     console.log("cancel");
 
     auto_navigate_flag = false;
+
+     __snsStopGoogleLandmarkAnimation();
 
     // refresh();
     findHim();

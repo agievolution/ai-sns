@@ -2404,6 +2404,9 @@ export default {
                     case 'openPlaceWebAddress':
                         this.handleOpenPlaceWebAddress(data.url);
                         break;
+                    case 'openUrl':
+                        this.handleOpenUrl(data.url);
+                        break;
                     case 'closeSNSProfile':
                         this.handleCloseSNSProfile();
                         break;
@@ -3300,6 +3303,26 @@ export default {
         }
 
         console.log('SNS Profile tab closed');
+    }
+
+    ,
+
+    handleOpenUrl(url) {
+        const u = (url === undefined || url === null) ? '' : String(url).trim();
+        if (!u) return;
+
+        try {
+            if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
+                window.electronAPI.openUrl(u);
+                return;
+            }
+        } catch (e) {
+        }
+
+        try {
+            window.open(u, '_blank', 'noopener');
+        } catch (e) {
+        }
     }
 
     ,

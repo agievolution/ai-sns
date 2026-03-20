@@ -128,8 +128,8 @@ const KMNotePage = {
                             <option value="7">36pt</option>
                         </select>
                         <div class="km-color-picker-wrapper">
-                            <input type="color" class="km-color-picker" id="colorPicker" value="#000000" title="Text color">
-                            <button class="km-color-btn" id="colorBtn" title="Text color">
+                            <input type="color" class="km-color-picker" id="colorPicker" value="#000000" title="Text color (Shift+Click to clear selection color)">
+                            <button class="km-color-btn" id="colorBtn" title="Text color (Shift+Click to clear selection color)">
                                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                                     <path d="M9.62 12L12 5.67 14.38 12M11 3L5.5 17h2.25l1.12-3h6.25l1.12 3h2.25L13 3h-2z"/>
                                     <rect x="3" y="20" width="18" height="3" id="colorIndicator" fill="#000000"/>

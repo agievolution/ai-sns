@@ -977,34 +977,23 @@ const PageRenderers = {
 
                 <!-- Tab navigation -->
                 <div class="tools-tabs">
-                    <button class="tools-tab-item active" data-tab="plugins" onclick="PageControllers.switchToolTab('plugins')">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7" rx="1"/>
-                            <rect x="14" y="3" width="7" height="7" rx="1"/>
-                            <rect x="3" y="14" width="7" height="7" rx="1"/>
-                            <rect x="14" y="14" width="7" height="7" rx="1"/>
-                        </svg>
-                        <span>Tools Plugin</span>
-                    </button>
-                    <button class="tools-tab-item" data-tab="mcp" onclick="PageControllers.switchToolTab('mcp')">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="3" width="20" height="14" rx="2"/>
-                            <line x1="8" y1="21" x2="16" y2="21" stroke-width="2"/>
+                    <button class="tools-tab-item active" data-tab="mcp" onclick="PageControllers.switchToolTab('mcp')">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                            <line x1="6" y1="18" x2="6.01" y2="18"></line>
                         </svg>
                         <span>MCP</span>
                     </button>
-                    <button class="tools-tab-item" data-tab="functions" onclick="PageControllers.switchToolTab('functions')">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                            <text x="4" y="16" font-size="12" font-family="serif" fill="currentColor">f(x)</text>
-                        </svg>
-                        <span>Function</span>
-                    </button>
                     <button class="tools-tab-item" data-tab="skills" onclick="PageControllers.switchToolTab('skills')">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="3" width="20" height="14" rx="2"/>
-                            <line x1="2" y1="20" x2="22" y2="20" stroke-width="2"/>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <polyline points="10 13 8 15 10 17"/>
+                            <polyline points="14 13 16 15 14 17"/>
                         </svg>
-                        <span>Computer Use</span>
+                        <span>Skills</span>
                     </button>
                 </div>
 
@@ -1077,34 +1066,23 @@ const PageRenderers = {
 
             <!-- Bottom category list -->
             <div class="tools-category-section">
-                <div class="tools-category-item active" data-tab="plugins">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#666">
-                        <rect x="3" y="3" width="7" height="7" rx="1"/>
-                        <rect x="14" y="3" width="7" height="7" rx="1"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1"/>
-                        <rect x="14" y="14" width="7" height="7" rx="1"/>
-                    </svg>
-                    <span>Tools Plugin</span>
-                </div>
-                <div class="tools-category-item" data-tab="mcp">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#666">
-                        <rect x="2" y="3" width="20" height="14" rx="2"/>
-                        <line x1="8" y1="21" x2="16" y2="21" stroke="#666" stroke-width="2"/>
+                <div class="tools-category-item active" data-tab="mcp">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#666" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
                     </svg>
                     <span>MCP</span>
                 </div>
-                <div class="tools-category-item" data-tab="functions">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#666">
-                        <text x="4" y="16" font-size="12" font-family="serif" fill="#666">f(x)</text>
-                    </svg>
-                    <span>Function</span>
-                </div>
                 <div class="tools-category-item" data-tab="skills">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#666">
-                        <rect x="2" y="3" width="20" height="14" rx="2"/>
-                        <line x1="2" y1="20" x2="22" y2="20" stroke="#666" stroke-width="2"/>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#666" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <polyline points="10 13 8 15 10 17"/>
+                        <polyline points="14 13 16 15 14 17"/>
                     </svg>
-                    <span>Computer Use</span>
+                    <span>Skills</span>
                 </div>
             </div>
         `;
@@ -1396,7 +1374,7 @@ const PageControllers = {
                     </div>
                 </div>
             `,
-            confirmText: 'Save',
+            confirmText: 'Ok',
             onConfirm: () => {
                 Notification.success('Settings saved');
             }
@@ -1472,7 +1450,7 @@ const PageControllers = {
                     </div>
                 </div>
             `,
-            confirmText: 'Save',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             showCancel: true,
             width: '720px',
@@ -3017,7 +2995,8 @@ If you have more questions, feel free to ask!`;
     // Tools page controller
     initToolsPage() {
         this.toolsManager = new window.ToolsManager();
-        this.currentToolTab = 'plugins';
+        this.currentToolTab = 'mcp';
+        this.toolsManager.switchTab(this.currentToolTab);
         this.bindToolsEvents();
         this.loadToolsData();
     },
@@ -3106,10 +3085,8 @@ If you have more questions, feel free to ask!`;
 
     getToolTypeName(type) {
         const names = {
-            'plugins': 'Plugin',
             'mcp': 'MCP',
-            'functions': 'Function',
-            'skills': 'Computer Use'
+            'skills': 'Skills'
         };
         return names[type] || type;
     },
@@ -3182,14 +3159,8 @@ If you have more questions, feel free to ask!`;
 
         try {
             switch (type) {
-                case 'plugins':
-                    await this.toolsManager.deletePlugin(id);
-                    break;
                 case 'mcp':
                     await this.toolsManager.deleteMCP(id);
-                    break;
-                case 'functions':
-                    await this.toolsManager.deleteFunction(id);
                     break;
                 case 'skills':
                     await this.toolsManager.deleteSkill(id);

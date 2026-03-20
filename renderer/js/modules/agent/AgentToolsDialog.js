@@ -19,6 +19,9 @@ const AgentToolsDialog = {
     // DocSkills selections (skill_key)
     docSkillSelections: new Set(),
 
+    // Non-MCP tool configs that are preserved on save but not shown in the UI
+    hiddenToolConfigs: [],
+
     /**
      * Open dialog
      */
@@ -28,6 +31,7 @@ const AgentToolsDialog = {
         // Reset selection state
         this.currentSelections.clear();
         this.docSkillSelections.clear();
+        this.hiddenToolConfigs = [];
 
         // Remove existing dialog
         const existingDialog = document.getElementById('agentToolsDialog');
@@ -50,6 +54,23 @@ const AgentToolsDialog = {
      * Create dialog HTML
      */
     createDialog(agentId) {
+        const mcpTabIcon = `
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+        `;
+        const skillsTabIcon = `
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <polyline points="10 13 8 15 10 17"/>
+                <polyline points="14 13 16 15 14 17"/>
+            </svg>
+        `;
+
         return `
             <div class="modal-overlay" id="agentToolsDialog">
                 <div class="agent-tools-dialog">
@@ -65,36 +86,12 @@ const AgentToolsDialog = {
                     <div class="dialog-body">
                         <!-- Tool category tabs -->
                         <div class="tools-tabs">
-                            <button class="tab-btn active" data-tab="plugin">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                    <path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z"/>
-                                </svg>
-                                Plugin
-                            </button>
-                            <button class="tab-btn" data-tab="mcp">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                </svg>
+                            <button class="tab-btn active" data-tab="mcp">
+                                ${mcpTabIcon}
                                 MCP
                             </button>
-                            <button class="tab-btn" data-tab="function">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                    <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
-                                </svg>
-                                Function
-                            </button>
                             <button class="tab-btn" data-tab="skill">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
-                                </svg>
-                                Computer Use
-                            </button>
-
-                            <button class="tab-btn" data-tab="skill">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                    <path d="M19 2H8c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 18H9V4h9v16z"/>
-                                    <path d="M7 6H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h2V6z"/>
-                                </svg>
+                                ${skillsTabIcon}
                                 Skills
                             </button>
                         </div>
@@ -149,12 +146,22 @@ const AgentToolsDialog = {
 
             // Initialize currentSelections with configured tools
             this.currentSelections.clear();
+            this.hiddenToolConfigs = [];
             agentTools.forEach(tool => {
                 // Extract the correct ID field based on tool_type
                 const toolId = tool.plugin_id || tool.mcp_id || tool.function_id || tool.skill_id;
                 const key = `${tool.tool_type}:${toolId}`;
-                this.currentSelections.add(key);
-                console.log('[AgentToolsDialog] Added to selections:', key);
+                if (tool.tool_type === 'mcp') {
+                    this.currentSelections.add(key);
+                    console.log('[AgentToolsDialog] Added to selections:', key);
+                } else {
+                    this.hiddenToolConfigs.push({
+                        tool_type: tool.tool_type,
+                        tool_id: toolId,
+                        enabled: true
+                    });
+                    console.log('[AgentToolsDialog] Preserved hidden tool config:', key);
+                }
             });
 
             // Initialize skills selections
@@ -181,8 +188,8 @@ const AgentToolsDialog = {
 
             dialog.dataset.agentDocSkills = JSON.stringify(Array.from(this.docSkillSelections));
 
-            // Show currently selected plugins
-            this.renderTools('plugin', allTools.plugins || []);
+            // Default to MCP tab
+            this.renderTools('mcp', allTools.mcps || []);
         } catch (error) {
             console.error('[AgentToolsDialog] Failed to load data:', error);
             this.showError('Failed to load data');
@@ -194,28 +201,25 @@ const AgentToolsDialog = {
      */
     async loadAllTools() {
         try {
-            const [plugins, mcps, functions, skills, docSkillsPayload] = await Promise.all([
-                fetch(this.resolve('/api/tools/plugins')).then(r => r.json()),
+            const [mcps, docSkillsPayload] = await Promise.all([
                 fetch(this.resolve('/api/tools/mcp')).then(r => r.json()),
-                fetch(this.resolve('/api/tools/functions')).then(r => r.json()),
-                fetch(this.resolve('/api/tools/skills')).then(r => r.json()),
                 fetch(this.resolve('/api/skills/list')).then(r => r.json())
             ]);
 
             const docSkills = docSkillsPayload?.data || [];
 
             return {
-                plugins: plugins || [],
                 mcps: mcps || [],
-                functions: functions || [],
-                skills: skills || [],
+                plugins: [],
+                functions: [],
+                skills: [],
                 docSkills: docSkills
             };
         } catch (error) {
             console.error('[AgentToolsDialog] Failed to load all tools:', error);
             return {
-                plugins: [],
                 mcps: [],
+                plugins: [],
                 functions: [],
                 skills: [],
                 docSkills: []
@@ -279,13 +283,24 @@ const AgentToolsDialog = {
      */
     getToolIcon(toolType) {
         const icons = {
-            plugin: '🔌',
-            mcp: '🔗',
-            function: '⚡',
-            skill: '🖥️',
-            'skill': '📄'
+            mcp: `
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                </svg>
+            `,
+            skill: `
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <polyline points="10 13 8 15 10 17"/>
+                    <polyline points="14 13 16 15 14 17"/>
+                </svg>
+            `
         };
-        return icons[toolType] || '🔧';
+        return icons[toolType] || icons.mcp;
     },
 
     /**
@@ -363,14 +378,11 @@ const AgentToolsDialog = {
 
         // Render tools for current tab
         const toolsMap = {
-            plugin: allTools.plugins || [],
             mcp: allTools.mcps || [],
-            function: allTools.functions || [],
-            skill: allTools.skills || [],
-            'skill': allTools.docSkills || []
+            skill: allTools.docSkills || []
         };
 
-        this.renderTools(tab, toolsMap[tab]);
+        this.renderTools(tab, toolsMap[tab] || []);
 
         // Clear search
         const searchInput = document.getElementById('toolsSearchInput');
@@ -437,7 +449,8 @@ const AgentToolsDialog = {
     updateSelectedCount() {
         const countEl = document.getElementById('selectedCount');
         if (countEl) {
-            countEl.textContent = (this.currentSelections.size + this.docSkillSelections.size);
+            const mcpCount = Array.from(this.currentSelections).filter((k) => String(k || '').startsWith('mcp:')).length;
+            countEl.textContent = (mcpCount + this.docSkillSelections.size);
         }
     },
 
@@ -447,7 +460,10 @@ const AgentToolsDialog = {
     async saveConfiguration(agentId) {
         try {
             // Build tool config list from currentSelections
-            const tools = Array.from(this.currentSelections).map((key, index) => {
+            const visibleTools = Array.from(this.currentSelections)
+                .filter((k) => String(k || '').startsWith('mcp:'));
+
+            const tools = visibleTools.map((key, index) => {
                 const [tool_type, tool_id] = key.split(':');
                 return {
                     tool_type,
@@ -455,6 +471,18 @@ const AgentToolsDialog = {
                     enabled: true,
                     priority: index + 1
                 };
+            });
+
+            // Preserve existing non-MCP tools without exposing them in the UI
+            const preserved = Array.isArray(this.hiddenToolConfigs) ? this.hiddenToolConfigs : [];
+            preserved.forEach((t) => {
+                if (!t || !t.tool_type || !t.tool_id) return;
+                tools.push({
+                    tool_type: String(t.tool_type),
+                    tool_id: String(t.tool_id),
+                    enabled: true,
+                    priority: tools.length + 1
+                });
             });
 
             console.log('[AgentToolsDialog] Saving tools:', tools);

@@ -1083,11 +1083,26 @@ function open_url(url) {
         }
         return;
     }
-    if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
-        window.electronAPI.openUrl(u);
-    } else {
-        window.open(u, "_blank");
+    try {
+        if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
+            window.electronAPI.openUrl(u);
+            return;
+        }
+    } catch (e) {
     }
+
+    try {
+        if (typeof window.parent !== 'undefined' && window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                type: 'openUrl',
+                url: u
+            }, '*');
+            return;
+        }
+    } catch (e) {
+    }
+
+    window.open(u, "_blank");
 }
 
 function userInfo() {

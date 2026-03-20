@@ -1551,6 +1551,8 @@ const multiAgentHandlers = {
             return;
         }
 
+        const chatListContainer = document.getElementById(`chatListContainer-${agentId}`);
+
         try {
             // Try to fetch conversations from API with agent_id param
             // If backend supports per-agent filtering, it returns filtered results
@@ -1586,13 +1588,20 @@ const multiAgentHandlers = {
             }
 
             if (conversations.length === 0) {
+                if (chatListContainer) {
+                    chatListContainer.classList.add('chat-list-empty');
+                }
                 treeChildren.innerHTML = '<div class="empty-state">No conversations</div>';
                 return;
             }
 
+            if (chatListContainer) {
+                chatListContainer.classList.remove('chat-list-empty');
+            }
+
             treeChildren.innerHTML = conversations.map((conv) => `
                 <div class="tree-item" data-conversation-id="${conv.conversation_id}" data-agent-id="${agentId}">
-                    <span class="tree-icon">💬</span>
+                    <span class="tree-icon">            🗨️</span>
                     <span class="item-text">${this.escapeHtml(conv.title || 'New conversation')}${conv.stick_time ? ' <span style="color:#ff9800;">📌</span>' : ''}</span>
                 </div>
             `).join('');
@@ -1623,6 +1632,10 @@ const multiAgentHandlers = {
             console.log(`[MultiAgentHandlers] Agent ${agentId} chat list loaded. Total: ${conversations.length}`);
         } catch (error) {
             console.error(`[MultiAgentHandlers] Agent ${agentId} failed to load chat list:`, error);
+            const chatListContainer = document.getElementById(`chatListContainer-${agentId}`);
+            if (chatListContainer) {
+                chatListContainer.classList.add('chat-list-empty');
+            }
         }
     },
 
@@ -1630,6 +1643,10 @@ const multiAgentHandlers = {
         const container = document.getElementById(`tagListContainer-${agentId}`);
         if (!container) return;
 
+        try {
+            container.classList.add('chat-list-empty');
+        } catch (e) {
+        }
         container.innerHTML = '<div class="chat-tree"><div class="tree-children"><div class="empty-state">Loading...</div></div></div>';
 
         try {
@@ -1644,6 +1661,10 @@ const multiAgentHandlers = {
 
             const tagged = (conversations || []).filter(c => c && c.label && String(c.label).trim());
             if (tagged.length === 0) {
+                try {
+                    container.classList.add('chat-list-empty');
+                } catch (e) {
+                }
                 container.innerHTML = '<div class="chat-tree"><div class="tree-children"><div class="empty-state">No tags</div></div></div>';
                 return;
             }
@@ -1675,8 +1696,17 @@ const multiAgentHandlers = {
 
             const groupTags = Object.keys(groups);
             if (groupTags.length === 0) {
+                try {
+                    container.classList.add('chat-list-empty');
+                } catch (e) {
+                }
                 container.innerHTML = '<div class="chat-tree"><div class="tree-children"><div class="empty-state">No tags</div></div></div>';
                 return;
+            }
+
+            try {
+                container.classList.remove('chat-list-empty');
+            } catch (e) {
             }
 
             const tags = groupTags.sort((a, b) => a.localeCompare(b));
@@ -1720,6 +1750,10 @@ const multiAgentHandlers = {
             });
         } catch (e) {
             console.error('[MultiAgentHandlers] Failed to load tag list:', e);
+            try {
+                container.classList.add('chat-list-empty');
+            } catch (e2) {
+            }
             container.textContent = 'Failed to load tags';
         }
     },
@@ -2890,22 +2924,29 @@ const multiAgentHandlers = {
                 const builtin = [
                     { id: 'mindmap', name: 'Mind map plugin', description: 'Convert Markdown mindmap syntax in chat messages into a visual mind map' },
                     { id: 'code', name: 'Code execution plugin', description: 'Extract code blocks from chat messages and provide edit/run features (supports JavaScript, Python, HTML/CSS/JS)' },
-                    { id: 'calendar', name: 'Calendar plugin', description: 'Display and manage calendar events in chat' },
-                    { id: 'chart', name: 'Chart plugin', description: 'Visualize data into charts' },
                     { id: 'avatar3d', name: '3D Avatar', description: 'Open the 3D Avatar page in the right settings panel' }
                 ];
 
                 const loadIntoUi = async () => {
                     if (!select) return;
-                    select.innerHTML = '<option value="">Please select a plugin...</option>';
+                    select.innerHTML = '<option value="" disabled selected>Please select a plugin...</option>';
                     if (desc) desc.textContent = 'Select a plugin to view details';
+                    try {
+                        select.classList.add('is-placeholder');
+                    } catch (e) {
+                    }
 
-                    for (const b of builtin) {
-                        const opt = document.createElement('option');
-                        opt.value = `builtin:${b.id}`;
-                        opt.textContent = b.name;
-                        opt.dataset.description = b.description;
-                        select.appendChild(opt);
+                    if (builtin.length) {
+                        const group = document.createElement('optgroup');
+                        group.label = 'Built-in';
+                        for (const b of builtin) {
+                            const opt = document.createElement('option');
+                            opt.value = `builtin:${b.id}`;
+                            opt.textContent = b.name;
+                            opt.dataset.description = b.description;
+                            group.appendChild(opt);
+                        }
+                        select.appendChild(group);
                     }
 
                     const plugins = await this._fetchRendererPlugins();
@@ -2928,6 +2969,11 @@ const multiAgentHandlers = {
                 if (select && desc) {
                     select.addEventListener('change', () => {
                         const value = String(select.value || '').trim();
+                        try {
+                            if (value) select.classList.remove('is-placeholder');
+                            else select.classList.add('is-placeholder');
+                        } catch (e) {
+                        }
                         if (!value) {
                             desc.textContent = 'Select a plugin to view details';
                             if (deleteBtn) deleteBtn.disabled = true;

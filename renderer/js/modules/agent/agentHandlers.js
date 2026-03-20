@@ -674,21 +674,29 @@ const agentHandlers = {
 
                     const loadIntoUi = async () => {
                         if (!select) return;
-                        select.innerHTML = '<option value="">Please select a plugin...</option>';
+                        select.innerHTML = '<option value="" disabled selected>Please select a plugin...</option>';
                         if (desc) desc.textContent = 'Select a plugin to view details';
+                        try {
+                            select.classList.add('is-placeholder');
+                        } catch (e) {
+                        }
 
                         const builtin = [
                             { id: 'mindmap', name: 'Mind map plugin', description: 'Convert Markdown mindmap syntax in chat messages into a visual mind map' },
                             { id: 'code', name: 'Code execution plugin', description: 'Extract code blocks from chat messages and provide edit/run features (supports JavaScript, Python, HTML/CSS/JS)' },
-                            { id: 'calendar', name: 'Calendar plugin', description: 'Display and manage calendar events in chat' },
-                            { id: 'chart', name: 'Chart plugin', description: 'Visualize data into charts' }
+                            
                         ];
-                        for (const b of builtin) {
-                            const opt = document.createElement('option');
-                            opt.value = `builtin:${b.id}`;
-                            opt.textContent = b.name;
-                            opt.dataset.description = b.description;
-                            select.appendChild(opt);
+                        if (builtin.length) {
+                            const group = document.createElement('optgroup');
+                            group.label = 'Built-in';
+                            for (const b of builtin) {
+                                const opt = document.createElement('option');
+                                opt.value = `builtin:${b.id}`;
+                                opt.textContent = b.name;
+                                opt.dataset.description = b.description;
+                                group.appendChild(opt);
+                            }
+                            select.appendChild(group);
                         }
 
                         const plugins = await this._fetchRendererPlugins();
@@ -711,6 +719,11 @@ const agentHandlers = {
                     if (select && desc) {
                         select.addEventListener('change', () => {
                             const value = String(select.value || '').trim();
+                            try {
+                                if (value) select.classList.remove('is-placeholder');
+                                else select.classList.add('is-placeholder');
+                            } catch (e) {
+                            }
                             if (!value) {
                                 desc.textContent = 'Select a plugin to view details';
                                 if (deleteBtn) deleteBtn.disabled = true;
@@ -1310,6 +1323,8 @@ const agentHandlers = {
         const chatList = document.getElementById('chatList');
         if (!chatList) return;
 
+        const chatListContainer = document.getElementById('chatListContainer') || chatList.closest('.chat-list-container');
+
         try {
             // Call real API to load conversation list from the database
             const response = await agentApi.getConversations(50);
@@ -1319,8 +1334,15 @@ const agentHandlers = {
             if (!treeChildren) return;
 
             if (conversations.length === 0) {
+                if (chatListContainer) {
+                    chatListContainer.classList.add('chat-list-empty');
+                }
                 treeChildren.innerHTML = '<div class="empty-state">No conversations</div>';
                 return;
+            }
+
+            if (chatListContainer) {
+                chatListContainer.classList.remove('chat-list-empty');
             }
 
             // Render conversation list
@@ -1336,6 +1358,9 @@ const agentHandlers = {
             console.error('Failed to load chat list:', error);
             const treeChildren = chatList.querySelector('.tree-children');
             if (treeChildren) {
+                if (chatListContainer) {
+                    chatListContainer.classList.add('chat-list-empty');
+                }
                 treeChildren.innerHTML = '<div class="empty-state error">Load failed</div>';
             }
         }

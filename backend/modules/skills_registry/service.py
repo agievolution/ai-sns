@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import zipfile
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+from fastapi import HTTPException, UploadFile
 
 from backend.config.database import get_db_session
 from backend.database.models.agent import AgentDocSkill
@@ -72,6 +76,129 @@ class DocSkillsService:
 
     def delete_skill(self, skill_key: str) -> None:
         self.registry.delete_skill(skill_key)
+
+    def import_skill_zip(self, file: UploadFile) -> Dict[str, Any]:
+        """Import a DocSkill zip into workspace skills/.
+
+        Rules:
+        - Accept only .zip uploads
+        - Allow SKILL.md at zip root
+        - Extract into a new folder under skills/
+        - Validate frontmatter contains runner.kind and runner.target
+        """
+
+        filename = (file.filename or '').lower()
+        if not filename.endswith('.zip'):
+            raise HTTPException(status_code=400, detail='Only .zip files are supported')
+
+        raw = file.file.read()
+        if not raw:
+            raise HTTPException(status_code=400, detail='Empty file')
+
+        project_root = Path(__file__).parent.parent.parent.parent
+        workspace_dir = (project_root / 'skills').resolve()
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+
+        tmp_dir = workspace_dir / f"_tmp_import_{uuid.uuid4().hex[:10]}"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_zip = tmp_dir / 'skill.zip'
+        tmp_zip.write_bytes(raw)
+
+        try:
+            with zipfile.ZipFile(tmp_zip, 'r') as zf:
+                names = zf.namelist()
+                if not names:
+                    raise HTTPException(status_code=400, detail='Zip is empty')
+
+                # Find SKILL.md (prefer root)
+                skill_md_candidates = [n for n in names if n and n.lower().endswith('skill.md') and not n.endswith('/')]
+                if not skill_md_candidates:
+                    raise HTTPException(status_code=400, detail='SKILL.md not found in zip')
+
+                skill_md_path = None
+                for c in skill_md_candidates:
+                    if '/' not in c.strip('/') and '\\' not in c:
+                        skill_md_path = c
+                        break
+                if not skill_md_path:
+                    # fallback to shortest path
+                    skill_md_path = sorted(skill_md_candidates, key=len)[0]
+
+                zip_root_prefix = Path(skill_md_path).parent
+
+                # Derive target folder name
+                folder_name = Path(skill_md_path).parent.name
+                if not folder_name:
+                    folder_name = Path(file.filename or 'imported_skill').stem
+                folder_name = ''.join(ch for ch in folder_name if ch.isalnum() or ch in ('-', '_')).strip('_-')
+                if not folder_name:
+                    folder_name = f"imported_skill_{uuid.uuid4().hex[:6]}"
+
+                target_dir = (workspace_dir / folder_name).resolve()
+                if target_dir.exists():
+                    target_dir = (workspace_dir / f"{folder_name}_{uuid.uuid4().hex[:6]}").resolve()
+                target_dir.mkdir(parents=True, exist_ok=True)
+
+                target_root = target_dir.resolve()
+
+                for member in zf.infolist():
+                    member_name = member.filename
+                    if not member_name or member_name.endswith('/'):
+                        continue
+
+                    if member_name.startswith('/') or member_name.startswith('\\'):
+                        raise HTTPException(status_code=400, detail='Zip contains absolute paths')
+
+                    dest_rel = Path(member_name)
+                    if zip_root_prefix and zip_root_prefix != Path('.'):
+                        try:
+                            if dest_rel.parts[: len(zip_root_prefix.parts)] == zip_root_prefix.parts:
+                                dest_rel = dest_rel.relative_to(zip_root_prefix)
+                        except Exception:
+                            dest_rel = Path(member_name)
+                    dest = (target_dir / dest_rel).resolve()
+                    if target_root not in dest.parents and dest != target_root:
+                        raise HTTPException(status_code=400, detail='Zip contains unsafe paths')
+
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(member, 'r') as src, open(dest, 'wb') as out:
+                        out.write(src.read())
+
+                # Ensure SKILL.md exists after extraction (in expected place).
+                extracted_skill_md = (target_dir / 'SKILL.md').resolve()
+                if not extracted_skill_md.exists():
+                    raise HTTPException(status_code=400, detail='SKILL.md not found after extraction')
+
+                parsed = self.registry._parse_skill_md(extracted_skill_md)
+                if not parsed:
+                    raise HTTPException(status_code=400, detail='Failed to parse SKILL.md frontmatter')
+
+                runner = parsed.runner or {}
+                kind = runner.get('kind')
+                target = runner.get('target')
+                if not kind or not target:
+                    raise HTTPException(status_code=400, detail='SKILL.md runner.kind and runner.target are required')
+
+                # Refresh and return imported skill
+                self.registry.refresh()
+                imported = self.registry.get(parsed.skill_key) or parsed
+                return {
+                    "skill_key": imported.skill_key,
+                    "name": imported.name,
+                    "description": imported.description,
+                    "location": imported.location,
+                    "source": imported.source,
+                    "runner": imported.runner,
+                }
+        finally:
+            try:
+                if tmp_dir.exists():
+                    for p in tmp_dir.rglob('*'):
+                        pass
+                    import shutil as _shutil
+                    _shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception:
+                pass
 
     def build_prompt_for_agent(self, agent_id: Optional[int]) -> str:
         skills = self._list_for_agent(agent_id)

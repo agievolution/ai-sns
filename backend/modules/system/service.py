@@ -47,6 +47,7 @@ class SystemService:
             "process_info_plan_summary_every_n": getattr(config, 'process_info_plan_summary_every_n', 5),
             "memory_enabled": bool(getattr(config, 'memory_enabled', True)),
             "memory_embedding_enabled": bool(getattr(config, 'memory_embedding_enabled', False)),
+            "log_retention_days": getattr(config, 'log_retention_days', 3),
             "tools": {
                 "page_size": settings.tools.page_size
             }
@@ -74,6 +75,7 @@ class SystemService:
             "process_info_plan_summary_every_n",
             "memory_enabled",
             "memory_embedding_enabled",
+            "log_retention_days",
         }
 
         payload = {k: v for k, v in kwargs.items() if k in allowed_keys}
@@ -86,12 +88,17 @@ class SystemService:
             "contact_recent_limit",
             "process_info_compact_every_n",
             "process_info_plan_summary_every_n",
+            "log_retention_days",
         ):
             if k in payload and payload[k] is not None:
                 try:
                     payload[k] = int(payload[k])
                 except (TypeError, ValueError):
                     payload.pop(k, None)
+
+        if "log_retention_days" in payload:
+            if payload["log_retention_days"] is not None and payload["log_retention_days"] < 0:
+                payload.pop("log_retention_days", None)
 
         for k in ("process_info_compact_every_n", "process_info_plan_summary_every_n"):
             if k in payload:

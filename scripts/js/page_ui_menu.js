@@ -57,6 +57,214 @@ try {
 } catch (e) {
 }
 
+try {
+    if (typeof window !== 'undefined' && window) {
+        window.__infoPanelCollapsed = window.__infoPanelCollapsed === true;
+        window.__infoChatPanelCollapsed = window.__infoChatPanelCollapsed === true;
+    }
+} catch (e) {
+}
+
+function __setInfoPanelCollapsed(panelEl, collapsed) {
+    try {
+        if (!panelEl) return;
+        const next = !!collapsed;
+        if (next) {
+            panelEl.classList.add('info-collapsed');
+        } else {
+            panelEl.classList.remove('info-collapsed');
+        }
+
+        const btn = panelEl.querySelector('.collapse_btn');
+        if (btn) {
+            btn.textContent = next ? '+' : '–';
+            btn.setAttribute('title', next ? 'Expand' : 'Collapse');
+        }
+
+        if (panelEl.id === 'info') {
+            try { window.__infoPanelCollapsed = next; } catch (e) {}
+        }
+        if (panelEl.id === 'info_chat') {
+            try { window.__infoChatPanelCollapsed = next; } catch (e) {}
+        }
+    } catch (e) {
+    }
+}
+
+function collapseInfoPanel() {
+    try {
+        const info = document.getElementById('info');
+        __setInfoPanelCollapsed(info, true);
+    } catch (e) {
+    }
+}
+
+function expandInfoPanel() {
+    try {
+        const info = document.getElementById('info');
+        __setInfoPanelCollapsed(info, false);
+    } catch (e) {
+    }
+}
+
+function toggleInfoPanelCollapsed() {
+    try {
+        const info = document.getElementById('info');
+        if (!info) return;
+        const isCollapsed = info.classList.contains('info-collapsed');
+        __setInfoPanelCollapsed(info, !isCollapsed);
+    } catch (e) {
+    }
+}
+
+function collapseInfoChatPanel() {
+    try {
+        const infoChat = document.getElementById('info_chat');
+        __setInfoPanelCollapsed(infoChat, true);
+    } catch (e) {
+    }
+}
+
+function expandInfoChatPanel() {
+    try {
+        const infoChat = document.getElementById('info_chat');
+        __setInfoPanelCollapsed(infoChat, false);
+    } catch (e) {
+    }
+}
+
+function toggleInfoChatPanelCollapsed() {
+    try {
+        const infoChat = document.getElementById('info_chat');
+        if (!infoChat) return;
+        const isCollapsed = infoChat.classList.contains('info-collapsed');
+        __setInfoPanelCollapsed(infoChat, !isCollapsed);
+    } catch (e) {
+    }
+}
+
+function __makePanelDraggable(panelEl, handleEl) {
+    try {
+        if (!panelEl || !handleEl) return;
+
+        try {
+            const cs = window.getComputedStyle ? window.getComputedStyle(panelEl) : null;
+            const left = cs ? cs.left : '';
+            const top = cs ? cs.top : '';
+            if (!panelEl.style.left) {
+                panelEl.style.left = (left && left !== 'auto') ? left : (panelEl.offsetLeft + 'px');
+            }
+            if (!panelEl.style.top) {
+                panelEl.style.top = (top && top !== 'auto') ? top : (panelEl.offsetTop + 'px');
+            }
+        } catch (e3) {
+            if (!panelEl.style.left) panelEl.style.left = panelEl.offsetLeft + 'px';
+            if (!panelEl.style.top) panelEl.style.top = panelEl.offsetTop + 'px';
+        }
+
+        let dragging = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        const shouldIgnoreTarget = (evtTarget) => {
+            try {
+                if (!evtTarget || !(evtTarget instanceof Element)) return false;
+                return !!evtTarget.closest('.close_btn, .collapse_btn');
+            } catch (e) {
+                return false;
+            }
+        };
+
+        const onMouseMove = (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            panelEl.style.left = (startLeft + dx) + 'px';
+            panelEl.style.top = (startTop + dy) + 'px';
+        };
+
+        const stopDrag = () => {
+            if (!dragging) return;
+            dragging = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', stopDrag);
+        };
+
+        handleEl.addEventListener('mousedown', (e) => {
+            if (shouldIgnoreTarget(e.target)) return;
+            try {
+                e.preventDefault();
+            } catch (e2) {
+            }
+            dragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = panelEl.offsetLeft;
+            startTop = panelEl.offsetTop;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', stopDrag);
+        });
+    } catch (e) {
+    }
+}
+
+function __initInfoPanels() {
+    try {
+        const info = document.getElementById('info');
+        const infoChat = document.getElementById('info_chat');
+
+        if (info) {
+            const collapseBtn = document.getElementById('info_collapse_btn') || info.querySelector('.collapse_btn');
+            if (collapseBtn && !collapseBtn.__boundCollapseHandler) {
+                collapseBtn.__boundCollapseHandler = true;
+                collapseBtn.addEventListener('click', (e) => {
+                    try { e.stopPropagation(); } catch (e2) {}
+                    toggleInfoPanelCollapsed();
+                });
+            }
+
+            const title = info.querySelector('.info_title');
+            if (title) {
+                __makePanelDraggable(info, title);
+            }
+            __setInfoPanelCollapsed(info, !!window.__infoPanelCollapsed);
+        }
+
+        if (infoChat) {
+            const collapseBtn = document.getElementById('info_chat_collapse_btn') || infoChat.querySelector('.collapse_btn');
+            if (collapseBtn && !collapseBtn.__boundCollapseHandler) {
+                collapseBtn.__boundCollapseHandler = true;
+                collapseBtn.addEventListener('click', (e) => {
+                    try { e.stopPropagation(); } catch (e2) {}
+                    toggleInfoChatPanelCollapsed();
+                });
+            }
+
+            const title = infoChat.querySelector('.info_title');
+            if (title) {
+                __makePanelDraggable(infoChat, title);
+            }
+            __setInfoPanelCollapsed(infoChat, !!window.__infoChatPanelCollapsed);
+        }
+    } catch (e) {
+        console.warn('Failed to init info panels:', e);
+    }
+}
+
+try {
+    if (typeof window !== 'undefined' && window) {
+        window.collapseInfoPanel = collapseInfoPanel;
+        window.expandInfoPanel = expandInfoPanel;
+        window.toggleInfoPanelCollapsed = toggleInfoPanelCollapsed;
+        window.collapseInfoChatPanel = collapseInfoChatPanel;
+        window.expandInfoChatPanel = expandInfoChatPanel;
+        window.toggleInfoChatPanelCollapsed = toggleInfoChatPanelCollapsed;
+    }
+} catch (e) {
+}
+
 function __postInfoPanelStateToParent() {
     try {
         const info = document.getElementById('info');
@@ -108,9 +316,11 @@ try {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             __syncTopInfoButtonActiveState();
+            __initInfoPanels();
         });
     } else {
         __syncTopInfoButtonActiveState();
+        __initInfoPanels();
     }
 } catch (e) {
 }
@@ -631,7 +841,36 @@ function close_info_list_chat() {
 
 }
 
-function addMessageToBoard(message) {
+function __formatMessageTimestamp(dateObj) {
+    try {
+        const d = dateObj instanceof Date ? dateObj : new Date();
+        const yyyy = String(d.getFullYear());
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mi = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+    } catch (e) {
+        return '';
+    }
+}
+
+function __appendTimestampToListItem(listItemEl, showTimestamp) {
+    try {
+        if (!listItemEl) return;
+        if (showTimestamp === false) return;
+        const ts = __formatMessageTimestamp(new Date());
+        if (!ts) return;
+        const timeEl = document.createElement('span');
+        timeEl.className = 'info_item_time';
+        timeEl.textContent = ts;
+        listItemEl.appendChild(timeEl);
+    } catch (e) {
+    }
+}
+
+function addMessageToBoard(message, showTimestamp) {
     // Get info list reference
     const infoList = document.getElementById('info_list');
 
@@ -645,13 +884,25 @@ function addMessageToBoard(message) {
     // newListItem.textContent = message;
 
     newListItem.innerHTML = message;
+    __appendTimestampToListItem(newListItem, showTimestamp);
     // Insert new item at the top
     infoList.insertBefore(newListItem, infoList.firstChild);
 }
 
-function appendMessageToBoard(message) {
+function appendMessageToBoard(message, showTimestamp) {
     // Get info list reference
     const infoList = document.getElementById('info_list');
+    if (!infoList) return;
+
+    const infoPanel = document.getElementById('info');
+    const isPanelVisible = !!(infoPanel && infoPanel.style && infoPanel.style.display !== 'none');
+    const isPanelCollapsed = !!(infoPanel && infoPanel.classList && infoPanel.classList.contains('info-collapsed'));
+
+    const isScrollableVisible = isPanelVisible && !isPanelCollapsed && infoList.clientHeight > 0;
+    const threshold = 20;
+    const wasNearBottom = isScrollableVisible
+        ? (infoList.scrollTop + infoList.clientHeight >= infoList.scrollHeight - threshold)
+        : false;
 
     // Create new list item
     const newListItem = document.createElement('li');
@@ -663,13 +914,29 @@ function appendMessageToBoard(message) {
     // newListItem.textContent = message;
 
     newListItem.innerHTML = message;
+    __appendTimestampToListItem(newListItem, showTimestamp);
     // Insert new item at the top
     // infoList.insertBefore(newListItem, infoList.firstChild);
     infoList.append(newListItem);
 
+    if (wasNearBottom) {
+        try {
+            requestAnimationFrame(() => {
+                try {
+                    infoList.scrollTop = infoList.scrollHeight;
+                } catch (e2) {
+                }
+            });
+        } catch (e) {
+            try {
+                infoList.scrollTop = infoList.scrollHeight;
+            } catch (e2) {
+            }
+        }
+    }
 }
 
-function appendMessageToBoardChat(message) {
+function appendMessageToBoardChat(message, showTimestamp) {
 
     close_info_list()
 
@@ -686,6 +953,7 @@ function appendMessageToBoardChat(message) {
     // Set list item text content
     // newListItem.textContent = message;
     newListItem.innerHTML = message;
+    __appendTimestampToListItem(newListItem, showTimestamp);
 
     // Insert new item at the top
     // infoListChat.insertBefore(newListItem, infoList.firstChild);

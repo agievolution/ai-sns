@@ -75,25 +75,45 @@ class ToolsService:
 
         if used_in_sns is True:
             try:
-                builtin_id = 'PL_BUILTIN_INSPECT_ENGINE_STATUS'
-                builtin = PluginResponse(
-                    id=0,
-                    plugin_id=builtin_id,
-                    name='Inspect Engine Status',
-                    version='1.0.0',
-                    alias_name='inspect-engine-status',
-                    description='Inspect SNS engine variables and call engine functions.',
-                    filename='/scripts/builtin_plugins/inspect_engine_status/index.js',
-                    plugin_type='renderer',
-                    used_in_sns=True,
-                    confirm_needed=False,
-                    can_be_sold=False,
-                    is_delete=False,
-                    create_time=datetime.now(),
-                )
+                builtin_defs = [
+                    {
+                        'plugin_id': 'PL_BUILTIN_LOG_VIEWER',
+                        'name': 'Log Viewer',
+                        'version': '1.0.0',
+                        'alias_name': 'log-viewer',
+                        'description': 'Browse backend LLM logs by date and file.',
+                        'filename': '/scripts/builtin_plugins/log_viewer/index.js',
+                    },
+                    {
+                        'plugin_id': 'PL_BUILTIN_INSPECT_ENGINE_STATUS',
+                        'name': 'Inspect Engine Status',
+                        'version': '1.0.0',
+                        'alias_name': 'inspect-engine-status',
+                        'description': 'Inspect SNS engine variables and call engine functions.',
+                        'filename': '/scripts/builtin_plugins/inspect_engine_status/index.js',
+                    },
+                ]
 
-                exists = any(str(getattr(p, 'plugin_id', '')) == builtin_id for p in items)
-                if not exists:
+                for d in reversed(builtin_defs):
+                    builtin_id = d['plugin_id']
+                    exists = any(str(getattr(p, 'plugin_id', '')) == builtin_id for p in items)
+                    if exists:
+                        continue
+                    builtin = PluginResponse(
+                        id=0,
+                        plugin_id=builtin_id,
+                        name=d['name'],
+                        version=d['version'],
+                        alias_name=d['alias_name'],
+                        description=d['description'],
+                        filename=d['filename'],
+                        plugin_type='renderer',
+                        used_in_sns=True,
+                        confirm_needed=False,
+                        can_be_sold=False,
+                        is_delete=False,
+                        create_time=datetime.now(),
+                    )
                     items.insert(0, builtin)
             except Exception as e:
                 logger.warning(f"Failed to inject built-in SNS plugin: {e}")

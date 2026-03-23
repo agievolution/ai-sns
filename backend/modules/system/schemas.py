@@ -20,6 +20,7 @@ class SystemConfig(BaseModel):
     process_info_plan_summary_every_n: Optional[int] = None
     memory_enabled: Optional[bool] = None
     memory_embedding_enabled: Optional[bool] = None
+    log_retention_days: Optional[int] = None
 
 
 class WebMngReorderItem(BaseModel):

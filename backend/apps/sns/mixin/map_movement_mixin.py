@@ -42,6 +42,86 @@ logger = logging.getLogger(__name__)
 
 class MapMovementMixin:
 
+    def _calc_allowed_distance_m(self, base_distance_m: int = 500) -> int:
+        try:
+            move_point = float(getattr(self.aichatcfg_record, "move_point", 0) or 0)
+        except Exception:
+            move_point = 0.0
+
+        if move_point <= 0:
+            return 0
+
+        if move_point > 100:
+            move_point = 100.0
+
+        try:
+            allowed = int(round(float(base_distance_m) * (move_point / 100.0)))
+        except Exception:
+            allowed = 0
+
+        return max(0, allowed)
+
+    @staticmethod
+    def _haversine_distance_m(lng1: float, lat1: float, lng2: float, lat2: float) -> float:
+        r = 6371000.0
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lng2 - lng1)
+        a = (
+            math.sin(dphi / 2.0) ** 2
+            + math.cos(phi1) * math.cos(phi2) * (math.sin(dlambda / 2.0) ** 2)
+        )
+        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+        return r * c
+
+    def _parse_route_points(self, raw: object) -> List[Dict[str, float]]:
+        if not raw:
+            return []
+
+        parsed = raw
+        if isinstance(raw, str):
+            try:
+                parsed = json.loads(raw)
+            except Exception:
+                return []
+
+        if isinstance(parsed, dict):
+            parsed = parsed.get("points")
+
+        if not isinstance(parsed, list):
+            return []
+
+        points: List[Dict[str, float]] = []
+        for p in parsed:
+            if not isinstance(p, dict):
+                continue
+            try:
+                lng = float(p.get("lng"))
+                lat = float(p.get("lat"))
+            except Exception:
+                continue
+            if not (-180.0 <= lng <= 180.0 and -90.0 <= lat <= 90.0):
+                continue
+            points.append({"lng": lng, "lat": lat})
+
+        return points
+
+    def _compute_route_total_distance_m(self, points: List[Dict[str, float]]) -> float:
+        if not points or len(points) < 2:
+            return 0.0
+
+        total = 0.0
+        for i in range(1, len(points)):
+            p1 = points[i - 1]
+            p2 = points[i]
+            try:
+                total += self._haversine_distance_m(p1["lng"], p1["lat"], p2["lng"], p2["lat"])
+            except Exception:
+                continue
+
+        return float(total)
+
     def _finish_route_and_switch_to_free_mode(self) -> None:
         try:
             self.move_by_route_flag = False
@@ -81,7 +161,10 @@ class MapMovementMixin:
             return ''
 
     def go_around(self):
-        radius = 500  # Radius (meters)
+        radius = self._calc_allowed_distance_m()  # Radius (meters)
+        if radius <= 0:
+            return "Move is blocked because move_point is 0."
+
         # Initialize current and last position
         current_position = Point(self.aichatcfg_record.current_position[1], self.aichatcfg_record.current_position[0])
         last_position = Point(self.aichatcfg_record.last_position[1], self.aichatcfg_record.last_position[0])
@@ -142,7 +225,11 @@ class MapMovementMixin:
         command = ("move_to_a_place", str(new_pos[0]), str(new_pos[1]))
         self.send_msg_to_map(command)
 
-        result = f"You moved 500 meters."
+        try:
+            moved_m = int(round(distance(current_position, target_position).m))
+        except Exception:
+            moved_m = int(radius)
+        result = f"You moved {moved_m} meters."
         self.update_after_moving()
         return result
 
@@ -158,7 +245,9 @@ class MapMovementMixin:
         return (math.degrees(math.atan2(x, y)) + 360) % 360
 
     def move_ahead(self, current_position, target_position, target_place):
-        move_distance = 500  # Move distance (meters)
+        move_distance = self._calc_allowed_distance_m()  # Move distance (meters)
+        if move_distance <= 0:
+            return "Move is blocked because move_point is 0."
 
         # Convert to geopy.Point (Point takes lat, lon)
         if not isinstance(current_position, Point):
@@ -230,20 +319,58 @@ class MapMovementMixin:
 
     def move_by_route(self):
         target_place = getattr(self, "route_target_place", "")
-        total_distance = float(getattr(self, "route_total_distance", 0) or 0)
-        moved_distance = float(getattr(self, "route_move_distance", 0) or 0)
 
-        remaining_distance = total_distance - moved_distance
-        if remaining_distance < 0:
-            remaining_distance = 0
+        allowed_step_m = self._calc_allowed_distance_m()
+        if allowed_step_m <= 0:
+            return "Move is blocked because move_point is 0."
 
-        if remaining_distance <= 1e-9:
+        cfg = None
+        try:
+            cfg = query_AiChatCfg_map()
+        except Exception:
+            cfg = None
+
+        points: List[Dict[str, float]] = []
+        route_distance_m = 0.0
+        if cfg is not None:
+            try:
+                points = self._parse_route_points(getattr(cfg, "route_points", None))
+            except Exception:
+                points = []
+            try:
+                route_distance_m = float(getattr(cfg, "route", 0) or 0)
+            except Exception:
+                route_distance_m = 0.0
+
+        total_distance_m = self._compute_route_total_distance_m(points)
+        if total_distance_m <= 0:
+            total_distance_m = float(getattr(self, "route_total_distance", 0) or 0)
+
+        if total_distance_m > 10.0 and 0.0 <= route_distance_m <= 1.0:
+            route_distance_m = float(route_distance_m) * float(total_distance_m)
+
+        remaining_distance_m = max(0.0, float(total_distance_m) - float(route_distance_m))
+
+        if remaining_distance_m < 1.0:
             self._finish_route_and_switch_to_free_mode()
             return f"Arrived at destination '{target_place}'. Switched to Free mode."
 
-        command = ("route_move_action", "", "")
+        step_m = min(int(allowed_step_m), int(math.floor(remaining_distance_m)))
+        if step_m <= 0:
+            self._finish_route_and_switch_to_free_mode()
+            return f"Arrived at destination '{target_place}'. Switched to Free mode."
+
+        try:
+            self.route_total_distance = float(total_distance_m)
+            self.route_move_distance = float(route_distance_m) + float(step_m)
+        except Exception:
+            pass
+
+        command = ("route_move_action", str(int(step_m)), "")
         self.send_msg_to_map(command)
-        return f"You moved {moved_distance} meters toward {target_place}. Remaining distance: {remaining_distance:.2f} km."
+
+        next_remaining_km = max(0.0, (remaining_distance_m - float(step_m)) / 1000.0)
+        return f"You moved {step_m} meters toward {target_place}. Remaining distance: {next_remaining_km:.2f} km."
 
     def update_after_moving(self):
         lng = self.aichatcfg_record.current_position[0]

@@ -16,6 +16,13 @@ from .code_executor import CodeExecutor
 from .tool_router import ToolRouter
 from .tool_converter import ToolConverter
 from backend.modules.tools.tool_executor import get_tool_executor
+from backend.shared.llm_log_writer import (
+    new_request_id,
+    log_llm_request,
+    log_llm_response,
+    log_llm_stream_chunk,
+    log_llm_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -610,7 +617,19 @@ IMPORTANT Tool Usage Guidelines:
                 kwargs['tools'] = tools
                 kwargs['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
+            request_id = new_request_id()
+            try:
+                log_llm_request(request_id=request_id, source="backend.modules.agent.agent_instance.AgentInstance.chat", request_json=kwargs)
+            except Exception:
+                pass
+
             response = await self.client.chat.completions.create(**kwargs)
+
+            try:
+                raw = response.model_dump() if hasattr(response, 'model_dump') else getattr(response, '__dict__', str(response))
+                log_llm_response(request_id=request_id, source="backend.modules.agent.agent_instance.AgentInstance.chat", response_json=raw)
+            except Exception:
+                pass
 
             if show_token_usage:
                 self._set_last_usage(conversation_id, self._usage_to_dict(getattr(response, 'usage', None)))
@@ -668,7 +687,19 @@ IMPORTANT Tool Usage Guidelines:
                         kwargs2['tools'] = tools_schema
                         kwargs2['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
+                    request_id2 = new_request_id()
+                    try:
+                        log_llm_request(request_id=request_id2, source="backend.modules.agent.agent_instance.AgentInstance.chat", request_json=kwargs2)
+                    except Exception:
+                        pass
+
                     response2 = await self.client.chat.completions.create(**kwargs2)
+
+                    try:
+                        raw2 = response2.model_dump() if hasattr(response2, 'model_dump') else getattr(response2, '__dict__', str(response2))
+                        log_llm_response(request_id=request_id2, source="backend.modules.agent.agent_instance.AgentInstance.chat", response_json=raw2)
+                    except Exception:
+                        pass
                     if show_token_usage:
                         self._set_last_usage(conversation_id, self._usage_to_dict(getattr(response2, 'usage', None)))
                     current_assistant_message = response2.choices[0].message
@@ -682,6 +713,10 @@ IMPORTANT Tool Usage Guidelines:
             return reply
 
         except Exception as e:
+            try:
+                log_llm_error(request_id=new_request_id(), source="backend.modules.agent.agent_instance.AgentInstance.chat", error=e)
+            except Exception:
+                pass
             logger.error(f"Agent chat failed: {e}", exc_info=True)
             return f"Error: {str(e)}"
 
@@ -775,6 +810,12 @@ IMPORTANT Tool Usage Guidelines:
                 kwargs['tools'] = tools
                 kwargs['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
+            request_id = new_request_id()
+            try:
+                log_llm_request(request_id=request_id, source="backend.modules.agent.agent_instance.AgentInstance.chat_stream", request_json=kwargs)
+            except Exception:
+                pass
+
             stream = await self.client.chat.completions.create(**kwargs)
 
             # Collect full reply and tool calls
@@ -783,6 +824,11 @@ IMPORTANT Tool Usage Guidelines:
             last_usage: Optional[Dict[str, Any]] = None
 
             async for chunk in stream:
+                try:
+                    raw_chunk = chunk.model_dump() if hasattr(chunk, 'model_dump') else getattr(chunk, '__dict__', str(chunk))
+                    log_llm_stream_chunk(request_id=request_id, source="backend.modules.agent.agent_instance.AgentInstance.chat_stream", stream_raw=raw_chunk)
+                except Exception:
+                    pass
                 if show_token_usage and getattr(chunk, 'usage', None):
                     last_usage = self._usage_to_dict(getattr(chunk, 'usage', None))
 
@@ -856,11 +902,22 @@ IMPORTANT Tool Usage Guidelines:
                         kwargs_final['tools'] = tools
                         kwargs_final['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
+                    request_id_round = new_request_id()
+                    try:
+                        log_llm_request(request_id=request_id_round, source="backend.modules.agent.agent_instance.AgentInstance.chat_stream", request_json=kwargs_final)
+                    except Exception:
+                        pass
+
                     final_stream = await self.client.chat.completions.create(**kwargs_final)
 
                     full_reply = ""
                     pending_tool_calls = {}
                     async for chunk in final_stream:
+                        try:
+                            raw_chunk = chunk.model_dump() if hasattr(chunk, 'model_dump') else getattr(chunk, '__dict__', str(chunk))
+                            log_llm_stream_chunk(request_id=request_id_round, source="backend.modules.agent.agent_instance.AgentInstance.chat_stream", stream_raw=raw_chunk)
+                        except Exception:
+                            pass
                         if show_token_usage and getattr(chunk, 'usage', None):
                             last_usage = self._usage_to_dict(getattr(chunk, 'usage', None))
 
@@ -897,6 +954,15 @@ IMPORTANT Tool Usage Guidelines:
             if use_memory:
                 self._add_to_memory('user', message, conversation_id)
                 self._add_to_memory('assistant', full_reply, conversation_id)
+
+            try:
+                log_llm_response(
+                    request_id=request_id,
+                    source="backend.modules.agent.agent_instance.AgentInstance.chat_stream",
+                    response_json={"status": "completed"},
+                )
+            except Exception:
+                pass
 
             # Save to database (optimization: use a single session for batch ops)
             if conversation_id:
@@ -976,6 +1042,10 @@ IMPORTANT Tool Usage Guidelines:
                     logger.error(f"Database connection failed: {e}", exc_info=True)
 
         except Exception as e:
+            try:
+                log_llm_error(request_id=new_request_id(), source="backend.modules.agent.agent_instance.AgentInstance.chat_stream", error=e)
+            except Exception:
+                pass
             logger.error(f"Agent streaming chat failed: {e}", exc_info=True)
             yield f"Error: {str(e)}"
 

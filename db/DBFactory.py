@@ -2527,6 +2527,7 @@ class SystemCfg(Base):
     process_info_plan_summary_every_n = Column(Integer, default=5)
     memory_enabled = Column(Boolean, default=True)
     memory_embedding_enabled = Column(Boolean, default=False)
+    log_retention_days = Column(Integer, default=3)
     is_delete = Column(Boolean, default=False)
     create_time = Column(DateTime, default=datetime.now)
 
@@ -2552,6 +2553,8 @@ def _ensure_system_cfg_columns():
             cursor.execute("ALTER TABLE system_cfg ADD COLUMN memory_enabled INTEGER DEFAULT 1")
         if 'memory_embedding_enabled' not in columns:
             cursor.execute("ALTER TABLE system_cfg ADD COLUMN memory_embedding_enabled INTEGER DEFAULT 0")
+        if 'log_retention_days' not in columns:
+            cursor.execute("ALTER TABLE system_cfg ADD COLUMN log_retention_days INTEGER DEFAULT 3")
         conn.commit()
     except Exception:
         try:
@@ -3319,6 +3322,8 @@ def update_map_trade(trade_id, **kwargs):
         if trade:
             for key, value in kwargs.items():
                 setattr(trade, key, value)
+            if "create_time" not in kwargs:
+                trade.create_time = datetime.now()
             session.commit()
             print(f"MapTrade {trade_id} updated successfully.")
     except Exception as e:

@@ -212,6 +212,19 @@ class CommunicationMixin:
 
         active_account = self._get_active_account()
         if active_account and active_account != account:
+            try:
+                self.show_alert_on_map(
+                    "Due to anti-harassment rules, the selected user was contacted too frequently. A different user has been selected for you.",
+                    is_error=False,
+                )
+            except Exception:
+                pass
+
+            try:
+                time.sleep(3)
+            except Exception:
+                pass
+
             self.end_active_conversation(
                 reason="switched",
                 message=f"Conversation switched from {active_account} to {account}.",
@@ -541,12 +554,12 @@ talk_to_a_people
         continue_chat = result["continue_chat"]
         current_chat_summary = result["summary"]
         message = result["next_message"]
-
+        goods_name = result.get("goods_name", "")
         buy_score = result.get("buy_score", False)
         price = result.get("price", 0)
 
         if buy_score >= 80 and price >= 0:
-            self.send_pay(price)
+            self.send_pay(price, good_name=goods_name)
             # self.end_active_conversation(
             #     reason="pay",
             #     message="Payment initiated.",

@@ -8,6 +8,13 @@ import httpx
 from typing import AsyncGenerator, Optional
 
 from db.DBFactory import add_AIChatMessages, query_AIChatMessages_All
+from backend.shared.llm_log_writer import (
+    new_request_id,
+    log_llm_request,
+    log_llm_response,
+    log_llm_stream_chunk,
+    log_llm_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +48,8 @@ class StreamingService:
         # Accumulate the complete assistant response
         accumulated_content = ""
 
+        request_id = new_request_id()
+
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 api_url = f"{ai_config['api_base'].rstrip('/')}/chat/completions"
@@ -52,6 +61,15 @@ class StreamingService:
                     "temperature": temperature,
                     "max_tokens": max_tokens
                 }
+
+                try:
+                    log_llm_request(
+                        request_id=request_id,
+                        source="backend.modules.chat.streaming.StreamingService.stream_chat",
+                        request_json=request_data,
+                    )
+                except Exception:
+                    pass
 
                 logger.info(f"Streaming chat request to: {api_url}")
                 logger.info(f"Using model: {model}")
@@ -67,6 +85,14 @@ class StreamingService:
                 ) as response:
                     if response.status_code != 200:
                         error_text = await response.aread()
+                        try:
+                            log_llm_error(
+                                request_id=request_id,
+                                source="backend.modules.chat.streaming.StreamingService.stream_chat",
+                                error=error_text.decode(errors="ignore"),
+                            )
+                        except Exception:
+                            pass
                         logger.error(f"API error: {response.status_code} - {error_text.decode()}")
                         yield {
                             "event": "error",
@@ -89,6 +115,14 @@ class StreamingService:
                             if line.startswith('data: '):
                                 data = line[6:]
                                 if data == '[DONE]':
+                                    try:
+                                        log_llm_response(
+                                            request_id=request_id,
+                                            source="backend.modules.chat.streaming.StreamingService.stream_chat",
+                                            response_json={"status": "completed"},
+                                        )
+                                    except Exception:
+                                        pass
                                     # Save messages to database if conversation_id is provided
                                     if conversation_id and accumulated_content:
                                         try:
@@ -148,6 +182,14 @@ class StreamingService:
                                     return
                                 try:
                                     parsed = json.loads(data)
+                                    try:
+                                        log_llm_stream_chunk(
+                                            request_id=request_id,
+                                            source="backend.modules.chat.streaming.StreamingService.stream_chat",
+                                            stream_raw=parsed,
+                                        )
+                                    except Exception:
+                                        pass
                                     choices = parsed.get('choices', [])
                                     if choices and len(choices) > 0:
                                         content = choices[0].get('delta', {}).get('content', '')
@@ -167,6 +209,14 @@ class StreamingService:
                         if line.startswith('data: ') and line[6:] != '[DONE]':
                             try:
                                 parsed = json.loads(line[6:])
+                                try:
+                                    log_llm_stream_chunk(
+                                        request_id=request_id,
+                                        source="backend.modules.chat.streaming.StreamingService.stream_chat",
+                                        stream_raw=parsed,
+                                    )
+                                except Exception:
+                                    pass
                                 choices = parsed.get('choices', [])
                                 if choices and len(choices) > 0:
                                     content = choices[0].get('delta', {}).get('content', '')
@@ -238,6 +288,14 @@ class StreamingService:
 
         except Exception as e:
             logger.error(f"Stream chat error: {e}")
+            try:
+                log_llm_error(
+                    request_id=request_id,
+                    source="backend.modules.chat.streaming.StreamingService.stream_chat",
+                    error=e,
+                )
+            except Exception:
+                pass
             yield {
                 "event": "error",
                 "data": json.dumps({"error": str(e)})

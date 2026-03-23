@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, ipcMain, Menu, Tray, dialog, shell, clipboard, globalShortcut, session } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, Menu, Tray, dialog, shell, clipboard, globalShortcut, session, nativeImage } = require('electron');
 
 const path = require('path');
 
@@ -48,6 +48,17 @@ let pythonProcess = null;
 
 let isQuitting = false;
 
+function _createMenuItemIcon({ fallbackPngPath, size = 16 }) {
+    try {
+        const img = nativeImage.createFromPath(path.join(__dirname, fallbackPngPath));
+        if (img && !img.isEmpty()) {
+            return img.resize({ width: size, height: size });
+        }
+    } catch (e) {
+    }
+    return undefined;
+}
+
 function isAudioOnlyMediaRequest(details) {
     const types = (details && Array.isArray(details.mediaTypes)) ? details.mediaTypes : [];
     const hasAudio = types.includes('audio');
@@ -73,6 +84,63 @@ function setupMediaPermissions() {
             if (permission !== 'media') return false;
             return isAudioOnlyMediaRequest(details);
         });
+    }
+}
+
+
+function _readConfigJsonSyncSafe() {
+    try {
+        const configPath = path.join(process.cwd(), 'config.json');
+        if (!fs.existsSync(configPath)) return {};
+        const raw = fs.readFileSync(configPath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+
+function _cleanupOldBackendLogsOnExit() {
+    try {
+        const cfg = _readConfigJsonSyncSafe();
+        const raw = (cfg && cfg.log_retention_days !== undefined && cfg.log_retention_days !== null)
+            ? String(cfg.log_retention_days).trim()
+            : '';
+        if (!raw) {
+            return;
+        }
+
+        const days = parseInt(raw, 10);
+        if (!Number.isFinite(days) || days < 0) {
+            return;
+        }
+
+        const logsRoot = path.join(process.cwd(), 'backend', 'logs');
+        if (!fs.existsSync(logsRoot)) return;
+
+        const entries = fs.readdirSync(logsRoot, { withFileTypes: true });
+        const now = new Date();
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const cutoffMs = now.getTime() - (days * msPerDay);
+
+        for (const ent of entries) {
+            if (!ent.isDirectory()) continue;
+            const name = ent.name;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(name)) continue;
+
+            const folderDate = new Date(`${name}T00:00:00`);
+            const t = folderDate.getTime();
+            if (!Number.isFinite(t)) continue;
+            if (t >= cutoffMs) continue;
+
+            const fullPath = path.join(logsRoot, name);
+            try {
+                fs.rmSync(fullPath, { recursive: true, force: true });
+            } catch (e) {
+            }
+        }
+    } catch (e) {
     }
 }
 
@@ -661,6 +729,18 @@ function createTray() {
 
     tray = new Tray(iconPath);
 
+    const trayMenuIcons = {
+        show: _createMenuItemIcon({
+            fallbackPngPath: '../images/application.png'
+        }),
+        hide: _createMenuItemIcon({
+            fallbackPngPath: '../images/hide.png'
+        }),
+        exit: _createMenuItemIcon({
+            fallbackPngPath: '../images/exit.png'
+        })
+    };
+
 
 
     const contextMenu = Menu.buildFromTemplate([
@@ -668,6 +748,8 @@ function createTray() {
         {
 
             label: 'Show',
+
+            icon: trayMenuIcons.show,
 
             click: () => {
 
@@ -687,6 +769,8 @@ function createTray() {
 
             label: 'Hide',
 
+            icon: trayMenuIcons.hide,
+
             click: () => {
 
                 if (mainWindow) {
@@ -699,23 +783,13 @@ function createTray() {
 
         },
 
-        {
-
-            label: 'Map',
-
-            click: () => {
-
-                createMapWindow().catch(err => console.error('Error creating map window:', err));
-
-            }
-
-        },
-
         { type: 'separator' },
 
         {
 
             label: 'Exit',
+
+            icon: trayMenuIcons.exit,
 
             click: () => {
 
@@ -822,7 +896,7 @@ ipcMain.handle('write-config-json', async (event, patch) => {
 
         const configPath = path.join(process.cwd(), 'config.json');
 
-        const allowedKeys = new Set(['agent_server', 'ai_sns_server']);
+        const allowedKeys = new Set(['agent_server', 'ai_sns_server', 'log_retention_days']);
 
         const input = (patch && typeof patch === 'object') ? patch : {};
 
@@ -1828,7 +1902,7 @@ ipcMain.on('show-browserview', () => {
 
         mainWindow.addBrowserView(browserView);
 
-        
+
 
         // Restore BrowserView position
 
@@ -1838,7 +1912,7 @@ ipcMain.on('show-browserview', () => {
 
         const titlebarHeight = 38;
 
-        
+
 
         browserView.setBounds({
 
@@ -1852,7 +1926,7 @@ ipcMain.on('show-browserview', () => {
 
         });
 
-        
+
 
         console.log('[BrowserView] Shown (restored)');
 
@@ -2011,6 +2085,11 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
 
     isQuitting = true;
+
+    try {
+        _cleanupOldBackendLogsOnExit();
+    } catch (e) {
+    }
 
     globalShortcut.unregisterAll();
 

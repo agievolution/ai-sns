@@ -1129,6 +1129,14 @@ select.form-select optgroup {
     z-index: 1000001;
 }
 
+.modal-overlay,
+.modal-overlay * {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+}
+
 .modal {
     background-color: var(--bg-content);
     border-radius: var(--radius-lg);

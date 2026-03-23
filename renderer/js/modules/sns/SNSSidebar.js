@@ -455,8 +455,245 @@ export default {
             } else if (message.type === 'user_stats_update') {
                 // Handle user stats updates
                 this.handleUserStatsUpdate(message.data);
+            } else if (message.type === 'trade_upserted') {
+                this.handleTradeUpserted(message.data);
+            } else if (message.type === 'trade_deleted') {
+                this.handleTradeDeleted(message.data);
             }
         });
+    },
+
+    handleTradeDeleted(payload) {
+        try {
+            const tradeId = payload && (payload.trade_id || payload.tradeId);
+            if (!tradeId || !Array.isArray(this.trades)) return;
+            const next = this.trades.filter(t => t && t.trade_id !== tradeId);
+            if (next.length !== this.trades.length) {
+                this.trades = next;
+                this.renderTrades();
+            }
+        } catch (e) {
+        }
+    },
+
+    _ensureTradeContextMenu() {
+        if (this._tradeContextMenu) return this._tradeContextMenu;
+
+        const menu = document.createElement('div');
+        menu.className = 'trade-context-menu';
+        menu.style.display = 'none';
+        menu.innerHTML = `
+            <button class="trade-context-menu-item" data-action="delete">Delete</button>
+        `;
+
+        document.body.appendChild(menu);
+        this._tradeContextMenu = menu;
+
+        menu.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const actionEl = e.target.closest('[data-action]');
+            const action = actionEl ? actionEl.dataset.action : '';
+            const tradeId = menu.dataset.tradeId || '';
+            this._hideTradeContextMenu();
+
+            if (action === 'delete' && tradeId) {
+                await this.deleteTrade(tradeId);
+            }
+        });
+
+        if (!this._tradeContextMenuGlobalHandlersBound) {
+            document.addEventListener('click', () => this._hideTradeContextMenu());
+            document.addEventListener('scroll', () => this._hideTradeContextMenu(), true);
+            window.addEventListener('resize', () => this._hideTradeContextMenu());
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') this._hideTradeContextMenu();
+            });
+            this._tradeContextMenuGlobalHandlersBound = true;
+        }
+
+        return menu;
+    },
+
+    _showTradeContextMenu(x, y, tradeId) {
+        const menu = this._ensureTradeContextMenu();
+        menu.dataset.tradeId = tradeId;
+        menu.style.display = 'block';
+
+        const pad = 8;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const rect = menu.getBoundingClientRect();
+        const left = Math.min(Math.max(pad, x), Math.max(pad, vw - rect.width - pad));
+        const top = Math.min(Math.max(pad, y), Math.max(pad, vh - rect.height - pad));
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+        menu.style.position = 'fixed';
+        menu.style.zIndex = '2000000';
+    },
+
+    _hideTradeContextMenu() {
+        if (!this._tradeContextMenu) return;
+        this._tradeContextMenu.style.display = 'none';
+        this._tradeContextMenu.dataset.tradeId = '';
+    },
+
+    _getTradeById(tradeId) {
+        if (!tradeId || !Array.isArray(this.trades)) return null;
+        return this.trades.find(t => t && t.trade_id === tradeId) || null;
+    },
+
+    showTradeDetails(trade) {
+        if (!trade) return;
+        const typeRaw = String(trade.trade_type || '').toUpperCase();
+        const typeLabel = typeRaw === 'B' ? 'Buy' : (typeRaw === 'S' ? 'Sell' : typeRaw);
+        const timeText = trade.create_time ? this._formatTradeTime(trade.create_time) : '';
+        const title = this.escapeHtml(trade.title || 'Trade Details');
+        const withName = this.escapeHtml(trade.trade_with_name || '');
+        const withAcct = this.escapeHtml(trade.trade_with_account || '');
+        const pay = (trade.pay === undefined || trade.pay === null) ? '' : String(trade.pay);
+        const detail = this.escapeHtml(trade.detail || '');
+        const tradeId = this.escapeHtml(trade.trade_id || '');
+
+        const content = `
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;flex-wrap:wrap;gap:8px 16px;">
+                    <div><strong>ID:</strong> ${tradeId}</div>
+                    <div><strong>Type:</strong> ${this.escapeHtml(typeLabel)}</div>
+                    <div><strong>Pay:</strong> $${this.escapeHtml(pay)}</div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px 16px;">
+                    <div><strong>With:</strong> ${withName}</div>
+                    ${withAcct ? `<div><strong>Account:</strong> ${withAcct}</div>` : ''}
+                    ${timeText ? `<div><strong>Time:</strong> ${this.escapeHtml(timeText)}</div>` : ''}
+                </div>
+                <div>
+                    <strong>Detail:</strong>
+                    <pre style="margin-top:6px;white-space:pre-wrap;word-break:break-word;background:var(--bg-secondary,#f8f9fa);padding:10px;border-radius:8px;border:1px solid var(--border-color,#e5e7eb);">${detail}</pre>
+                </div>
+            </div>
+        `;
+
+        if (window.Modal && typeof window.Modal.show === 'function') {
+            window.Modal.show({
+                title,
+                content,
+                showCancel: false,
+                confirmText: 'Close'
+            });
+        }
+    },
+
+    async deleteTrade(tradeId) {
+        const id = String(tradeId || '').trim();
+        if (!id) return;
+
+        const confirmed = await (async () => {
+            try {
+                if (window.Toast && typeof window.Toast.confirm === 'function') {
+                    return await window.Toast.confirm('Delete this trade?', {
+                        title: 'Delete Trade',
+                        confirmText: 'Delete',
+                        cancelText: 'Cancel'
+                    });
+                }
+            } catch (e) {
+            }
+            return false;
+        })();
+
+        if (!confirmed) return;
+
+        try {
+            const apiClient = getApiClient();
+            if (!apiClient || typeof apiClient.delete !== 'function') return;
+            await apiClient.delete(`/api/map/trades/${encodeURIComponent(id)}`);
+            this.trades = (this.trades || []).filter(t => t && t.trade_id !== id);
+            this.renderTrades();
+            try {
+                if (window.Toast && typeof window.Toast.success === 'function') {
+                    window.Toast.success('Trade deleted');
+                }
+            } catch (e) {
+            }
+        } catch (e) {
+            try {
+                if (window.Toast && typeof window.Toast.error === 'function') {
+                    window.Toast.error('Failed to delete trade');
+                }
+            } catch (err) {
+            }
+        }
+    },
+
+    async openChatFromTrade(account, nickName) {
+        const acct = String(account || '').trim();
+        if (!acct) return;
+
+        if (!Array.isArray(this.contacts)) {
+            this.contacts = [];
+        }
+
+        const existing = this.contacts.find(c => c && c.account === acct);
+        if (!existing) {
+            this.contacts.unshift({
+                account: acct,
+                nick_name: String(nickName || acct),
+                new_message_flag: false
+            });
+            this.renderContacts();
+        }
+
+        await this.openChat(acct);
+    },
+
+    handleTradeUpserted(tradeData) {
+        try {
+            const t = tradeData && typeof tradeData === 'object' ? tradeData : null;
+            const tradeId = t && (t.trade_id || t.tradeId);
+            if (!tradeId) {
+                this.loadTrades();
+                return;
+            }
+
+            if (!Array.isArray(this.trades)) {
+                this.trades = [];
+            }
+
+            const idx = this.trades.findIndex(x => x && x.trade_id === tradeId);
+            if (idx >= 0) {
+                this.trades[idx] = { ...this.trades[idx], ...t, trade_id: tradeId };
+            } else {
+                this.trades.unshift({ ...t, trade_id: tradeId });
+            }
+
+            this.renderTrades();
+        } catch (e) {
+            this.loadTrades();
+        }
+    },
+
+    _tradeTsMs(trade) {
+        try {
+            const v = trade && trade.create_time;
+            if (!v) return 0;
+            const ms = Date.parse(v);
+            return Number.isFinite(ms) ? ms : 0;
+        } catch (e) {
+            return 0;
+        }
+    },
+
+    _formatTradeTime(iso) {
+        try {
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (!(d instanceof Date) || Number.isNaN(d.getTime())) return '';
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        } catch (e) {
+            return '';
+        }
     },
 
     upsertContact(contactData) {
@@ -689,8 +926,10 @@ export default {
             return;
         }
 
+        const sortedTrades = [...this.trades].sort((a, b) => this._tradeTsMs(b) - this._tradeTsMs(a));
+
         // Filter trades based on search query
-        const filteredTrades = this.trades.filter(trade => {
+        const filteredTrades = sortedTrades.filter(trade => {
             if (!this.tradeSearchQuery) return true;
             const query = this.tradeSearchQuery.toLowerCase();
             return trade.title.toLowerCase().includes(query) ||
@@ -706,16 +945,57 @@ export default {
         tradeList.innerHTML = filteredTrades.map(trade => `
             <div class="trade-item" data-trade-id="${trade.trade_id}">
                 <div class="trade-header">
-                    <span class="trade-title">${trade.title}</span>
+                    <span class="trade-title">
+                        <span class="trade-type-badge trade-type-${String(trade.trade_type || '').toLowerCase()}">${this.escapeHtml((trade.trade_type || '').toString())}</span>
+                        ${trade.title}
+                    </span>
                     <span class="trade-pay">$${trade.pay}</span>
                 </div>
                 <div class="trade-detail">${trade.detail || ''}</div>
                 <div class="trade-footer">
-                    <span class="trade-with">${trade.trade_with_name}</span>
-                    <span class="trade-status">${trade.status === 0 ? 'Pending' : 'Completed'}</span>
+                    <span class="trade-with">
+                        <span
+                            class="trade-with-name trade-with-link"
+                            data-account="${this.escapeHtml((trade.trade_with_account || '').toString())}"
+                            data-nick-name="${this.escapeHtml((trade.trade_with_name || '').toString())}"
+                            title="${this.escapeHtml((trade.trade_with_name || '').toString())}"
+                        >${this.escapeHtml((trade.trade_with_name || '').toString())}</span>
+                        ${trade.create_time ? `<span class="trade-time">${this._formatTradeTime(trade.create_time)}</span>` : ''}
+                    </span>
                 </div>
             </div>
         `).join('');
+
+        if (!this._tradeListDelegationBound) {
+            tradeList.addEventListener('click', async (e) => {
+                const withLink = e.target.closest('.trade-with-link');
+                if (withLink) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const account = (withLink.dataset.account || '').trim();
+                    const nickName = (withLink.dataset.nickName || withLink.textContent || '').trim();
+                    await this.openChatFromTrade(account, nickName);
+                    return;
+                }
+
+                const item = e.target.closest('.trade-item');
+                if (!item) return;
+                const tradeId = item.dataset.tradeId;
+                const trade = this._getTradeById(tradeId);
+                this.showTradeDetails(trade);
+            });
+
+            tradeList.addEventListener('contextmenu', (e) => {
+                const item = e.target.closest('.trade-item');
+                if (!item) return;
+                e.preventDefault();
+                const tradeId = item.dataset.tradeId;
+                if (!tradeId) return;
+                this._showTradeContextMenu(e.clientX, e.clientY, tradeId);
+            });
+
+            this._tradeListDelegationBound = true;
+        }
     },
 
     /**

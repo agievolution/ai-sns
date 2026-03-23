@@ -94,6 +94,15 @@ const homeHandlers = {
                     ? String(remoteCfg.process_info_plan_summary_every_n)
                     : '5';
 
+                let logRetentionValue = '3';
+                if (localCfg && Object.prototype.hasOwnProperty.call(localCfg, 'log_retention_days')) {
+                    const v = localCfg.log_retention_days;
+                    logRetentionValue = (v === undefined || v === null) ? '' : String(v);
+                } else if (remoteCfg && Object.prototype.hasOwnProperty.call(remoteCfg, 'log_retention_days')) {
+                    const v = remoteCfg.log_retention_days;
+                    logRetentionValue = (v === undefined || v === null) ? '' : String(v);
+                }
+
                 const memoryEnabledValue = (remoteCfg && remoteCfg.memory_enabled !== undefined && remoteCfg.memory_enabled !== null)
                     ? Boolean(remoteCfg.memory_enabled)
                     : true;
@@ -109,6 +118,7 @@ const homeHandlers = {
                 const recentLimitInput = modal.element?.querySelector('#homeCfgContactRecentLimit');
                 const compactEveryInput = modal.element?.querySelector('#homeCfgProcessInfoCompactEveryN');
                 const planSummaryEveryInput = modal.element?.querySelector('#homeCfgProcessInfoPlanSummaryEveryN');
+                const logRetentionInput = modal.element?.querySelector('#homeCfgLogRetentionDays');
                 const memoryEnabledInput = modal.element?.querySelector('#homeCfgMemoryEnabled');
                 const memoryEmbeddingEnabledInput = modal.element?.querySelector('#homeCfgMemoryEmbeddingEnabled');
                 const memoryEmbeddingRow = modal.element?.querySelector('#homeCfgMemoryEmbeddingRow');
@@ -132,6 +142,9 @@ const homeHandlers = {
                 }
                 if (planSummaryEveryInput) {
                     planSummaryEveryInput.value = planSummaryEveryValue;
+                }
+                if (logRetentionInput) {
+                    logRetentionInput.value = logRetentionValue;
                 }
                 if (memoryEnabledInput) {
                     memoryEnabledInput.checked = !!memoryEnabledValue;
@@ -180,6 +193,10 @@ const homeHandlers = {
                     <div class="setting-group">
                         <label>Process Plan Summary Every N Rounds</label>
                         <input type="number" min="0" max="100000" step="1" class="setting-input" id="homeCfgProcessInfoPlanSummaryEveryN" value="" placeholder="5" />
+                    </div>
+                    <div class="setting-group">
+                        <label>Log retention days</label>
+                        <input type="number" min="0" max="3650" step="1" class="setting-input" id="homeCfgLogRetentionDays" value="" placeholder="Default 3. Leave empty to disable deletion. Deletes folders older than N days." />
                     </div>
                     <div class="setting-group">
                         <label>Enable Memory</label>
@@ -247,6 +264,7 @@ const homeHandlers = {
 
                     const compactEveryRaw = (modal.element?.querySelector('#homeCfgProcessInfoCompactEveryN')?.value || '').trim();
                     const planSummaryEveryRaw = (modal.element?.querySelector('#homeCfgProcessInfoPlanSummaryEveryN')?.value || '').trim();
+                    const logRetentionRaw = (modal.element?.querySelector('#homeCfgLogRetentionDays')?.value || '').trim();
 
                     const memory_enabled = !!(modal.element?.querySelector('#homeCfgMemoryEnabled')?.checked);
 
@@ -256,6 +274,8 @@ const homeHandlers = {
 
                     const process_info_compact_every_n = compactEveryRaw ? parseInt(compactEveryRaw, 10) : 50;
                     const process_info_plan_summary_every_n = planSummaryEveryRaw ? parseInt(planSummaryEveryRaw, 10) : 5;
+
+                    const log_retention_days = logRetentionRaw ? parseInt(logRetentionRaw, 10) : 3;
 
                     if (!Number.isFinite(conversation_timeout_seconds) || conversation_timeout_seconds < 5 || conversation_timeout_seconds > 3600) {
                         throw new Error('Conversation Timeout must be between 5 and 3600 seconds');
@@ -273,12 +293,22 @@ const homeHandlers = {
                         throw new Error('Process Plan Summary Every N Rounds must be between 0 and 100000');
                     }
 
+                    if (logRetentionRaw) {
+                        if (!Number.isFinite(log_retention_days) || log_retention_days < 0 || log_retention_days > 3650) {
+                            throw new Error('Log retention days must be between 0 and 3650, or empty to disable deletion');
+                        }
+                    }
+
                     let memory_embedding_enabled = !!(modal.element?.querySelector('#homeCfgMemoryEmbeddingEnabled')?.checked);
                     if (!memory_enabled) {
                         memory_embedding_enabled = false;
                     }
 
-                    const localRes = await window.electronAPI.writeConfigJson({ agent_server, ai_sns_server });
+                    const localRes = await window.electronAPI.writeConfigJson({
+                        agent_server,
+                        ai_sns_server,
+                        log_retention_days: logRetentionRaw ? String(log_retention_days) : ''
+                    });
                     if (!localRes || !localRes.success) {
                         if (typeof Notification !== 'undefined' && Notification.error) {
                             Notification.error(localRes?.error || 'Local save failed');
@@ -299,6 +329,7 @@ const homeHandlers = {
                                 process_info_plan_summary_every_n,
                                 memory_enabled,
                                 memory_embedding_enabled,
+                                log_retention_days: logRetentionRaw ? log_retention_days : null,
                             });
                             remoteOk = !!(remoteRes && remoteRes.success);
                         } catch (e) {

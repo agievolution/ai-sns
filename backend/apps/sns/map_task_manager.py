@@ -47,6 +47,8 @@ class MapTaskManager:
 
         self._process_info_since_compact = 0
         self._process_info_since_plan_summary = 0
+        self._process_plan_summary_due = False
+        self._resume_after_plan_summary = None
 
         self._pick_people_format_retry = {
             "communication": 0,
@@ -156,6 +158,8 @@ class MapTaskManager:
         self._process_plan_summarizing = False
         self._process_info_since_compact = 0
         self._process_info_since_plan_summary = 0
+        self._process_plan_summary_due = False
+        self._resume_after_plan_summary = None
 
         self.js_task_manager = self.parent.taskmng_js
         self.current_task_record = query_single_map_task(status=1)
@@ -283,7 +287,7 @@ I am participating in a virtual social game based on Google Maps. Players role-p
             self.init_task_mng()
 
         if action_requested == "process_activity":
-            self.parent.write_on_going_process_to_pane(lt("Agent is thinking how to proceed current action.", "Agent is thinking how to proceed with the current action."))
+            self.parent.write_on_going_process_to_pane(lt("Thinking about the next action.", "Thinking about the next action."))
             ask_content = kwargs.get("ask_content", self.get_current_objective())
             stop_review = True
             if not self.parent.human_take_over:
@@ -299,9 +303,48 @@ I am participating in a virtual social game based on Google Maps. Players role-p
                 item_to_achieved = ask_content
 
             self.js_task_manager.show_information(lt(f"Agent is thinking how to proceed:{item_to_achieved}", f"Agent is thinking how to proceed:{item_to_achieved}"))
+
+            if self._process_plan_summary_due and (not self._process_plan_summarizing):
+                self._process_plan_summarizing = True
+                self._process_plan_summary_due = False
+                self._resume_after_plan_summary = {
+                    "action": "process_activity",
+                    "ask_content": ask_content,
+                    "human_send_flag": human_send_flag,
+                }
+                asyncio.create_task(self.process_task(action="process_plan_summary"))
+                return
+
             self.set_command_status("ask_agent_instruction_to_process_activity")
 
             asyncio.create_task(self.parent.ask_agent_instruction_to_process_activity(ask_content))
+
+        elif action_requested == "process_plan_summary":
+            plan_manage_prompt = (get_prompt_by_title("__plan_manage__") or "").strip()
+            current_goals = (get_prompt_by_title("__plan_goals__") or "").strip()
+            current_long_goals, current_short_goals = self._extract_goal_sections(current_goals)
+            items = list(self.process_info_list or [])
+            items = items[-60:] if len(items) > 60 else items
+            process_log = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(items))
+
+            msg_parts = [
+                "Current Long-Term Goals (may be empty):",
+                (current_long_goals or "").strip() or "(empty)",
+                "Current Short-Term Goals (may be empty):",
+                (current_short_goals or "").strip() or "(empty)",
+                "Process log entries:",
+                process_log,
+                "\nOutput requirements:\n"
+                "- Provide updated goals only.\n"
+                "- Include BOTH sections with these exact labels:\n"
+                "  Long-Term Goals:\n"
+                "  Short-Term Goals:\n"
+                "- Do NOT include any other sections such as Changes Made/Reasoning/Next Recommended Actions.\n",
+            ]
+            question = "\n\n".join([p for p in msg_parts if p is not None])
+
+            self.set_command_status("ask_agent_process_plan_summary")
+            asyncio.create_task(self.parent.ask_agent_and_get_instruction(question, plan_manage_prompt))
 
         elif event == "agent_instruction_to_process_activity_returned":
             # instruction_dict = json.loads(instruction)
@@ -325,6 +368,45 @@ I am participating in a virtual social game based on Google Maps. Players role-p
             self.js_task_manager.show_information(lt(f"Agent return instruction:{function_str}.The target is:{objective_to_achieve}", f"Agent return instruction:{function_str}. The target is:{objective_to_achieve}"))
             self.set_command_status("")
             self.parent.parse_agent_instruction_for_process_activity(instruction)
+
+        elif event == "ask_agent_process_plan_summary_returned":
+            result = kwargs.get("result", "")
+            try:
+                long_goals, short_goals = self._extract_goal_sections((result or "").strip())
+            except Exception:
+                long_goals, short_goals = "", ""
+
+            if not long_goals and not short_goals:
+                logger.warning(
+                    "Process plan summary did not contain goal sections; skipping __plan_goals__ update. raw_result_head=%s",
+                    (result or "")[:300],
+                )
+            else:
+                next_content = (
+                    "Long-Term Goals:\n"
+                    f"{(long_goals or '').strip()}\n\n"
+                    "Short-Term Goals:\n"
+                    f"{(short_goals or '').strip()}\n"
+                )
+                ok = False
+                try:
+                    ok = bool(upsert_prompt_by_title("__plan_goals__", next_content))
+                except Exception as e:
+                    logger.warning("Failed to update __plan_goals__ prompt: %s", e)
+                    ok = False
+
+                if ok:
+                    logger.info("Updated __plan_goals__ from process plan summary")
+
+            self._process_plan_summarizing = False
+            self.set_command_status("")
+
+            resume_payload = self._resume_after_plan_summary
+            self._resume_after_plan_summary = None
+            if isinstance(resume_payload, dict) and resume_payload:
+                asyncio.create_task(self.process_task(**resume_payload))
+            else:
+                asyncio.create_task(self.process_task(action="process_activity", ask_content=self.get_current_objective()))
 
         elif action_requested == "process_human_instruction":
             ask_content = kwargs.get("ask_content", "")
@@ -486,18 +568,17 @@ I am participating in a virtual social game based on Google Maps. Players role-p
         if self._process_plan_summarizing:
             return
 
+        if getattr(self, "_process_plan_summary_due", False):
+            return
+
         self._process_info_since_plan_summary = 0
 
-        try:
-            loop = asyncio.get_running_loop()
-            logger.info(
-                "Scheduling process plan summary (every_n=%s, process_info_len=%s)",
-                summary_every,
-                len(getattr(self, "process_info_list", []) or []),
-            )
-            loop.create_task(self._summarize_process_and_update_goals())
-        except RuntimeError:
-            return
+        self._process_plan_summary_due = True
+        logger.info(
+            "Marked process plan summary due (every_n=%s, process_info_len=%s)",
+            summary_every,
+            len(getattr(self, "process_info_list", []) or []),
+        )
 
     def _schedule_process_history_flush(self):
         try:
@@ -705,77 +786,14 @@ I am participating in a virtual social game based on Google Maps. Players role-p
             return
 
         self._process_plan_summarizing = True
+        self._process_plan_summary_due = False
         try:
-            logger.info(
-                "Process plan summary start (process_info_len=%s)",
-                len(getattr(self, "process_info_list", []) or []),
-            )
-            plan_manage_prompt = (get_prompt_by_title("__plan_manage__") or "").strip()
-            current_goals = (get_prompt_by_title("__plan_goals__") or "").strip()
-            current_long_goals, current_short_goals = self._extract_goal_sections(current_goals)
-            process_log = "\n".join(
-                f"{idx + 1}. {item}" for idx, item in enumerate(list(self.process_info_list))
-            )
-
-            msg_parts = []
-            if plan_manage_prompt:
-                msg_parts.append(plan_manage_prompt)
-            msg_parts.append("Current Long-Term Goals (may be empty):")
-            msg_parts.append((current_long_goals or "").strip() or "(empty)")
-            msg_parts.append("Current Short-Term Goals (may be empty):")
-            msg_parts.append((current_short_goals or "").strip() or "(empty)")
-            msg_parts.append("Process log entries:")
-            msg_parts.append(process_log)
-            msg_parts.append(
-                "\nOutput requirements:\n"
-                "- Provide updated goals only.\n"
-                "- Include BOTH sections with these exact labels:\n"
-                "  Long-Term Goals:\n"
-                "  Short-Term Goals:\n"
-                "- Do NOT include any other sections such as Changes Made/Reasoning/Next Recommended Actions.\n"
-            )
-
-            prompt = "\n\n".join([p for p in msg_parts if p is not None])
-
-            result = ""
-            try:
-                result = await self.parent.chat_with_agent(
-                    prompt,
-                    conversation_suffix="process_plan_manage",
-                    use_tools=False,
-                    use_memory=False,
-                    use_knowledge_base=False,
-                )
-            except Exception as e:
-                logger.warning("Failed to call agent for process plan summary: %s", e)
-                result = ""
-
-            long_goals, short_goals = self._extract_goal_sections((result or "").strip())
-            if not long_goals and not short_goals:
-                logger.warning(
-                    "Plan summary did not contain goal sections; skipping __plan_goals__ update. raw_result_head=%s",
-                    (result or "")[:300],
-                )
-                return
-
-            next_content = (
-                "Long-Term Goals:\n"
-                f"{(long_goals or '').strip()}\n\n"
-                "Short-Term Goals:\n"
-                f"{(short_goals or '').strip()}\n"
-            )
-
-            ok = False
-            try:
-                ok = bool(upsert_prompt_by_title("__plan_goals__", next_content))
-            except Exception as e:
-                logger.warning("Failed to update __plan_goals__ prompt: %s", e)
-                ok = False
-
-            if ok:
-                logger.info("Updated __plan_goals__ from process plan summary")
-        finally:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
             self._process_plan_summarizing = False
+            return
+
+        loop.create_task(self.process_task(action="process_plan_summary"))
 
     def set_current_objective(self, content):
         self.current_objective = content

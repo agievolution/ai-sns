@@ -90,9 +90,17 @@ const AgentPage = {
                         </div>
 
                         <div class="toolbar-right">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="#1a73e8">
-                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                            </svg>
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="20" height="20" stroke="#1a73e8" fill="#1a73e8">
+       
+                <circle cx="50" cy="50" r="45" fill="1a73e8" stroke="#1a73e8" stroke-width="2" stroke-dasharray="4 4" opacity="0.2"/>
+               
+                <g class="char-spark">
+                    <circle cx="50" cy="35" r="15" />
+                    <path d="M50,55 C30,55 20,70 20,90 L80,90 C80,70 70,55 50,55 Z" />
+                
+                    <path d="M80,20 L82,28 L90,30 L82,32 L80,40 L78,32 L70,30 L78,28 Z" />
+                </g>
+            </svg>
                             <select class="role-selector" id="roleSelector-${agent.id}" data-agent-id="${agent.id}" ${isRemote ? 'disabled' : ''}>
                                 <option value="senior-dev">Senior Developer</option>
                                 <option value="assistant">General Assistant</option>
@@ -114,21 +122,14 @@ const AgentPage = {
             <stop offset="100%" style="stop-color:#38ef7d"/>
         </linearGradient>
     </defs>
-    
- 
     <circle cx="24" cy="24" r="22" fill="url(#robotGrad-${agent.id})" opacity="0.1"/>
-    
-
-    <g transform="translate(4.8, 4.8) scale(0.8)">
-       
+    <g transform="translate(4.8, 4.8) scale(0.8)">       
         <path d="
             M24 7v3 M21 7h6 
             M16 12h16a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3z
             M19 19h2 M27 19h2
             M11 34c0-3 3-5 6-5h14c3 0 6 2 6 5v4H11v-4z
-        " fill="none" stroke="url(#robotGrad-${agent.id})" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        
-        
+        " fill="none" stroke="url(#robotGrad-${agent.id})" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>              
         <circle cx="20" cy="19" r="1.5" fill="url(#robotGrad-${agent.id})"/>
         <circle cx="28" cy="19" r="1.5" fill="url(#robotGrad-${agent.id})"/>
     </g>

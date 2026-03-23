@@ -26,6 +26,9 @@ var currentDistance = 0;
 var is_route_move_action = false;
 var last_p = null;
 
+var __routeMoveTargetDistanceM = null;
+var __routeMoveTargetMonitorTimer = null;
+
 // Flag whether route planning is initiated by the user
 var isUserInitiatedRoutePlanning = false;
 
@@ -632,6 +635,16 @@ function animatePoly(d) {
     update_map_setting("current_position", route_current_position);
 }
 
+function __clearRouteMoveTargetMonitor() {
+    try {
+        if (__routeMoveTargetMonitorTimer) {
+            clearInterval(__routeMoveTargetMonitorTimer);
+            __routeMoveTargetMonitorTimer = null;
+        }
+    } catch (e) {
+    }
+}
+
 
 function startAnimation() {
 
@@ -677,7 +690,19 @@ function viewRoute() {
 }
 
 // Track toggle function
-function route_move_action_from_python(){
+function route_move_action_from_python(allowedDistanceM){
+    const n = Number(allowedDistanceM);
+    const hasLimit = Number.isFinite(n) && n >= 0;
+
+    __clearRouteMoveTargetMonitor();
+
+    if (hasLimit) {
+        const target = Math.min(Number.isFinite(eol) ? eol : Number.POSITIVE_INFINITY, currentDistance + n);
+        __routeMoveTargetDistanceM = Number.isFinite(target) ? target : null;
+    } else {
+        __routeMoveTargetDistanceM = null;
+    }
+
     // Call startTrack or continueTrack based on currentDistance
     if (currentDistance === 0) {
         startTrack();
@@ -685,10 +710,25 @@ function route_move_action_from_python(){
         continueTrack();
     }
 
-    // Call pauseTrack after 10 seconds
-    setTimeout(() => {
-        pauseTrack();
-    }, 11000);
+    if (!hasLimit) {
+        // Backward compatible behavior
+        setTimeout(() => {
+            pauseTrack();
+        }, 11000);
+        return;
+    }
+
+    // Pause as soon as we reach the target distance.
+    __routeMoveTargetMonitorTimer = setInterval(() => {
+        try {
+            if (__routeMoveTargetDistanceM === null) return;
+            if (currentDistance >= __routeMoveTargetDistanceM - Math.max(1, step)) {
+                __clearRouteMoveTargetMonitor();
+                pauseTrack();
+            }
+        } catch (e) {
+        }
+    }, 200);
 }
 
 function toggleTrack() {

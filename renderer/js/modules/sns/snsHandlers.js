@@ -1875,9 +1875,6 @@ export default {
                                 const selectedText = window.getSelection().toString();
                                 if (selectedText) {
                                     searchInput.value = selectedText;
-                                    // Trigger search
-                                    const event = new Event('input', { bubbles: true });
-                                    searchInput.dispatchEvent(event);
                                 }
                             }
                         }, 100);
@@ -1913,131 +1910,297 @@ export default {
 
         let currentMatches = [];
         let currentMatchIndex = -1;
+        let _searchJobToken = 0;
+        let _lastSearchedText = '';
+        let _pendingNavigate = null;
 
-        // Highlight search results
-        const highlightMatches = (searchText) => {
-            // Clear previous highlights
-            this.clearSearchHighlights();
-
-            if (!searchText.trim()) {
-                searchResultsInfo.style.display = 'none';
-                return;
-            }
-
-            // Get currently active tab
-            const activePane = tabContent.querySelector('.tab-pane.active');
-            if (!activePane) return;
-
-            // Search text content
-            const textNodes = this.getTextNodes(activePane);
-            currentMatches = [];
-
-            const searchLower = searchText.toLowerCase();
-
-            textNodes.forEach(node => {
-                const text = node.textContent;
-                const textLower = text.toLowerCase();
-                let index = 0;
-
-                while ((index = textLower.indexOf(searchLower, index)) !== -1) {
-                    // Create highlight mark
-                    const range = document.createRange();
-                    range.setStart(node, index);
-                    range.setEnd(node, index + searchText.length);
-
-                    const mark = document.createElement('mark');
-                    mark.className = 'search-highlight';
-                    mark.textContent = text.substring(index, index + searchText.length);
-
-                    range.deleteContents();
-                    range.insertNode(mark);
-
-                    currentMatches.push(mark);
-                    index += searchText.length;
-
-                    // Update node reference (DOM has changed)
-                    node = mark.nextSibling;
-                    if (!node || node.nodeType !== Node.TEXT_NODE) break;
-                }
-            });
-
-            // Update search results info
-            if (currentMatches.length > 0) {
-                searchResultsInfo.style.display = 'flex';
-                searchResultsText.textContent = `Found ${currentMatches.length} results`;
-                currentMatchIndex = 0;
-                this.scrollToMatch(currentMatchIndex);
-            } else {
-                searchResultsInfo.style.display = 'flex';
-                searchResultsText.textContent = 'No results found';
-                currentMatchIndex = -1;
-            }
-        };
-
-        // Get all text nodes
-        this.getTextNodes = (element) => {
-            const textNodes = [];
-            const walker = document.createTreeWalker(
-                element,
-                NodeFilter.SHOW_TEXT,
-                {
-                    acceptNode: (node) => {
-                        // Skip whitespace nodes and already-highlighted nodes
-                        if (!node.textContent.trim() || node.parentElement.tagName === 'MARK') {
-                            return NodeFilter.FILTER_REJECT;
-                        }
-                        return NodeFilter.FILTER_ACCEPT;
-                    }
-                }
-            );
-
-            let node;
-            while (node = walker.nextNode()) {
-                textNodes.push(node);
-            }
-            return textNodes;
-        };
-
-        // Clear search highlights
-        this.clearSearchHighlights = () => {
-            const highlights = tabContent.querySelectorAll('.search-highlight');
-            highlights.forEach(mark => {
-                const parent = mark.parentNode;
-                parent.replaceChild(document.createTextNode(mark.textContent), mark);
-                parent.normalize(); // Merge adjacent text nodes
-            });
+        const clearLocalSearchState = () => {
             currentMatches = [];
             currentMatchIndex = -1;
         };
 
-        // Scroll to specified match
+        const clearSelectionHighlight = () => {
+            try {
+                const sel = window.getSelection();
+                if (sel && typeof sel.removeAllRanges === 'function') {
+                    sel.removeAllRanges();
+                }
+            } catch (e) {
+            }
+        };
+
+        const cancelActiveSearchJob = () => {
+            _searchJobToken += 1;
+        };
+
+        const getSearchBlocks = (activePane) => {
+            if (!activePane) return [];
+
+            const blocks = [];
+            const seen = new Set();
+            const pushUnique = (el) => {
+                if (!el || seen.has(el)) return;
+                seen.add(el);
+                blocks.push(el);
+            };
+
+            Array.from(activePane.querySelectorAll('.status-section-title')).forEach(pushUnique);
+
+            const thinkingEntries = Array.from(activePane.querySelectorAll('.thinking-log-entry'));
+            thinkingEntries.forEach(pushUnique);
+
+            const statusRows = Array.from(activePane.querySelectorAll('.status-row'));
+            statusRows.forEach(pushUnique);
+
+            const preBlocks = Array.from(activePane.querySelectorAll('pre'));
+            preBlocks.forEach(pushUnique);
+
+            const rowsContainers = Array.from(activePane.querySelectorAll('.status-rows'));
+            rowsContainers.forEach((c) => {
+                if (!c) return;
+                const hasThinkingEntries = c.querySelector('.thinking-log-entry');
+                const hasRows = c.querySelector('.status-row');
+                const hasPre = c.querySelector('pre');
+                if (!hasThinkingEntries && !hasRows && !hasPre) pushUnique(c);
+            });
+
+            if (blocks.length > 0) return blocks;
+
+            const sections = Array.from(activePane.querySelectorAll('.status-section'));
+            if (sections.length > 0) return sections;
+
+            try {
+                const children = Array.from(activePane.children || []).filter(Boolean);
+                if (children.length > 0) return children;
+            } catch (e) {
+            }
+
+            return [activePane];
+        };
+
+        const buildMatchesAsync = (searchText) => {
+            const token = _searchJobToken;
+            clearLocalSearchState();
+
+            const raw = (searchText === undefined || searchText === null) ? '' : String(searchText);
+            const normalized = raw.trim();
+            _lastSearchedText = normalized;
+
+            if (!normalized) {
+                if (searchResultsInfo) searchResultsInfo.style.display = 'none';
+                return;
+            }
+
+            const activePane = tabContent.querySelector('.tab-pane.active');
+            if (!activePane) return;
+
+            const blocks = getSearchBlocks(activePane);
+            const query = normalized.toLowerCase();
+            const maxMatches = 2000;
+
+            if (searchResultsInfo) searchResultsInfo.style.display = 'flex';
+            if (searchResultsText) searchResultsText.textContent = 'Searching...';
+
+            let blockIndex = 0;
+
+            const processBatch = () => {
+                if (token !== _searchJobToken) return;
+
+                const startMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+                while (blockIndex < blocks.length) {
+                    const el = blocks[blockIndex];
+                    blockIndex += 1;
+
+                    if (!el) continue;
+
+                    let text = '';
+                    try {
+                        text = String(el.textContent || '');
+                    } catch (e) {
+                        text = '';
+                    }
+
+                    if (!text) {
+                        const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                        if (nowMs - startMs > 10) break;
+                        continue;
+                    }
+
+                    const lower = text.toLowerCase();
+                    let fromIndex = 0;
+                    while (fromIndex < lower.length) {
+                        const found = lower.indexOf(query, fromIndex);
+                        if (found === -1) break;
+                        currentMatches.push({ el, start: found });
+                        if (currentMatches.length >= maxMatches) break;
+                        fromIndex = found + query.length;
+                    }
+
+                    if (currentMatches.length >= maxMatches) {
+                        break;
+                    }
+
+                    const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                    if (nowMs - startMs > 10) {
+                        break;
+                    }
+                }
+
+                if (token !== _searchJobToken) return;
+
+                if (blockIndex < blocks.length && currentMatches.length < maxMatches) {
+                    requestAnimationFrame(processBatch);
+                    return;
+                }
+
+                if (searchResultsInfo) searchResultsInfo.style.display = 'flex';
+                if (currentMatches.length > 0) {
+                    if (searchResultsText) {
+                        if (currentMatches.length >= maxMatches) {
+                            searchResultsText.textContent = `Found ${currentMatches.length}+ results`;
+                        } else {
+                            searchResultsText.textContent = `Found ${currentMatches.length} results`;
+                        }
+                    }
+                    const targetIndex = (_pendingNavigate === 'last') ? (currentMatches.length - 1) : 0;
+                    _pendingNavigate = null;
+                    currentMatchIndex = targetIndex;
+                    this.scrollToMatch(currentMatchIndex);
+                } else {
+                    if (searchResultsText) searchResultsText.textContent = 'No results found';
+                    currentMatchIndex = -1;
+                }
+            };
+
+            requestAnimationFrame(processBatch);
+        };
+
+        this.clearSearchHighlights = () => {
+            cancelActiveSearchJob();
+            clearLocalSearchState();
+            _lastSearchedText = '';
+            _pendingNavigate = null;
+            clearSelectionHighlight();
+        };
+
+        const createRangeFromTextOffsets = (root, start, end) => {
+            if (!root || start < 0 || end <= start) return null;
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+            let node = null;
+            let pos = 0;
+            let startNode = null;
+            let startOffset = 0;
+            let endNode = null;
+            let endOffset = 0;
+
+            while ((node = walker.nextNode())) {
+                const value = node.nodeValue || '';
+                const len = value.length;
+                if (!startNode && pos + len >= start) {
+                    startNode = node;
+                    startOffset = Math.max(0, start - pos);
+                }
+                if (pos + len >= end) {
+                    endNode = node;
+                    endOffset = Math.max(0, end - pos);
+                    break;
+                }
+                pos += len;
+            }
+
+            if (!startNode || !endNode) return null;
+            try {
+                const range = document.createRange();
+                range.setStart(startNode, startOffset);
+                range.setEnd(endNode, endOffset);
+                return range;
+            } catch (e) {
+                return null;
+            }
+        };
+
+        const highlightCurrentMatch = (match) => {
+            try {
+                if (!match || !match.el) return;
+                const q = String(_lastSearchedText || '');
+                if (!q) return;
+
+                const start = Number(match.start);
+                const end = start + q.length;
+                if (!Number.isFinite(start) || start < 0) return;
+
+                clearSelectionHighlight();
+                const range = createRangeFromTextOffsets(match.el, start, end);
+                if (!range) return;
+
+                const sel = window.getSelection();
+                if (!sel) return;
+                sel.removeAllRanges();
+                sel.addRange(range);
+            } catch (e) {
+            }
+        };
+
         this.scrollToMatch = (index) => {
             if (index < 0 || index >= currentMatches.length) return;
 
-            // Remove previous current highlight
-            currentMatches.forEach(mark => mark.classList.remove('search-highlight-current'));
+            const match = currentMatches[index];
+            const el = match && match.el;
+            if (!el) return;
 
-            // Add current highlight
-            const currentMark = currentMatches[index];
-            currentMark.classList.add('search-highlight-current');
+            // Build a Range for the matched text so we can scroll precisely to it
+            const q = String(_lastSearchedText || '');
+            const start = Number(match.start);
+            const end = start + q.length;
+            const range = (q && Number.isFinite(start) && start >= 0)
+                ? createRangeFromTextOffsets(el, start, end)
+                : null;
 
-            // Scroll into view
-            currentMark.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
+            if (range) {
+                // Use the Range bounding rect to scroll the matched text into view
+                const rect = range.getBoundingClientRect();
+                const scrollContainer = tabContent;
+                if (scrollContainer) {
+                    const containerRect = scrollContainer.getBoundingClientRect();
+                    const offsetTop = rect.top - containerRect.top + scrollContainer.scrollTop;
+                    scrollContainer.scrollTo({
+                        top: offsetTop - scrollContainer.clientHeight / 2 + rect.height / 2,
+                        behavior: 'smooth'
+                    });
+                }
 
-            // Update results text
-            searchResultsText.textContent = `${index + 1} / ${currentMatches.length}`;
+                // Highlight via native Selection
+                requestAnimationFrame(() => {
+                    highlightCurrentMatch(match);
+                });
+            } else if (typeof el.scrollIntoView === 'function') {
+                // Fallback: scroll the block element into view
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            if (searchResultsText) {
+                searchResultsText.textContent = `${index + 1} / ${currentMatches.length}`;
+            }
         };
 
-        // Search input event
-        let searchTimeout;
-        searchInput.addEventListener('input', (e) => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                highlightMatches(e.target.value);
-            }, 300); // Debounce
+        const ensureSearchAndNavigate = (direction) => {
+            const v = String(searchInput.value || '').trim();
+            const sameQuery = v && _lastSearchedText && v === _lastSearchedText;
+
+            if (!sameQuery) {
+                cancelActiveSearchJob();
+                _pendingNavigate = (direction === 'prev') ? 'last' : null;
+                buildMatchesAsync(v);
+                return true;
+            }
+            return false;
+        };
+
+        searchInput.addEventListener('input', () => {
+            cancelActiveSearchJob();
+            clearLocalSearchState();
+            if (searchResultsInfo) searchResultsInfo.style.display = 'none';
         });
 
         // Clear button - clear search and close search bar
@@ -2054,6 +2217,7 @@ export default {
 
         // Previous result
         searchPrevBtn.addEventListener('click', () => {
+            if (ensureSearchAndNavigate('prev')) return;
             if (currentMatches.length === 0) return;
             currentMatchIndex = (currentMatchIndex - 1 + currentMatches.length) % currentMatches.length;
             this.scrollToMatch(currentMatchIndex);
@@ -2061,6 +2225,7 @@ export default {
 
         // Next result
         searchNextBtn.addEventListener('click', () => {
+            if (ensureSearchAndNavigate('next')) return;
             if (currentMatches.length === 0) return;
             currentMatchIndex = (currentMatchIndex + 1) % currentMatches.length;
             this.scrollToMatch(currentMatchIndex);
@@ -2071,28 +2236,62 @@ export default {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (e.shiftKey) {
-                    searchPrevBtn.click();
-                } else {
-                    searchNextBtn.click();
+                    if (ensureSearchAndNavigate('prev')) return;
+                    if (currentMatches.length === 0) {
+                        ensureSearchAndNavigate('prev');
+                        return;
+                    }
+                    currentMatchIndex = (currentMatchIndex - 1 + currentMatches.length) % currentMatches.length;
+                    this.scrollToMatch(currentMatchIndex);
+                    return;
                 }
+
+                if (ensureSearchAndNavigate('next')) return;
+                if (currentMatches.length === 0) {
+                    ensureSearchAndNavigate('next');
+                    return;
+                }
+                currentMatchIndex = (currentMatchIndex + 1) % currentMatches.length;
+                this.scrollToMatch(currentMatchIndex);
             } else if (e.key === 'Escape') {
                 searchClear.click();
             }
         });
 
-        // Clear search when switching tabs
+        const closeSearchUI = () => {
+            cancelActiveSearchJob();
+            clearLocalSearchState();
+            clearSelectionHighlight();
+            _lastSearchedText = '';
+            _pendingNavigate = null;
+            if (searchResultsInfo) searchResultsInfo.style.display = 'none';
+            const searchBar = document.getElementById('statusSearchBar');
+            if (searchBar) searchBar.style.display = 'none';
+            searchInput.value = '';
+        };
+
+        // Clear search and hide search bar when switching tabs
         const tabsContainer = document.getElementById('statusTabs');
         if (tabsContainer) {
             tabsContainer.addEventListener('click', (e) => {
                 if (e.target.closest('.status-tab')) {
-                    // Delay clearing to wait for tab switch to complete
-                    setTimeout(() => {
-                        if (searchInput.value) {
-                            highlightMatches(searchInput.value);
-                        }
-                    }, 100);
+                    closeSearchUI();
                 }
             });
+        }
+
+        let _lastActivePaneKey = null;
+        try {
+            const observer = new MutationObserver(() => {
+                const pane = tabContent.querySelector('.tab-pane.active');
+                const key = pane ? (pane.getAttribute('data-tab') || '') : '';
+                if (key && key !== _lastActivePaneKey) {
+                    _lastActivePaneKey = key;
+                    closeSearchUI();
+                }
+            });
+            observer.observe(tabContent, { attributes: true, subtree: true, attributeFilter: ['class', 'style'] });
+        } catch (e) {
         }
     },
 
@@ -2766,7 +2965,16 @@ export default {
             margin-bottom: 8px;
             border-radius: 4px;
         `;
-        contentDiv.textContent = content;
+        try {
+            const pad = (n) => String(n).padStart(2, '0');
+            const d = new Date();
+            const timeText = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            const baseText = (content === undefined || content === null) ? '' : String(content);
+            const joined = baseText ? `Time: ${timeText}\n${baseText}` : `Time: ${timeText}`;
+            contentDiv.textContent = joined;
+        } catch (e) {
+            contentDiv.textContent = content;
+        }
 
         // If this is the first entry, clear "N/A"
         if (thinkingLogSection.querySelector('.na')) {
@@ -3004,17 +3212,64 @@ export default {
             historySection.innerHTML = '';
         }
 
-        const historyDiv = document.createElement('div');
-        historyDiv.style.cssText = `
-            white-space: pre-wrap;
+        const formatNow = () => {
+            try {
+                const pad = (n) => String(n).padStart(2, '0');
+                const d = new Date();
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            } catch (e) {
+                return '';
+            }
+        };
+
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = `
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
             font-size: 13px;
             line-height: 1.6;
             color: var(--text-primary);
         `;
-        historyDiv.textContent = content;
+
+        const text = (content === undefined || content === null) ? '' : String(content);
+        const items = text.split('\n').map(s => s.trim()).filter(Boolean);
+        if (!items.length) {
+            const na = document.createElement('span');
+            na.className = 'na';
+            na.textContent = 'N/A';
+            wrapper.appendChild(na);
+        } else {
+            for (const item of items) {
+                const entry = document.createElement('div');
+                entry.style.cssText = `
+                    padding: 6px 0;
+                    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+                `;
+
+                const timeLine = document.createElement('div');
+                timeLine.style.cssText = `
+                    font-size: 11px;
+                    line-height: 1.2;
+                    color: var(--text-secondary, #666);
+                    opacity: 0.9;
+                    margin-bottom: 2px;
+                `;
+                timeLine.textContent = formatNow();
+
+                const contentLine = document.createElement('div');
+                contentLine.style.cssText = `
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                `;
+                contentLine.textContent = item;
+
+                entry.appendChild(timeLine);
+                entry.appendChild(contentLine);
+                wrapper.appendChild(entry);
+            }
+        }
+
         historySection.innerHTML = '';
-        historySection.appendChild(historyDiv);
+        historySection.appendChild(wrapper);
         console.log('History section updated');
     },
 
@@ -3279,6 +3534,12 @@ export default {
         const profileTab = statusTabs.querySelector('.status-tab[data-tab="profile"]');
         const profilePane = statusTabContent.querySelector('.tab-pane[data-tab="profile"]');
 
+        if (!profileTab && !profilePane) {
+            return;
+        }
+
+        const wasActive = !!(profileTab && profileTab.classList.contains('active'));
+
         if (profileTab) {
             profileTab.remove();
         }
@@ -3290,16 +3551,18 @@ export default {
         // Switch to the first tab (Process) — use exclusive toggle to avoid
         // leaving stale 'active' class on other tabs (fixes simultaneous
         // Process + Think activation bug).
-        const firstTab = statusTabs.querySelector('.status-tab');
-        const firstPane = statusTabContent.querySelector('.tab-pane');
+        if (wasActive) {
+            const firstTab = statusTabs.querySelector('.status-tab');
+            const firstPane = statusTabContent.querySelector('.tab-pane');
 
-        if (firstTab && firstPane) {
-            statusTabs.querySelectorAll('.status-tab').forEach(btn => {
-                btn.classList.toggle('active', btn === firstTab);
-            });
-            statusTabContent.querySelectorAll('.tab-pane').forEach(pane => {
-                pane.classList.toggle('active', pane === firstPane);
-            });
+            if (firstTab && firstPane) {
+                statusTabs.querySelectorAll('.status-tab').forEach(btn => {
+                    btn.classList.toggle('active', btn === firstTab);
+                });
+                statusTabContent.querySelectorAll('.tab-pane').forEach(pane => {
+                    pane.classList.toggle('active', pane === firstPane);
+                });
+            }
         }
 
         console.log('SNS Profile tab closed');

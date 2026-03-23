@@ -210,18 +210,29 @@ const AgentSidebar = {
         const agentItemsHTML = agents.map(agent => `
             <!-- Agent list item -->
             <div class="agent-item" data-agent-id="${agent.id}">
-<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Head -->
-  <rect x="3" y="6" width="18" height="14" rx="2" stroke="#1a73e8" stroke-width="2"/>
-  <!-- Antenna -->
-  <line x1="12" y1="6" x2="12" y2="3" stroke="#1a73e8" stroke-width="2"/>
-  <circle cx="12" cy="2" r="1.5" fill="#1a73e8"/>
-  <!-- Eyes -->
-  <circle cx="8.5" cy="11.5" r="1.5" fill="#1a73e8"/>
-  <circle cx="15.5" cy="11.5" r="1.5" fill="#1a73e8"/>
-  <!-- Mouth -->
-  <path d="M9 15 Q12 18 15 15" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            
+            <svg viewBox="0 0 48 48" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="robotGrad-${agent.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#11998e"/>
+            <stop offset="100%" style="stop-color:#38ef7d"/>
+        </linearGradient>
+    </defs>
+    <circle cx="24" cy="24" r="22" fill="url(#robotGrad-${agent.id})" opacity="0.1"/>
+    <g transform="translate(4.8, 4.8) scale(0.8)">       
+        <path d="
+            M24 7v3 M21 7h6 
+            M16 12h16a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3z
+            M19 19h2 M27 19h2
+            M11 34c0-3 3-5 6-5h14c3 0 6 2 6 5v4H11v-4z
+        " fill="none" stroke="url(#robotGrad-${agent.id})" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>              
+        <circle cx="20" cy="19" r="1.5" fill="url(#robotGrad-${agent.id})"/>
+        <circle cx="28" cy="19" r="1.5" fill="url(#robotGrad-${agent.id})"/>
+    </g>
 </svg>
+            
+            
+
 
                 <span class="web-section-title">${agent.name || 'Unnamed Agent'}</span>
             </div>
@@ -251,9 +262,17 @@ const AgentSidebar = {
                 <span class="web-section-title">LLM Setting</span>
             </div>
             <div class="agent-item agent-management" data-page="role-management">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="18" height="18" stroke="currentColor" fill="currentColor">
+       
+                <circle cx="50" cy="50" r="45" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" opacity="0.1"/>
+               
+                <g class="char-spark">
+                    <circle cx="50" cy="35" r="15" />
+                    <path d="M50,55 C30,55 20,70 20,90 L80,90 C80,70 70,55 50,55 Z" />
+                
+                    <path d="M80,20 L82,28 L90,30 L82,32 L80,40 L78,32 L70,30 L78,28 Z" />
+                </g>
+            </svg>
                 <span class="web-section-title">Role Setting</span>
             </div>
             <div class="agent-item agent-management" data-page="agent-management">

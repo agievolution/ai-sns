@@ -11,6 +11,13 @@ import json
 import logging
 
 from backend.config.settings import get_settings
+from backend.shared.llm_log_writer import (
+    new_request_id,
+    log_llm_request,
+    log_llm_response,
+    log_llm_stream_chunk,
+    log_llm_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,21 +113,43 @@ class AIClient:
             **kwargs
         }
 
+        request_id = new_request_id()
+        try:
+            log_llm_request(request_id=request_id, source="backend.shared.ai_client.AIClient.chat_completion", request_json=request_data)
+        except Exception:
+            pass
+
         logger.info(f"Chat completion request: model={request_data['model']}, messages={len(messages)}")
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                self._get_completion_url(),
-                json=request_data,
-                headers=self._get_headers()
-            )
+            try:
+                response = await client.post(
+                    self._get_completion_url(),
+                    json=request_data,
+                    headers=self._get_headers()
+                )
 
-            if response.status_code != 200:
-                error_text = response.text
-                logger.error(f"API error {response.status_code}: {error_text}")
-                raise httpx.HTTPError(f"HTTP {response.status_code}: {error_text}")
+                if response.status_code != 200:
+                    error_text = response.text
+                    try:
+                        log_llm_error(request_id=request_id, source="backend.shared.ai_client.AIClient.chat_completion", error=error_text)
+                    except Exception:
+                        pass
+                    logger.error(f"API error {response.status_code}: {error_text}")
+                    raise httpx.HTTPError(f"HTTP {response.status_code}: {error_text}")
 
-            return response.json()
+                data = response.json()
+                try:
+                    log_llm_response(request_id=request_id, source="backend.shared.ai_client.AIClient.chat_completion", response_json=data)
+                except Exception:
+                    pass
+                return data
+            except Exception as e:
+                try:
+                    log_llm_error(request_id=request_id, source="backend.shared.ai_client.AIClient.chat_completion", error=e)
+                except Exception:
+                    pass
+                raise
 
     async def chat_completion_stream(
         self,
@@ -158,75 +187,143 @@ class AIClient:
             **kwargs
         }
 
+        request_id = new_request_id()
+        try:
+            log_llm_request(request_id=request_id, source="backend.shared.ai_client.AIClient.chat_completion_stream", request_json=request_data)
+        except Exception:
+            pass
+
         logger.info(f"Streaming chat completion: model={request_data['model']}, messages={len(messages)}")
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            async with client.stream(
-                'POST',
-                self._get_completion_url(),
-                json=request_data,
-                headers=self._get_headers()
-            ) as response:
-                if response.status_code != 200:
-                    error_text = await response.aread()
-                    logger.error(f"API error {response.status_code}: {error_text.decode()}")
-                    raise httpx.HTTPError(f"HTTP {response.status_code}: {error_text.decode()}")
+        done_sent = False
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream(
+                    'POST',
+                    self._get_completion_url(),
+                    json=request_data,
+                    headers=self._get_headers()
+                ) as response:
+                    if response.status_code != 200:
+                        error_text = await response.aread()
+                        try:
+                            log_llm_error(
+                                request_id=request_id,
+                                source="backend.shared.ai_client.AIClient.chat_completion_stream",
+                                error=error_text.decode(errors="ignore"),
+                            )
+                        except Exception:
+                            pass
+                        logger.error(f"API error {response.status_code}: {error_text.decode(errors='ignore')}")
+                        raise httpx.HTTPError(f"HTTP {response.status_code}: {error_text.decode(errors='ignore')}")
 
-                buffer = ""
-                async for chunk in response.aiter_bytes():
-                    chunk_str = chunk.decode('utf-8')
-                    buffer += chunk_str
+                    buffer = ""
+                    async for chunk in response.aiter_bytes():
+                        chunk_str = chunk.decode('utf-8', errors='ignore')
+                        buffer += chunk_str
 
-                    # Process complete lines
-                    lines = buffer.split('\n')
-                    buffer = lines.pop() if lines else ""
+                        lines = buffer.split('\n')
+                        buffer = lines.pop() if lines else ""
 
-                    for line in lines:
-                        line = line.strip()
-                        if line.startswith('data: '):
-                            data = line[6:]
+                        for line in lines:
+                            s = line.strip()
+                            if not s.startswith('data: '):
+                                continue
 
-                            if data == '[DONE]':
+                            payload = s[6:].strip()
+                            if payload == '[DONE]':
+                                done_sent = True
                                 yield {"event": "done", "data": {"status": "completed"}}
-                                return
+                                break
 
                             try:
-                                parsed = json.loads(data)
-                                choices = parsed.get('choices', [])
-                                if choices and len(choices) > 0:
-                                    delta = choices[0].get('delta', {})
-                                    content = delta.get('content', '')
-
-                                    if content:
-                                        yield {
-                                            "event": "message",
-                                            "data": {"content": content},
-                                            "raw": parsed
-                                        }
+                                parsed = json.loads(payload)
                             except json.JSONDecodeError as e:
                                 logger.debug(f"JSON parse error: {e}")
                                 continue
 
-                # Handle remaining buffer
-                if buffer.strip():
-                    line = buffer.strip()
-                    if line.startswith('data: ') and line[6:] != '[DONE]':
-                        try:
-                            parsed = json.loads(line[6:])
-                            choices = parsed.get('choices', [])
-                            if choices and len(choices) > 0:
-                                delta = choices[0].get('delta', {})
-                                content = delta.get('content', '')
-                                if content:
-                                    yield {
-                                        "event": "message",
-                                        "data": {"content": content},
-                                        "raw": parsed
-                                    }
-                        except json.JSONDecodeError:
-                            pass
+                            try:
+                                log_llm_stream_chunk(
+                                    request_id=request_id,
+                                    source="backend.shared.ai_client.AIClient.chat_completion_stream",
+                                    stream_raw=parsed,
+                                )
+                            except Exception:
+                                pass
 
+                            try:
+                                choices = parsed.get('choices', [])
+                                if choices and len(choices) > 0:
+                                    delta = choices[0].get('delta', {})
+                                    content = delta.get('content', '')
+                                    if content:
+                                        yield {
+                                            "event": "message",
+                                            "data": {"content": content},
+                                            "raw": parsed,
+                                        }
+                            except Exception:
+                                continue
+
+                        if done_sent:
+                            break
+
+                    if not done_sent and buffer.strip():
+                        for raw_line in buffer.splitlines():
+                            s = raw_line.strip()
+                            if not s.startswith('data: '):
+                                continue
+                            payload = s[6:].strip()
+                            if payload == '[DONE]':
+                                done_sent = True
+                                break
+                            try:
+                                parsed = json.loads(payload)
+                            except Exception:
+                                continue
+                            try:
+                                log_llm_stream_chunk(
+                                    request_id=request_id,
+                                    source="backend.shared.ai_client.AIClient.chat_completion_stream",
+                                    stream_raw=parsed,
+                                )
+                            except Exception:
+                                pass
+                            try:
+                                choices = parsed.get('choices', [])
+                                if choices and len(choices) > 0:
+                                    delta = choices[0].get('delta', {})
+                                    content = delta.get('content', '')
+                                    if content:
+                                        yield {
+                                            "event": "message",
+                                            "data": {"content": content},
+                                            "raw": parsed,
+                                        }
+                            except Exception:
+                                continue
+
+            if not done_sent:
                 yield {"event": "done", "data": {"status": "completed"}}
+
+            try:
+                log_llm_response(
+                    request_id=request_id,
+                    source="backend.shared.ai_client.AIClient.chat_completion_stream",
+                    response_json={"status": "completed"},
+                )
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                log_llm_error(
+                    request_id=request_id,
+                    source="backend.shared.ai_client.AIClient.chat_completion_stream",
+                    error=e,
+                )
+            except Exception:
+                pass
+            raise
 
     async def simple_chat(self, user_message: str, system_prompt: Optional[str] = None) -> str:
         """

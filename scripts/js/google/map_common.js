@@ -1685,7 +1685,7 @@ function initMap() {
 
             // Load model with retry
 
-            const gltf = await loadModelWithRetry(loader, 'avatar3d/lobster_0_0_0_0_1_0.glb');
+            const gltf = await loadModelWithRetry(loader, 'avatar3d/lobster_animation_0_0_0_0_1_0.glb');
 
             model2 = gltf.scene;
 

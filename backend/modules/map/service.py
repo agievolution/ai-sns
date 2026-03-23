@@ -44,6 +44,14 @@ logger = logging.getLogger(__name__)
 class MapService:
     """Service for managing map functionality"""
 
+    @staticmethod
+    def _coerce_route_distance_m(cfg: Any) -> float:
+        try:
+            raw = getattr(cfg, "route", 0) or 0
+            return float(raw)
+        except Exception:
+            return 0.0
+
     @classmethod
     def _sync_location_to_remote_ai_sns(cls, *, cfg: Any, lng: float, lat: float) -> None:
         """Best-effort sync of the latest location to the configured ai_sns_server."""
@@ -310,6 +318,7 @@ class MapService:
         cfg = query_AiChatCfg_map()
         if cfg:
             normalized_current_position = MapService._ensure_current_position(cfg)
+            route_distance_m = MapService._coerce_route_distance_m(cfg)
             return {
                 "success": True,
                 "data": {
@@ -323,7 +332,7 @@ class MapService:
                     "route_start": getattr(cfg, 'route_start', ''),
                     "route_end": getattr(cfg, 'route_end', ''),
                     "route_current_position": json.loads(getattr(cfg, 'route_current_position', '{}')) if getattr(cfg, 'route_current_position', None) else {},
-                    "route_distance": getattr(cfg, 'route_distance', 0.0),
+                    "route_distance": route_distance_m,
                     "route_points": getattr(cfg, 'route_points', '') or "",
                     "avatar3d": getattr(cfg, 'avatar3d', 'default.glb'),
                     "nationid": getattr(cfg, 'nationid', '123456'),
@@ -408,8 +417,10 @@ class MapService:
             updates["route_end"] = payload.get("route_end")
         if "route_current_position" in payload:
             updates["route_current_position"] = json.dumps(payload.get("route_current_position"), ensure_ascii=False) if payload.get("route_current_position") else "{}"
-        if "route_distance" in payload:
-            updates["route_distance"] = payload.get("route_distance")
+        if "route" in payload:
+            updates["route"] = payload.get("route")
+        elif "route_distance" in payload:
+            updates["route"] = payload.get("route_distance")
 
         if "route_points" in payload:
             updates["route_points"] = payload.get("route_points") or ""

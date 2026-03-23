@@ -367,3 +367,40 @@ async def get_trades(db: Session = Depends(get_db_sync)):
         logger.error(f"Error getting trades: {e}")
         return []
 
+
+@router.delete("/trades/{trade_id}")
+async def delete_trade(trade_id: str, db: Session = Depends(get_db_sync)):
+    """Soft delete a trade by trade_id"""
+    from backend.database.models.map import MapTrade
+
+    trade_id = (trade_id or "").strip()
+    if not trade_id:
+        raise HTTPException(status_code=400, detail="trade_id is required")
+
+    try:
+        trade = db.query(MapTrade).filter(MapTrade.trade_id == trade_id).first()
+        if not trade:
+            raise HTTPException(status_code=404, detail="Trade not found")
+
+        trade.is_delete = True
+        db.commit()
+
+        try:
+            await global_ws_manager.broadcast({
+                "type": "trade_deleted",
+                "data": {"trade_id": trade_id}
+            })
+        except Exception as e:
+            logger.warning(f"Failed to broadcast trade_deleted: {e}")
+
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.error(f"Error deleting trade {trade_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

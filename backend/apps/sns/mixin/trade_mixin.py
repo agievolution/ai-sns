@@ -44,6 +44,42 @@ logger = logging.getLogger(__name__)
 
 class TradeMixin:
 
+    def _broadcast_trade_upserted(self, trade_id: str) -> None:
+        trade_id = (trade_id or "").strip()
+        if not trade_id:
+            return
+
+        try:
+            trade = query_single_map_trade(trade_id=trade_id)
+            if not trade:
+                return
+
+            payload = {
+                "id": getattr(trade, "id", None),
+                "trade_id": getattr(trade, "trade_id", None),
+                "trade_type": getattr(trade, "trade_type", None),
+                "title": getattr(trade, "title", None),
+                "detail": getattr(trade, "detail", None),
+                "link": getattr(trade, "link", None),
+                "trade_with_name": getattr(trade, "trade_with_name", None),
+                "trade_with_account": getattr(trade, "trade_with_account", None),
+                "trade_with_company": getattr(trade, "trade_with_company", None),
+                "pay": getattr(trade, "pay", None),
+                "pay_method": getattr(trade, "pay_method", None),
+                "status": getattr(trade, "status", None),
+                "create_time": trade.create_time.isoformat() if getattr(trade, "create_time", None) else None,
+            }
+
+            msg = {"type": "trade_upserted", "data": payload}
+
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(websocket_manager.broadcast(msg))
+            except RuntimeError:
+                asyncio.create_task(websocket_manager.broadcast(msg))
+        except Exception as e:
+            logger.warning("trade_upserted broadcast failed: %s", e)
+
     def _parse_trade_payment(self, price_str: str):
         trade_id = ""
         trade_price = "0"
@@ -466,11 +502,12 @@ class TradeMixin:
         current_chat_summary = result["summary"]
         message = result["next_message"]
 
+        goods_name = result.get("goods_name", "")
         buy_score = result.get("buy_score", False)
         price = result.get("price", 0)
 
         if buy_score >= 80 and price >= 0:
-            self.send_pay(price)
+            self.send_pay(price, good_name=goods_name)
             # self.end_active_conversation(
             #     reason="pay",
             #     message="Payment initiated.",
@@ -566,7 +603,14 @@ class TradeMixin:
     def check_buy_in_received(self, msg):
         return "AISNS_INT_003_INQUIRY" in (msg or "")
 
-    def send_pay(self, price, to_account: Optional[str] = None, to_nation_id: Optional[str] = None, to_nick_name: Optional[str] = None) -> None:
+    def send_pay(
+        self,
+        price,
+        to_account: Optional[str] = None,
+        to_nation_id: Optional[str] = None,
+        to_nick_name: Optional[str] = None,
+        good_name: Optional[str] = None,
+    ) -> None:
         trade_id = generate_random_id()
         current_talk_people = self.current_talk_people or {}
         logger.info("sendpay.......")
@@ -656,7 +700,7 @@ class TradeMixin:
             current_credit = int(self.aichatcfg_record.credit or 0)
             self.aichatcfg_record.credit = current_credit + 1
             trade_type = "B"
-            title = f"Trade with {nick_name}"
+            title = (good_name or "").strip() or f"Trade with {nick_name}"
             detail = "Waiting for goods"
             trade_with_name = nick_name
             trade_with_account = account
@@ -666,6 +710,8 @@ class TradeMixin:
                 update_map_trade(trade_id, trade_type=trade_type, title=title, detail=detail, pay=price, trade_with_name=trade_with_name, trade_with_account=trade_with_account, status=1)
             else:
                 add_map_trade(trade_id=trade_id, trade_type=trade_type, title=title, detail=detail, pay=price, trade_with_name=trade_with_name, trade_with_account=trade_with_account, status=1)
+
+            self._broadcast_trade_upserted(trade_id)
         except Exception as e:
             logger.error(f"send_pay failed: {e}", exc_info=True)
 
@@ -783,7 +829,10 @@ class TradeMixin:
 
             self.talk_to_a_people(message, nation_id, account, nick_name)
             trade_type = "S"
-            title = f"Trade with {nick_name}"
+            title = (
+                (getattr(getattr(self, "aichatcfg_record", None), "goods_or_service_description", None) or "").strip()
+                or f"Trade with {nick_name}"
+            )
             detail = good_payload
             trade_with_name = nick_name
             trade_with_account = account
@@ -792,6 +841,8 @@ class TradeMixin:
                 update_map_trade(trade_id, trade_type=trade_type, title=title, detail=detail, pay=price, trade_with_name=trade_with_name, trade_with_account=trade_with_account, status=2)
             else:
                 add_map_trade(trade_id=trade_id, trade_type=trade_type, title=title, detail=detail, pay=price, trade_with_name=trade_with_name, trade_with_account=trade_with_account, status=2)
+
+            self._broadcast_trade_upserted(trade_id)
             self.add_money(price)
 
             # Memory capture: record sell trade
@@ -855,6 +906,8 @@ class TradeMixin:
 
         try:
             update_map_trade(trade_id, detail=goods_detail, status=3)
+
+            self._broadcast_trade_upserted(trade_id)
 
             def _end_trade_conversation():
                 self.end_active_conversation(

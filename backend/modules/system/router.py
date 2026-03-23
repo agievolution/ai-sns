@@ -3,6 +3,8 @@
 System module - API router
 """
 import logging
+import re
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File
 from fastapi.responses import Response
 from typing import List
@@ -14,6 +16,28 @@ from .dependencies import get_system_service, get_system_init_wizard_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _get_backend_logs_root() -> Path:
+    return Path(__file__).resolve().parents[2] / 'logs'
+
+
+def _validate_date_folder(date_str: str) -> str:
+    s = str(date_str or '').strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        raise HTTPException(status_code=400, detail='Invalid date format')
+    return s
+
+
+def _validate_log_filename(name: str) -> str:
+    s = str(name or '').strip()
+    if not s:
+        raise HTTPException(status_code=400, detail='Empty filename')
+    if Path(s).name != s:
+        raise HTTPException(status_code=400, detail='Invalid filename')
+    if '..' in s or '/' in s or '\\' in s:
+        raise HTTPException(status_code=400, detail='Invalid filename')
+    return s
 
 
 @router.get("/config", response_model=dict)
@@ -52,6 +76,86 @@ async def update_system_config(
     except Exception as e:
         logger.error(f"Error updating system config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/logs/dates', response_model=dict)
+async def list_log_dates():
+    try:
+        root = _get_backend_logs_root()
+        if not root.exists() or not root.is_dir():
+            return {"success": True, "data": []}
+
+        items = []
+        for p in root.iterdir():
+            if not p.is_dir():
+                continue
+            name = p.name
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", name):
+                items.append(name)
+        items.sort(reverse=True)
+        return {"success": True, "data": items}
+    except Exception as e:
+        logger.error(f"Error listing log dates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/logs/files', response_model=dict)
+async def list_log_files(date: str):
+    date = _validate_date_folder(date)
+    root = _get_backend_logs_root()
+    day_dir = (root / date).resolve()
+
+    try:
+        root_resolved = root.resolve()
+        if root_resolved not in day_dir.parents and day_dir != root_resolved:
+            raise HTTPException(status_code=400, detail='Invalid path')
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid path')
+
+    if not day_dir.exists() or not day_dir.is_dir():
+        return {"success": True, "data": []}
+
+    files = []
+    for p in day_dir.iterdir():
+        if not p.is_file():
+            continue
+        if p.suffix.lower() != '.ndjson':
+            continue
+        files.append(p.name)
+    files.sort()
+    return {"success": True, "data": files}
+
+
+@router.get('/logs/file', response_model=dict)
+async def read_log_file(date: str, name: str):
+    date = _validate_date_folder(date)
+    name = _validate_log_filename(name)
+
+    root = _get_backend_logs_root()
+    day_dir = (root / date).resolve()
+    target = (day_dir / name).resolve()
+
+    try:
+        root_resolved = root.resolve()
+        if root_resolved not in target.parents:
+            raise HTTPException(status_code=400, detail='Invalid path')
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid path')
+
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail='File not found')
+
+    try:
+        content = target.read_text(encoding='utf-8', errors='ignore')
+    except Exception as e:
+        logger.error(f"Error reading log file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"success": True, "data": {"date": date, "name": name, "content": content}}
 
 
 @router.get("/web-mng", response_model=dict)

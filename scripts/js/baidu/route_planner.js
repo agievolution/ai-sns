@@ -8,6 +8,55 @@ var is_route_move_action = false;
 var currentDistance = 0;
 var move_duration = 600;
 
+var __routeTotalDistanceM = 0;
+var __routeMoveTargetProcess = null;
+var __routeMoveMonitorTimer = null;
+var __routeCurrentProcess = 0;
+var __routeCurrentDistanceM = 0;
+
+function __snsHaversineDistanceM(lng1, lat1, lng2, lat2) {
+    const r = 6371000.0;
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const dphi = (lat2 - lat1) * Math.PI / 180;
+    const dlambda = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dphi / 2) * Math.sin(dphi / 2) +
+        Math.cos(phi1) * Math.cos(phi2) *
+        Math.sin(dlambda / 2) * Math.sin(dlambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return r * c;
+}
+
+function __snsComputeRouteTotalDistanceM(points) {
+    try {
+        if (!Array.isArray(points) || points.length < 2) return 0;
+        let total = 0;
+        for (let i = 1; i < points.length; i++) {
+            const p1 = points[i - 1];
+            const p2 = points[i];
+            const lng1 = Number(p1 && p1.lng);
+            const lat1 = Number(p1 && p1.lat);
+            const lng2 = Number(p2 && p2.lng);
+            const lat2 = Number(p2 && p2.lat);
+            if (!Number.isFinite(lng1) || !Number.isFinite(lat1) || !Number.isFinite(lng2) || !Number.isFinite(lat2)) continue;
+            total += __snsHaversineDistanceM(lng1, lat1, lng2, lat2);
+        }
+        return Number.isFinite(total) ? total : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+function __snsClearRouteMoveMonitor() {
+    try {
+        if (__routeMoveMonitorTimer) {
+            clearInterval(__routeMoveMonitorTimer);
+            __routeMoveMonitorTimer = null;
+        }
+    } catch (e) {
+    }
+}
+
 // Flag: whether the route planning is initiated by the user
 var isUserInitiatedRoutePlanning = false;
 
@@ -35,6 +84,11 @@ function loadRouteFromPoints(points) {
                 return new BMapGL.Point(lng, lat);
             })
             .filter(Boolean);
+
+        __routeTotalDistanceM = __snsComputeRouteTotalDistanceM(points);
+        __routeCurrentDistanceM = 0;
+        __routeCurrentProcess = 0;
+        currentDistance = 0;
 
         if (pointArray.length < 2) {
             throw new Error('Route points are empty after normalization');
@@ -102,6 +156,18 @@ function loadRouteFromPoints(points) {
         } });
 
         trackLine.setMovePoint(movePoint);
+
+        try {
+            const initD = Number((typeof init_route_distance !== 'undefined') ? init_route_distance : 0);
+            if (Number.isFinite(initD) && initD > 0 && __routeTotalDistanceM > 0) {
+                const p = Math.min(1, Math.max(0, initD / __routeTotalDistanceM));
+                __routeCurrentProcess = p;
+                __routeCurrentDistanceM = initD;
+                currentDistance = initD;
+                trackLine.setProcess(p);
+            }
+        } catch (e) {
+        }
 
         // Fit map to route.
         try {
@@ -433,6 +499,17 @@ function getAllGpsPositions(routeResult) {
 
     // Draw route on the map
     const pointArray = positions.map(pos => new BMapGL.Point(pos.lng, pos.lat));
+
+    try {
+        const rawPoints = positions.map(p => ({ lng: Number(p.lng), lat: Number(p.lat) }))
+            .filter(p => Number.isFinite(p.lng) && Number.isFinite(p.lat));
+        __routeTotalDistanceM = __snsComputeRouteTotalDistanceM(rawPoints);
+        __routeCurrentDistanceM = 0;
+        __routeCurrentProcess = 0;
+        currentDistance = 0;
+    } catch (e) {
+        __routeTotalDistanceM = 0;
+    }
     currentRoute = new BMapGL.Polyline(pointArray, {
         strokeColor: "blue",
         strokeWeight: 2,
@@ -560,18 +637,46 @@ function getAllGpsPositions(routeResult) {
 
 
 // Toggle track from python side
-function route_move_action_from_python(){
-    // Decide startTrack vs continueTrack based on currentDistance
-    if (currentDistance === 0) {
+function route_move_action_from_python(allowedDistanceM){
+    const n = Number(allowedDistanceM);
+    const hasLimit = Number.isFinite(n) && n >= 0;
+
+    __snsClearRouteMoveMonitor();
+
+    if (hasLimit && __routeTotalDistanceM > 0) {
+        const targetDistanceM = Math.min(__routeTotalDistanceM, __routeCurrentDistanceM + n);
+        __routeMoveTargetProcess = Math.min(1, Math.max(0, targetDistanceM / __routeTotalDistanceM));
+    } else {
+        __routeMoveTargetProcess = null;
+    }
+
+    // Decide startTrack vs continueTrack based on current distance in meters
+    if (__routeCurrentDistanceM === 0) {
         startTrack();
     } else {
         continueTrack();
     }
 
-    // Call pauseTrack after 10 seconds
-    setTimeout(() => {
-        pauseTrack();
-    }, 10000);
+    if (!hasLimit || __routeMoveTargetProcess === null) {
+        // Backward compatible behavior
+        setTimeout(() => {
+            pauseTrack();
+        }, 10000);
+        return;
+    }
+
+    __routeMoveMonitorTimer = setInterval(() => {
+        try {
+            if (!trackLine) return;
+            const p = Number(trackLine.process);
+            if (!Number.isFinite(p)) return;
+            if (p >= __routeMoveTargetProcess - 1e-6) {
+                __snsClearRouteMoveMonitor();
+                pauseTrack();
+            }
+        } catch (e) {
+        }
+    }, 200);
 }
 
 function toggleTrack() {
@@ -767,7 +872,9 @@ function pauseTrack() {
 
     trackLine.pauseAnimation();
 
-    currentDistance = progress;
+    __routeCurrentProcess = Number(progress) || 0;
+    __routeCurrentDistanceM = (__routeTotalDistanceM > 0) ? (__routeCurrentProcess * __routeTotalDistanceM) : 0;
+    currentDistance = __routeCurrentDistanceM;
     const route_current_position = JSON.stringify(currentPoint);
     update_map_setting("route_current_position", route_current_position);
     update_map_setting("route", currentDistance);
@@ -779,7 +886,7 @@ function pauseTrack() {
 function continueTrack() {
     // trackLine.setProcess(0.1904666666666667);
     trackLine.setMovePoint(movePoint);
-    trackLine.setProcess(currentDistance);
+    trackLine.setProcess(__routeCurrentProcess);
     trackLine.resumeAnimation();
 }
 

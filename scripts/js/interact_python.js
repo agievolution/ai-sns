@@ -629,7 +629,21 @@ var handle_command = function (command, param_1, param_2) {
             map.setCenter(new BMapGL.Point(newLng, newLat));
         }
     } else if (command == "route_move_action") {
-        route_move_action_from_python();
+        let allowedDistanceM = null;
+        try {
+            const n = Number(param_1);
+            allowedDistanceM = Number.isFinite(n) ? n : null;
+        } catch (e) {
+            allowedDistanceM = null;
+        }
+
+        try {
+            if (typeof route_move_action_from_python === 'function') {
+                route_move_action_from_python(allowedDistanceM);
+            }
+        } catch (e) {
+            console.error('route_move_action_from_python failed:', e);
+        }
     } else if (command == "route_mode_free") {
         try {
             if (typeof route_status !== 'undefined') {
@@ -688,7 +702,7 @@ var handle_command = function (command, param_1, param_2) {
             console.error("Failed to switch to Free mode:", e);
         }
     } else if (command == "show_information") {
-        addMessageToBoard(param_1);
+        appendMessageToBoard(param_1);
     } else if (command == "show_information_chat") {
         appendMessageToBoardChat(param_1);
     } else if (command == "load_information") {
@@ -891,19 +905,19 @@ function handle_map_setting_loaded(setting_json) {
     nation_id_me = nationid;
 
     if (route_current_position && Object.keys(route_current_position).length > 0) {
-        addMessageToBoard("Route current position: " + route_current_position.lng + ", " + route_current_position.lat);
+        appendMessageToBoard("Route current position: " + route_current_position.lng + ", " + route_current_position.lat,false);
     }
 
     if (route && route !== "") {
-        addMessageToBoard("Route distance: " + route);
+        appendMessageToBoard("Route distance: " + route,false);
     }
 
     if (route_end && route_end !== "") {
-        addMessageToBoard("Route end: " + route_end);
+        appendMessageToBoard("Route end: " + route_end,false);
     }
 
     if (route_start && route_start !== "") {
-        addMessageToBoard("Route start: " + route_start);
+        appendMessageToBoard("Route start: " + route_start,false);
     }
 
     if (route_status && route_status !== "") {
@@ -915,25 +929,20 @@ function handle_map_setting_loaded(setting_json) {
         } else {
             display_route_status = "Unknown route type";
         }
-        addMessageToBoard("Route status: " + display_route_status);
+        appendMessageToBoard("<b>Route status:</b> <br>" + display_route_status,false);
     }
 
-    if (setting_home_position && Object.keys(setting_home_position).length > 0) {
-        addMessageToBoard("Home position: " + setting_home_position.lng + ", " + setting_home_position.lat);
-    } else {
-        addMessageToBoard("Home position: Not set");
-    }
 
-    addMessageToBoard("Current position: " + current_position.lng + ", " + current_position.lat);
+    appendMessageToBoard("<b>Current position:</b> " + current_position.lng + ", " + current_position.lat,false);
     var display_map_type = (map_type == "0") ? "google" : "baidu";
-    addMessageToBoard("Map type: " + display_map_type);
-    addMessageToBoard("Profile: " + profile);
-    addMessageToBoard("3D avatar: " + avatar3d);
-    addMessageToBoard("Avatar: " + avatar);
-    addMessageToBoard("Nickname: " + nick_name);
-    addMessageToBoard("XMPP account: " + account);
-    addMessageToBoard("User ID: " + nationid);
-    addMessageToBoard("Configuration loaded successfully:");
+    appendMessageToBoard("<b>Map type:</b> <br>" + display_map_type,false);
+    appendMessageToBoard("<b>Profile:</b> <br>" + profile,false);
+    appendMessageToBoard("<b>3D avatar:</b> <br>" + avatar3d,false);
+    appendMessageToBoard("<b>Avatar:</b> <br>" + avatar,false);
+    appendMessageToBoard("<b>XMPP account:</b> <br>" + account,false);
+    appendMessageToBoard("<b>Nickname:</b> <br>" + nick_name,false);
+    appendMessageToBoard("<b>Nation ID:</b> <br>" + nationid,false);
+    appendMessageToBoard("<b>CONFIGURATION LOADED !</b>");
 
     window.current_position = current_position || {};
 
@@ -1162,6 +1171,26 @@ function Maximize() {
         }, '*');
     }
 
+    try {
+        const info = document.getElementById('info');
+        const wasVisible = !!(info && info.style && info.style.display !== 'none');
+        if (wasVisible) {
+            if (typeof window.collapseInfoPanel === 'function') {
+                window.collapseInfoPanel();
+            } else if (info && info.classList) {
+                info.classList.add('info-collapsed');
+            }
+        }
+        if (typeof window.__syncTopInfoButtonActiveState === 'function') {
+            window.__syncTopInfoButtonActiveState();
+        }
+        if (typeof window.__postInfoPanelStateToParent === 'function') {
+            window.__postInfoPanelStateToParent();
+        }
+    } catch (e) {
+        console.warn('Failed to collapse info panel on maximize:', e);
+    }
+
     if (typeof window.electron !== 'undefined') {
         window.electron.maximize();
     }
@@ -1206,6 +1235,26 @@ function Minimize() {
             type: 'togglePanels',
             action: 'expand'
         }, '*');
+    }
+
+    try {
+        const info = document.getElementById('info');
+        if (info) {
+            info.style.display = 'block';
+        }
+        if (typeof window.expandInfoPanel === 'function') {
+            window.expandInfoPanel();
+        } else if (info) {
+            info.classList && info.classList.remove('info-collapsed');
+        }
+        if (typeof window.__syncTopInfoButtonActiveState === 'function') {
+            window.__syncTopInfoButtonActiveState();
+        }
+        if (typeof window.__postInfoPanelStateToParent === 'function') {
+            window.__postInfoPanelStateToParent();
+        }
+    } catch (e) {
+        console.warn('Failed to show info panel on minimize:', e);
     }
 
     if (typeof window.electron !== 'undefined') {

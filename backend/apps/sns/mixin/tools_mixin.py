@@ -171,9 +171,89 @@ class ToolsMixin:
         method = ""
         params = {}
         try:
-            url, method, params = self._parse_service_call_payload(content)
+            try:
+                url, method, params = self._parse_service_call_payload(content)
+            except Exception as e:
+                msg = f"Invalid service payload: {e}"
+                try:
+                    self.show_alert_on_map(msg)
+                except Exception:
+                    pass
+                try:
+                    self.taskmng.add_process_info_to_list(f"system: {msg}")
+                except Exception:
+                    pass
+                try:
+                    self.write_thinking_process_to_pane("Service selection parse failed", msg)
+                except Exception:
+                    pass
+                try:
+                    self.show_status_on_map("idle")
+                except Exception:
+                    pass
+                try:
+                    asyncio.create_task(self.taskmng.process_task(action="process_activity", ask_content=""))
+                except Exception:
+                    pass
+                return
+
+            try:
+                self.command_status = ""
+            except Exception:
+                pass
+
+            response_text = await self._call_web_service_with_retry_async(url, method, params)
+            if response_text is not None:
+                try:
+                    self.handle_service_called_result(response_text)
+                except Exception as e:
+                    msg = f"Service call returned but handling failed: {e}"
+                    try:
+                        self.show_alert_on_map(msg, is_error=True)
+                    except Exception:
+                        pass
+                    try:
+                        self.taskmng.add_process_info_to_list(f"system: {msg}")
+                    except Exception:
+                        pass
+                    try:
+                        self.write_thinking_process_to_pane("Service call handling failed", msg)
+                    except Exception:
+                        pass
+                    try:
+                        self.show_status_on_map("idle")
+                    except Exception:
+                        pass
+                    try:
+                        asyncio.create_task(self.taskmng.process_task(action="process_activity", ask_content=""))
+                    except Exception:
+                        pass
+                return
+
+            final_msg = f"Web service call failed after retries: {method.upper()} {url}"
+            try:
+                self.show_alert_on_map(final_msg, is_error=True)
+            except Exception:
+                pass
+            try:
+                self.taskmng.add_process_info_to_list(f"system: {final_msg}")
+            except Exception:
+                pass
+            try:
+                self.write_thinking_process_to_pane("Web service call failed", final_msg)
+            except Exception:
+                pass
+            try:
+                self.show_status_on_map("idle")
+            except Exception:
+                pass
+
+            try:
+                asyncio.create_task(self.taskmng.process_task(action="process_activity", ask_content=""))
+            except Exception:
+                pass
         except Exception as e:
-            msg = f"Invalid service payload: {e}"
+            msg = f"Unexpected error while handling service selection: {e}"
             try:
                 self.show_alert_on_map(msg, is_error=True)
             except Exception:
@@ -183,62 +263,17 @@ class ToolsMixin:
             except Exception:
                 pass
             try:
-                self.write_thinking_process_to_pane("Service selection parse failed", msg)
+                self.write_thinking_process_to_pane("Service selection failed", msg)
             except Exception:
                 pass
             try:
                 self.show_status_on_map("idle")
             except Exception:
                 pass
-            return
-
-        try:
-            self.command_status = ""
-        except Exception:
-            pass
-
-        response_text = await self._call_web_service_with_retry_async(url, method, params)
-        if response_text is not None:
             try:
-                self.handle_service_called_result(response_text)
-            except Exception as e:
-                msg = f"Service call returned but handling failed: {e}"
-                try:
-                    self.show_alert_on_map(msg, is_error=True)
-                except Exception:
-                    pass
-                try:
-                    self.taskmng.add_process_info_to_list(f"system: {msg}")
-                except Exception:
-                    pass
-                try:
-                    self.write_thinking_process_to_pane("Service call handling failed", msg)
-                except Exception:
-                    pass
-            return
-
-        final_msg = f"Web service call failed after retries: {method.upper()} {url}"
-        try:
-            self.show_alert_on_map(final_msg, is_error=True)
-        except Exception:
-            pass
-        try:
-            self.taskmng.add_process_info_to_list(f"system: {final_msg}")
-        except Exception:
-            pass
-        try:
-            self.write_thinking_process_to_pane("Web service call failed", final_msg)
-        except Exception:
-            pass
-        try:
-            self.show_status_on_map("idle")
-        except Exception:
-            pass
-
-        try:
-            asyncio.create_task(self.taskmng.process_task(action="process_activity", ask_content=""))
-        except Exception:
-            pass
+                asyncio.create_task(self.taskmng.process_task(action="process_activity", ask_content=""))
+            except Exception:
+                pass
 
     async def _call_web_service_with_retry_async(self, url: str, method: str, params: dict):
         max_retries = int(getattr(self, "_WEB_SERVICE_MAX_RETRIES", self._WEB_SERVICE_MAX_RETRIES) or 3)

@@ -178,7 +178,56 @@ ask_agent_and_get_instruction
                 use_memory=False,
                 use_knowledge_base=False,
             )
-            # return reply
+
+            if reply is None:
+                reply = ""
+            elif not isinstance(reply, str):
+                try:
+                    reply = str(reply)
+                except Exception:
+                    reply = ""
+
+            try:
+                sanitized = re.sub(r'^\s*```json\s*|\s*```\s*$', '', reply, flags=re.DOTALL)
+            except Exception:
+                sanitized = reply
+
+            empty_reply = (not isinstance(sanitized, str)) or (not sanitized.strip())
+            if empty_reply:
+                retry_state = getattr(self, "_empty_agent_reply_retry", None)
+                if not isinstance(retry_state, dict):
+                    retry_state = {}
+                    setattr(self, "_empty_agent_reply_retry", retry_state)
+
+                retry_count = int(retry_state.get(command_status, 0) or 0)
+                if retry_count < 1:
+                    retry_state[command_status] = retry_count + 1
+                    try:
+                        self.show_alert_on_map("Agent returned empty output, retrying...", is_error=False)
+                    except Exception:
+                        pass
+
+                    reply = await agent_adapter.chat(
+                        agent=agent,
+                        message=question,
+                        conversation_id=agent_adapter.build_conversation_id(prefix="sns", suffix="cjrtesting"),
+                        use_tools=use_tools,
+                        use_memory=False,
+                        use_knowledge_base=False,
+                    )
+
+                    if reply is None:
+                        reply = ""
+                    elif not isinstance(reply, str):
+                        try:
+                            reply = str(reply)
+                        except Exception:
+                            reply = ""
+                else:
+                    try:
+                        self.show_alert_on_map("Agent returned empty output.", is_error=False)
+                    except Exception:
+                        pass
         finally:
             # Restore original system prompt
             agent.role_config['system_prompt'] = original_prompt
@@ -186,15 +235,20 @@ ask_agent_and_get_instruction
 
         self.on_agent_return_instruction(question, reply)
 
-        agent.role_config['system_prompt'] = original_prompt
-
     # b. Agent returns instruction
     def on_agent_return_instruction(self, question, content):
         self.agent_replying_flag = False
         if self.stopping_ai_process_flag:
             self.stop_AI_process_finished()
             return
-        # content = content.strip('```json').strip('```').strip()
+        if content is None:
+            content = ""
+        elif not isinstance(content, str):
+            try:
+                content = str(content)
+            except Exception:
+                content = ""
+
         content = re.sub(r'^\s*```json\s*|\s*```\s*$', '', content, flags=re.DOTALL)
         command_status = self.command_status
         title_str = "Agent return the instruction"
@@ -234,6 +288,10 @@ on_agent_return_instruction
 
         elif command_status == "ask_agent_start_to_buy_from_a_people":
             asyncio.create_task(self.taskmng.process_task(event="ask_agent_start_to_buy_from_a_people_returned", result=content))
+
+
+        elif command_status == "ask_agent_process_plan_summary":
+            asyncio.create_task(self.taskmng.process_task(event="ask_agent_process_plan_summary_returned", result=content))
 
 
         elif command_status == "ask_agent_to_use_service":

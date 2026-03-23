@@ -684,7 +684,7 @@ const agentHandlers = {
                         const builtin = [
                             { id: 'mindmap', name: 'Mind map plugin', description: 'Convert Markdown mindmap syntax in chat messages into a visual mind map' },
                             { id: 'code', name: 'Code execution plugin', description: 'Extract code blocks from chat messages and provide edit/run features (supports JavaScript, Python, HTML/CSS/JS)' },
-                            
+
                         ];
                         if (builtin.length) {
                             const group = document.createElement('optgroup');
@@ -1481,7 +1481,7 @@ const agentHandlers = {
         const assistantName = !isUser ? (currentAgent?.name || 'AI Assistant') : null;
         const avatarSvg = isUser ?
             '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>' :
-            '<svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M160-360q-50 0-85-35t-35-85q0-50 35-85t85-35v-80q0-33 23.5-56.5T240-760h120q0-50 35-85t85-35q50 0 85 35t35 85h120q33 0 56.5 23.5T800-680v80q50 0 85 35t35 85q0 50-35 85t-85 35v160q0 33-23.5 56.5T720-120H240q-33 0-56.5-23.5T160-200v-160Zm242.5-97.5Q420-475 420-500t-17.5-42.5Q385-560 360-560t-42.5 17.5Q300-525 300-500t17.5 42.5Q335-440 360-440t42.5-17.5Zm240 0Q660-475 660-500t-17.5-42.5Q625-560 600-560t-42.5 17.5Q540-525 540-500t17.5 42.5Q575-440 600-440t42.5-17.5ZM320-280h320v-80H320v80Zm-80 80h480v-480H240v480Zm240-240Z"/></svg>';
+            '<svg viewBox="0 0 48 48" width="26" height="26" xmlns="http://www.w3.org/2000/svg"  fill="currentColor"><g transform="translate(4.8, 4.8) scale(0.8)"><path d="M24 7v3 M21 7h6 M16 12h16a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3z M19 19h2 M27 19h2 M11 34c0-3 3-5 6-5h14c3 0 6 2 6 5v4H11v-4z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="19" r="1.5" fill="currentColor"/><circle cx="28" cy="19" r="1.5" fill="currentColor"/></g></svg>';
 
         return `
             <div class="message-item ${isUser ? 'user-message' : 'assistant-message'}">
@@ -1622,7 +1622,7 @@ const agentHandlers = {
             <div class="message-item assistant-message streaming">
                 <div class="message-header">
                     <div class="message-avatar assistant-avatar">
-                        <svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M160-360q-50 0-85-35t-35-85q0-50 35-85t85-35v-80q0-33 23.5-56.5T240-760h120q0-50 35-85t85-35q50 0 85 35t35 85h120q33 0 56.5 23.5T800-680v80q50 0 85 35t35 85q0 50-35 85t-85 35v160q0 33-23.5 56.5T720-120H240q-33 0-56.5-23.5T160-200v-160Zm242.5-97.5Q420-475 420-500t-17.5-42.5Q385-560 360-560t-42.5 17.5Q300-525 300-500t17.5 42.5Q335-440 360-440t42.5-17.5Zm240 0Q660-475 660-500t-17.5-42.5Q625-560 600-560t-42.5 17.5Q540-525 540-500t17.5 42.5Q575-440 600-440t42.5-17.5ZM320-280h320v-80H320v80Zm-80 80h480v-480H240v480Zm240-240Z"/></svg>
+                        <svg viewBox="0 0 48 48" width="26" height="26" xmlns="http://www.w3.org/2000/svg"  fill="currentColor"><g transform="translate(4.8, 4.8) scale(0.8)"><path d="M24 7v3 M21 7h6 M16 12h16a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3z M19 19h2 M27 19h2 M11 34c0-3 3-5 6-5h14c3 0 6 2 6 5v4H11v-4z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="19" r="1.5" fill="currentColor"/><circle cx="28" cy="19" r="1.5" fill="currentColor"/></g></svg>
                     </div>
                     <span class="message-sender">${this.escapeHtml(currentAgent.name)}</span>
                     <span class="message-time">${timeStr}</span>

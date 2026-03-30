@@ -352,10 +352,11 @@ const multiAgentHandlers = {
     async init() {
         console.log('[MultiAgentHandlers] Starting multi-agent system initialization...');
 
-        // 1. Load agent list from API
+        // 1. Load agent list from API and filter out inactive/deleted agents
         const response = await fetch(this.resolve('/api/agent'));
         const result = await response.json();
-        const agents = result.success ? (result.data || []) : [];
+        const agents = (result.success ? (result.data || []) : [])
+            .filter(a => a.is_active !== false);
 
         if (agents.length === 0) {
             console.warn('[MultiAgentHandlers] No available agents');
@@ -366,11 +367,11 @@ const multiAgentHandlers = {
         agentState.setAgents(agents);
         console.log('[MultiAgentHandlers] Loaded agents:', agents.length);
 
-        // 3. Initialize AgentSidebar
-        await AgentSidebar.init();
-
-        // 4. Initialize AgentPage
+        // 3. Initialize AgentPage FIRST so that page DOM exists
         await AgentPage.init(agents);
+
+        // 4. Initialize AgentSidebar (switchAgent can now find page elements)
+        await AgentSidebar.init();
 
         // 5. Set current agent to the first one
         if (agents.length > 0) {
@@ -388,6 +389,11 @@ const multiAgentHandlers = {
         for (const agent of agents) {
             await this.loadModelOptionsForAgent(agent.id);
             await this.loadRoleOptionsForAgent(agent.id);
+        }
+
+        // Keep the visible/default agent stable after background preload work
+        if (agents.length > 0) {
+            agentState.setCurrentAgent(agents[0].id);
         }
 
         // 9. Load chat list for current agent
@@ -2406,8 +2412,11 @@ const multiAgentHandlers = {
 
                     // 5. Load selected model config (only when a valid config exists)
                     if (selectedModel) {
-                        agentState.setCurrentAgent(agentId);
-                        agentState.setModel(selectedModel.config_id);
+                        const targetState = agentState.ensureAgentState(agentId);
+                        if (!targetState.currentModelConfig) {
+                            targetState.currentModelConfig = {};
+                        }
+                        targetState.currentModelConfig.config_id = selectedModel.config_id;
                         await this.loadAndApplyModelConfig(selectedModel.config_id, agentId, false);
                     }
                 }
@@ -2484,8 +2493,11 @@ const multiAgentHandlers = {
 
                     // 5. Load selected role config (only when a valid config exists)
                     if (selectedRole) {
-                        agentState.setCurrentAgent(agentId);
-                        agentState.setRole(selectedRole.role_id);
+                        const targetState = agentState.ensureAgentState(agentId);
+                        if (!targetState.currentRoleConfig) {
+                            targetState.currentRoleConfig = {};
+                        }
+                        targetState.currentRoleConfig.role_id = selectedRole.role_id;
                         await this.loadAndApplyRoleConfig(selectedRole.role_id, agentId, false);
                     }
                 }
@@ -2519,7 +2531,8 @@ const multiAgentHandlers = {
                 } catch (e) {
                 }
 
-                agentState.currentModelConfig = mergedConfig;
+                const targetState = agentState.ensureAgentState(agentId);
+                targetState.currentModelConfig = mergedConfig;
                 this.populateParamTabForAgent(mergedConfig, agentId);
                 console.log(`[MultiAgentHandlers] Agent ${agentId} model config loaded:`, modelConfig.name);
 
@@ -2546,7 +2559,8 @@ const multiAgentHandlers = {
 
             if (result.success && result.data) {
                 const roleConfig = result.data;
-                agentState.currentRoleConfig = roleConfig;
+                const targetState = agentState.ensureAgentState(agentId);
+                targetState.currentRoleConfig = roleConfig;
                 this.populatePromptTabForAgent(roleConfig, agentId);
                 console.log(`[MultiAgentHandlers] Agent ${agentId} role config loaded:`, roleConfig.name);
 

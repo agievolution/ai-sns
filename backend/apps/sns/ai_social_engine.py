@@ -574,6 +574,8 @@ class AISocialEngine(
                     self.life_decline_counter = 0
                 if hasattr(self, 'energy_decline_counter'):
                     self.energy_decline_counter = 0
+                if hasattr(self, 'process_activity_counter'):
+                    self.process_activity_counter = 0
 
             except Exception:
                 pass
@@ -614,6 +616,8 @@ class AISocialEngine(
                     self.life_decline_counter = 0
                 if hasattr(self, 'energy_decline_counter'):
                     self.energy_decline_counter = 0
+                if hasattr(self, 'process_activity_counter'):
+                    self.process_activity_counter = 0
             except Exception:
                 pass
 
@@ -1067,7 +1071,7 @@ class AISocialEngine(
                     except Exception:
                         pass
                     return
-                self.taskmng_js.show_information(lt(f"Human:{instruction}", f"Human:{instruction}"))
+                self.taskmng_js.show_information(lt(f"<b>Human:</b><br>{instruction}", f"<b>Human:</b><br>{instruction}"))
                 self.write_on_going_process_to_pane(lt("Human take control...", "Human is in control..."))
                 self.handle_human_instruction(instruction)
             else:
@@ -1160,7 +1164,8 @@ class AISocialEngine(
 
         try:
             if acct:
-                self.sendMessage("TERMINATE", False, acct, (active.get("nick_name") if isinstance(active, dict) else None), back_ground=True)
+                logger.info("End the Conversation.Send TERMINATE by frontend.")
+                # self.sendMessage("TERMINATE", False, acct, (active.get("nick_name") if isinstance(active, dict) else None), back_ground=True)
         except Exception:
             pass
 

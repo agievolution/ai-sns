@@ -414,6 +414,61 @@ window.addEventListener('message', function(event) {
         } else {
             console.warn('Button not found:', buttonSelector);
         }
+    } else if (event.data && event.data.type === 'mapGoTo') {
+        const payload = (event.data && typeof event.data === 'object') ? (event.data.data || {}) : {};
+        const lng = Number(payload.lng);
+        const lat = Number(payload.lat);
+        const zoom = (payload.zoom !== undefined && payload.zoom !== null) ? Number(payload.zoom) : null;
+
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+            console.warn('[mapGoTo] Invalid lng/lat:', payload);
+            return;
+        }
+
+        try {
+            if (typeof window !== 'undefined') {
+                window.current_position = { lng, lat };
+            }
+        } catch (e) {
+        }
+
+        try {
+            if (typeof map_type === 'string' && map_type === 'baidu') {
+                if (typeof BMapGL !== 'undefined' && typeof map !== 'undefined' && map && typeof map.centerAndZoom === 'function') {
+                    const point = new BMapGL.Point(lng, lat);
+                    const z = Number.isFinite(zoom) ? Math.max(3, Math.min(21, zoom)) : 16;
+                    map.centerAndZoom(point, z);
+                }
+                return;
+            }
+        } catch (e) {
+            console.warn('[mapGoTo] Failed to go-to on baidu map:', e);
+        }
+
+        try {
+            // Default: google map implementation
+            if (typeof google !== 'undefined' && google && google.maps && typeof map !== 'undefined' && map) {
+                const latLng = new google.maps.LatLng(lat, lng);
+                if (typeof map.panTo === 'function') {
+                    map.panTo(latLng);
+                } else if (typeof map.setCenter === 'function') {
+                    map.setCenter(latLng);
+                }
+
+                if (Number.isFinite(zoom) && typeof map.setZoom === 'function') {
+                    map.setZoom(Math.max(1, Math.min(22, zoom)));
+                }
+
+                try {
+                    if (typeof window.__preferPersonAnchorForMs === 'function') {
+                        window.__preferPersonAnchorForMs(4500);
+                    }
+                } catch (e) {
+                }
+            }
+        } catch (e) {
+            console.warn('[mapGoTo] Failed to go-to on google map:', e);
+        }
     } else if (event.data && event.data.type === 'snsPluginCommand') {
         const command = event.data.command;
         const params = (event.data && typeof event.data === 'object') ? (event.data.params || {}) : {};

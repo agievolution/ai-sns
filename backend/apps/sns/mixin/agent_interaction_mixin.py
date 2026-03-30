@@ -176,9 +176,8 @@ ask_agent_and_get_instruction
 
         try:
             # Call agent to chat
-            use_tools = getattr(getattr(self, "ai_chat_cfg", None), "use_tools", None)
-            if use_tools is None:
-                use_tools = getattr(self, "use_tools", None)
+            use_tools = False
+            tool_choice = "none" if not use_tools else None
             reply = await agent_adapter.chat(
                 agent=agent,
                 message=question,
@@ -186,7 +185,7 @@ ask_agent_and_get_instruction
                 use_tools=use_tools,
                 use_memory=False,
                 use_knowledge_base=False,
-                tool_choice="none",
+                tool_choice=tool_choice,
             )
 
             if reply is None:
@@ -224,7 +223,7 @@ ask_agent_and_get_instruction
                         use_tools=use_tools,
                         use_memory=False,
                         use_knowledge_base=False,
-                        tool_choice="none",
+                        tool_choice=tool_choice,
                     )
 
                     if reply is None:

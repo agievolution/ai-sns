@@ -1062,10 +1062,11 @@ talk_to_a_people
         current_chat_summary = result["summary"]
         message = result["next_message"]
         goods_name = result.get("goods_name", "")
-        buy_score = result.get("buy_score", False)
+        buyer = result.get("buyer", "")
+        buy_score = result.get("buy_score", 0)
         price = result.get("price", 0)
 
-        if buy_score >= 80 and price >= 0:
+        if buy_score >= 80 and price >= 0 and  buyer.lower()=="me":
             self.send_pay(price, good_name=goods_name)
             # self.end_active_conversation(
             #     reason="pay",

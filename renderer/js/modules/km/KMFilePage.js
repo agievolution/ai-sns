@@ -45,6 +45,8 @@ const KMFilePage = {
         // Bind search button events
         document.querySelectorAll('[id^="vectorSearchBtn-"]').forEach(btn => {
             const kbId = btn.id.replace('vectorSearchBtn-', '');
+            if (btn.dataset.kmVectorSearchBound === '1') return;
+            btn.dataset.kmVectorSearchBound = '1';
             btn.addEventListener('click', () => {
                 if (window.kmHandlers) {
                     window.kmHandlers.performVectorSearch(parseInt(kbId));
@@ -55,6 +57,8 @@ const KMFilePage = {
         // Bind Enter key to search
         document.querySelectorAll('[id^="vectorSearchInput-"]').forEach(input => {
             const kbId = input.id.replace('vectorSearchInput-', '');
+            if (input.dataset.kmVectorSearchBound === '1') return;
+            input.dataset.kmVectorSearchBound = '1';
             input.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && window.kmHandlers) {
                     window.kmHandlers.performVectorSearch(parseInt(kbId));

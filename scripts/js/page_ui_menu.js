@@ -144,22 +144,35 @@ function toggleInfoChatPanelCollapsed() {
 }
 
 function __makePanelDraggable(panelEl, handleEl) {
+    __makePanelDraggableWithOptions(panelEl, handleEl, {
+        ignoreSelector: '.close_btn, .collapse_btn',
+        normalizeFixedPosition: false,
+    });
+}
+
+function __makePanelDraggableWithOptions(panelEl, handleEl, options) {
     try {
         if (!panelEl || !handleEl) return;
 
-        try {
-            const cs = window.getComputedStyle ? window.getComputedStyle(panelEl) : null;
-            const left = cs ? cs.left : '';
-            const top = cs ? cs.top : '';
-            if (!panelEl.style.left) {
-                panelEl.style.left = (left && left !== 'auto') ? left : (panelEl.offsetLeft + 'px');
+        const opts = options || {};
+        const ignoreSelector = typeof opts.ignoreSelector === 'string' ? opts.ignoreSelector : '';
+        const normalizeFixedPosition = !!opts.normalizeFixedPosition;
+
+        if (!normalizeFixedPosition) {
+            try {
+                const cs = window.getComputedStyle ? window.getComputedStyle(panelEl) : null;
+                const left = cs ? cs.left : '';
+                const top = cs ? cs.top : '';
+                if (!panelEl.style.left) {
+                    panelEl.style.left = (left && left !== 'auto') ? left : (panelEl.offsetLeft + 'px');
+                }
+                if (!panelEl.style.top) {
+                    panelEl.style.top = (top && top !== 'auto') ? top : (panelEl.offsetTop + 'px');
+                }
+            } catch (e3) {
+                if (!panelEl.style.left) panelEl.style.left = panelEl.offsetLeft + 'px';
+                if (!panelEl.style.top) panelEl.style.top = panelEl.offsetTop + 'px';
             }
-            if (!panelEl.style.top) {
-                panelEl.style.top = (top && top !== 'auto') ? top : (panelEl.offsetTop + 'px');
-            }
-        } catch (e3) {
-            if (!panelEl.style.left) panelEl.style.left = panelEl.offsetLeft + 'px';
-            if (!panelEl.style.top) panelEl.style.top = panelEl.offsetTop + 'px';
         }
 
         let dragging = false;
@@ -171,7 +184,8 @@ function __makePanelDraggable(panelEl, handleEl) {
         const shouldIgnoreTarget = (evtTarget) => {
             try {
                 if (!evtTarget || !(evtTarget instanceof Element)) return false;
-                return !!evtTarget.closest('.close_btn, .collapse_btn');
+                if (ignoreSelector && evtTarget.closest(ignoreSelector)) return true;
+                return false;
             } catch (e) {
                 return false;
             }
@@ -198,13 +212,52 @@ function __makePanelDraggable(panelEl, handleEl) {
                 e.preventDefault();
             } catch (e2) {
             }
+
+            if (normalizeFixedPosition) {
+                try {
+                    const rect = panelEl.getBoundingClientRect();
+                    panelEl.style.position = 'fixed';
+                    panelEl.style.left = rect.left + 'px';
+                    panelEl.style.top = rect.top + 'px';
+                    panelEl.style.right = 'auto';
+                    panelEl.style.bottom = 'auto';
+                } catch (e3) {
+                }
+            }
+
             dragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            startLeft = panelEl.offsetLeft;
-            startTop = panelEl.offsetTop;
+            try {
+                const rect = panelEl.getBoundingClientRect();
+                startLeft = rect.left;
+                startTop = rect.top;
+            } catch (e3) {
+                startLeft = panelEl.offsetLeft;
+                startTop = panelEl.offsetTop;
+            }
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', stopDrag);
+        });
+    } catch (e) {
+    }
+}
+
+function __initSetRoutePanel() {
+    try {
+        const setroute = document.getElementById('setroute');
+        if (!setroute) return;
+
+        const handle = setroute.querySelector(':scope > div') || setroute;
+        try {
+            handle.style.cursor = 'move';
+            handle.style.userSelect = 'none';
+        } catch (e) {
+        }
+
+        __makePanelDraggableWithOptions(setroute, handle, {
+            ignoreSelector: 'button, input, select, textarea, a, .close_btn, .collapse_btn',
+            normalizeFixedPosition: true,
         });
     } catch (e) {
     }
@@ -317,10 +370,12 @@ try {
         document.addEventListener('DOMContentLoaded', () => {
             __syncTopInfoButtonActiveState();
             __initInfoPanels();
+            __initSetRoutePanel();
         });
     } else {
         __syncTopInfoButtonActiveState();
         __initInfoPanels();
+        __initSetRoutePanel();
     }
 } catch (e) {
 }

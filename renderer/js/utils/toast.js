@@ -555,7 +555,7 @@ const Toast = {
         loading.className = 'toast toast-loading';
 
         loading.innerHTML = `
-            <div class="loading-spinner">
+            <div class="toast-loading-spinner">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2196f3" stroke-width="2">
                     <circle cx="12" cy="12" r="10" opacity="0.25"/>
                     <path d="M12 2 A10 10 0 0 1 22 12" opacity="1">

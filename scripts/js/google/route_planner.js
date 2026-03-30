@@ -319,7 +319,7 @@ function createMarker(latlng, label, html) {
         map: map,
         title: label,
         icon: {
-            url: '/' + mapAvatarPath, // icon image path
+            url: '/images/avatars/' + mapAvatarPath, // icon image path
             scaledSize: new google.maps.Size(36, 49), // icon scaled size (px)
             origin: new google.maps.Point(0, 0), // icon origin, usually (0, 0)
             anchor: new google.maps.Point(18, 49) // icon anchor, usually bottom-center
@@ -391,36 +391,40 @@ function calcRoute() {
 
     var start = document.getElementById("start").value;
     var end = document.getElementById("end").value;
-    var positionType = document.getElementById("position_type").value;
+    var positionTypeEl = document.getElementById("position_type");
+    var positionType = positionTypeEl ? String(positionTypeEl.value || "") : "";
 
     // Keep original values for database storage
     var startForStorage = start;
     var endForStorage = end;
 
-    // If end point is coordinates, use the coordinates directly
-
-    // Parse coordinate string "lat,lng"
-    var coords = end.split(",");
-    if (coords.length === 2) {
-
-        var endLat = parseFloat(coords[1]);
-        var endLng = parseFloat(coords[0]);
-        // Check for valid numbers
-        if (!isNaN(endLat) && !isNaN(endLng)) {
-            end = new google.maps.LatLng(endLat, endLng);
-        }
-
+    function tryParseLatLng(value) {
+        if (typeof value !== 'string') return null;
+        var parts = value.split(",");
+        if (parts.length !== 2) return null;
+        var lng = parseFloat(String(parts[0]).trim());
+        var lat = parseFloat(String(parts[1]).trim());
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+        return new google.maps.LatLng(lat, lng);
     }
 
-
-    // Check whether start point is coordinates
-    var startCoords = start.split(",");
-    if (startCoords.length === 2) {
-        var startLat = parseFloat(startCoords[1]);
-        var startLng = parseFloat(startCoords[0]);
-        // Check for valid numbers
-        if (!isNaN(startLat) && !isNaN(startLng)) {
-            start = new google.maps.LatLng(startLat, startLng);
+    if (positionType === "coordinates") {
+        var parsedStart = tryParseLatLng(start);
+        var parsedEnd = tryParseLatLng(end);
+        if (!parsedStart || !parsedEnd) {
+            showAlert('Invalid coordinate format. Expected "lng,lat".');
+            return;
+        }
+        start = parsedStart;
+        end = parsedEnd;
+    } else if (positionType !== "address") {
+        var fallbackEnd = tryParseLatLng(end);
+        if (fallbackEnd) {
+            end = fallbackEnd;
+        }
+        var fallbackStart = tryParseLatLng(start);
+        if (fallbackStart) {
+            start = fallbackStart;
         }
     }
 
@@ -628,11 +632,21 @@ function animatePoly(d) {
     updatePoly(d);
     timerHandle = setTimeout("animatePoly(" + (d + step) + ")", tick);
     currentDistance = d + step;
-    const route_current_position = JSON.stringify(p);
-    const current_position = route_current_position;
-    update_map_setting("route_current_position", route_current_position);
+    const lng = Number(p.lng());
+    const lat = Number(p.lat());
+    const routeCurrentPos = { lng: lng, lat: lat };
+    try {
+        init_route_current_position = routeCurrentPos;
+    } catch (e) {
+    }
+    update_map_setting("route_current_position", routeCurrentPos);
     update_map_setting("route", currentDistance);
-    update_map_setting("current_position", route_current_position);
+    try {
+        if (typeof sync_current_position === 'function') {
+            sync_current_position(lng, lat, { throttleMs: 800 });
+        }
+    } catch (e) {
+    }
 }
 
 function __clearRouteMoveTargetMonitor() {
@@ -780,7 +794,34 @@ function toggleTrack() {
 
 // Track simulation
 function startTrack() {
+    try {
+        const persistedPos = (typeof init_route_current_position !== 'undefined' && init_route_current_position !== null)
+            ? init_route_current_position
+            : null;
+        const hasPersisted = persistedPos && Number.isFinite(Number(persistedPos.lng)) && Number.isFinite(Number(persistedPos.lat));
+        const persistedLatLng = hasPersisted
+            ? new google.maps.LatLng(Number(persistedPos.lat), Number(persistedPos.lng))
+            : null;
 
+        let resumeLatLng = persistedLatLng;
+        if (!resumeLatLng && polyline && typeof polyline.GetPointAtDistance === 'function') {
+            // Best-effort fallback if persisted position is missing
+            resumeLatLng = polyline.GetPointAtDistance(currentDistance);
+        }
+
+        if (map && resumeLatLng) {
+            if (typeof map.panTo === 'function') {
+                map.panTo(resumeLatLng);
+            } else if (typeof map.setCenter === 'function') {
+                map.setCenter(resumeLatLng);
+            }
+            if (user_marker && typeof user_marker.setPosition === 'function') {
+                user_marker.setPosition(resumeLatLng);
+            }
+            last_p = resumeLatLng;
+        }
+    } catch (e) {
+    }
     startAnimation();
 }
 
@@ -800,11 +841,41 @@ function pauseTrack() {
     );
 
     setPersonModelPointByNationId(nation_id_me, offsetPoint);
-
+    setPersonPointByNationId(nation_id_me, offsetPoint.lng(), offsetPoint.lat());
+    findHim();
 }
 
 // Continue animation
 function continueTrack() {
+    // findHim();
+    try {
+        const persistedPos = (typeof init_route_current_position !== 'undefined' && init_route_current_position !== null)
+            ? init_route_current_position
+            : null;
+        const hasPersisted = persistedPos && Number.isFinite(Number(persistedPos.lng)) && Number.isFinite(Number(persistedPos.lat));
+        const persistedLatLng = hasPersisted
+            ? new google.maps.LatLng(Number(persistedPos.lat), Number(persistedPos.lng))
+            : null;
+
+        let resumeLatLng = persistedLatLng;
+        if (!resumeLatLng && polyline && typeof polyline.GetPointAtDistance === 'function') {
+            // Best-effort fallback if persisted position is missing
+            resumeLatLng = polyline.GetPointAtDistance(currentDistance);
+        }
+
+        if (map && resumeLatLng) {
+            if (typeof map.panTo === 'function') {
+                map.panTo(resumeLatLng);
+            } else if (typeof map.setCenter === 'function') {
+                map.setCenter(resumeLatLng);
+            }
+            if (user_marker && typeof user_marker.setPosition === 'function') {
+                user_marker.setPosition(resumeLatLng);
+            }
+            last_p = resumeLatLng;
+        }
+    } catch (e) {
+    }
     d = currentDistance;
     timerHandle = setTimeout("animatePoly(" + d + ")", tick);
 }

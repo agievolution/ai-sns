@@ -118,11 +118,10 @@ class Router {
                 pageSidebar.innerHTML = sidebarContent;
                 sidebarContainer.appendChild(pageSidebar);
 
-                // Special case: Agent page requires async initialization
-                if (page === 'agent' && window.AgentSidebar && typeof window.AgentSidebar.init === 'function') {
-                    console.log('[Router] Initializing Agent sidebar...');
-                    await window.AgentSidebar.init();
-                }
+                // Note: Agent sidebar initialization is handled by multiAgentHandlers.init()
+                // which is called from module.init() in renderOrShowMainContent().
+                // This avoids duplicate AgentSidebar.init() calls and ensures
+                // the sidebar is initialized AFTER AgentPage creates page DOM.
 
                 pageSidebar.dataset.initialized = 'true';
                 console.log(`[Router] Sidebar rendered for the first time: ${page}`);

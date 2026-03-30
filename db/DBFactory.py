@@ -729,6 +729,9 @@ def add_AgentCfg(user_id, name, memo, borndate, borncontry, language, gender, jo
 
 def query_AgentCfg_All(**kwargs):
     session = Session()
+    # Exclude soft-deleted agents by default
+    if 'is_delete' not in kwargs:
+        kwargs['is_delete'] = False
     agents = session.query(AgentCfg).filter_by(**kwargs).order_by(asc(AgentCfg.position)).all()
     for agent in agents:
         print(f"ID: {agent.id}, Name: {agent.name}, Memo: {agent.memo}")

@@ -79,7 +79,7 @@ class ToolsService:
                 builtin_defs = [
                     {
                         'plugin_id': 'PL_BUILTIN_LOG_VIEWER',
-                        'name': 'Log Viewer',
+                        'name': 'LLM Log',
                         'version': '1.0.0',
                         'alias_name': 'log-viewer',
                         'description': 'Browse backend LLM logs by date and file.',

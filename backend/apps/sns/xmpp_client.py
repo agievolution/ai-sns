@@ -67,20 +67,8 @@ class XMPPClient(slixmpp.ClientXMPP):
 
             logger.info(f"Received message from {from_jid}: {body}")
 
-            # Forward to AI Social Engine
-            try:
-                from backend.apps.sns.service_async import _social_engine_instance
-                if _social_engine_instance:
-                    event = {
-                        'body': body,
-                        'from': from_jid
-                    }
-                    await _social_engine_instance.receiveMessage(event)
-                    logger.info(f"Message forwarded to AI Social Engine")
-            except Exception as e:
-                logger.error(f"Error forwarding message to AI Social Engine: {e}")
-
-            # Save to database
+            # Save to database first so the incoming message gets an earlier
+            # create_time than any response the engine may generate.
             try:
                 config = self.db.query(AiChatCfg).filter(
                     AiChatCfg.is_delete == False
@@ -158,16 +146,22 @@ class XMPPClient(slixmpp.ClientXMPP):
                         'type': 'contact_upserted',
                         'data': contact_payload
                     })
-                    # handled1 in await _social_engine_instance.receiveMessage(event)
-                    # await self.broadcast_new_message({
-                    #     'type': 'map_chat_message',
-                    #     'from_user': from_jid,
-                    #     'to_user': config.account,
-                    #     'content': body,
-                    #     'timestamp': message.create_time.isoformat() if message.create_time else None
-                    # })
             except Exception as e:
                 logger.error(f"Error saving message to database: {e}")
+
+            # Forward to AI Social Engine after DB save so that any engine
+            # response (e.g. goods delivery) gets a later create_time.
+            try:
+                from backend.apps.sns.service_async import _social_engine_instance
+                if _social_engine_instance:
+                    event = {
+                        'body': body,
+                        'from': from_jid
+                    }
+                    await _social_engine_instance.receiveMessage(event)
+                    logger.info(f"Message forwarded to AI Social Engine")
+            except Exception as e:
+                logger.error(f"Error forwarding message to AI Social Engine: {e}")
 
     async def broadcast_new_message(self, message_data: dict):
         """Broadcast new message to all WebSocket clients"""

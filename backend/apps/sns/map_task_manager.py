@@ -481,6 +481,22 @@ I am participating in a virtual social game based on Google Maps. Players role-p
         elif action_requested == "process_human_instruction":
             ask_content = kwargs.get("ask_content", "")
 
+            counter = None
+            try:
+                counter = getattr(self.parent, "process_activity_counter", None)
+                if counter is not None:
+                    self.parent.process_activity_counter = counter + 1
+            except Exception:
+                counter = None
+
+            try:
+                suffix = f"[#{counter + 1}]" if counter is not None else ""
+                msg = f"<b>🤔Agent is thinking the human instruction.{suffix}</b>"
+                if self.js_task_manager:
+                    self.js_task_manager.show_information(lt(msg, msg))
+            except Exception:
+                logger.exception("Failed to show process_human_instruction status on UI")
+
             self.set_command_status("ask_agent_instruction_to_process_human_instruction")
 
             asyncio.create_task(self.parent.ask_agent_instruction_to_process_human_instruction(ask_content))

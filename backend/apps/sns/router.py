@@ -22,7 +22,8 @@ from backend.apps.sns.schemas import (
     HumanMessageRequest,
     AgentInstructionRequest,
     EndActiveConversationRequest,
-    PromptByTitleUpdateRequest
+    PromptByTitleUpdateRequest,
+    MarkContactReadRequest
 )
 
 from backend.apps.sns.memory.router import router as memory_router
@@ -58,6 +59,16 @@ async def send_message(request: SendMessageRequest, db: AsyncSession = Depends(g
     """Send a message via XMPP"""
     service = SNSService(db)
     return await service.send_message(request.to_account, request.content)
+
+
+@router.post("/mark-contact-read")
+async def mark_contact_read(
+    request: MarkContactReadRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark a contact as read (clear red dot) and persist to DB."""
+    service = SNSService(db)
+    return await service.mark_contact_read(request.account)
 
 
 @router.post("/send-file")

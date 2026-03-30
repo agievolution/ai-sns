@@ -145,6 +145,10 @@ class AgentInstructionRequest(BaseModel):
     instruction: str
 
 
+class MarkContactReadRequest(BaseModel):
+    account: str
+
+
 class EndActiveConversationRequest(BaseModel):
     reason: str = "user_stop"
     message: Optional[str] = ""

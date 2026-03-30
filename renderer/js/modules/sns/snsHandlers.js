@@ -1507,7 +1507,12 @@ export default {
                     const result = await snsApi.sendHumanMessage(message);
 
                     if (!result.success) {
-                        this.showToast(`Error: ${result.message || 'Unknown error'}`, 'error');
+                        const backendMsg = String(result.message || '').trim();
+                        if (backendMsg === 'Message send failed: no active conversation.') {
+                            this.showToast(backendMsg, 'warning');
+                        } else {
+                            this.showToast(`Error: ${backendMsg || 'Unknown error'}`, 'error');
+                        }
                     }
                 } catch (error) {
                     console.error('Failed to send control message:', error);
@@ -2727,11 +2732,15 @@ export default {
         console.log('Location update:', data);
         const lngElement = document.querySelector('.status-row.sub span[class="value"]');
         const latElement = document.querySelectorAll('.status-row.sub span[class="value"]')[1];
-        if (lngElement && data.lng) {
-            lngElement.textContent = `${data.lng}`;
+        const lngNum = (data && data.lng !== undefined && data.lng !== null) ? Number(data.lng) : null;
+        const latNum = (data && data.lat !== undefined && data.lat !== null) ? Number(data.lat) : null;
+        const hasLng = Number.isFinite(lngNum);
+        const hasLat = Number.isFinite(latNum);
+        if (lngElement && hasLng) {
+            lngElement.textContent = `${lngNum}`;
         }
-        if (latElement && data.lat) {
-            latElement.textContent = `${data.lat}`;
+        if (latElement && hasLat) {
+            latElement.textContent = `${latNum}`;
         }
     },
 
@@ -3429,20 +3438,119 @@ export default {
             resourceSection.innerHTML = '';
         }
 
-        // Create content element
-        const contentDiv = document.createElement('div');
-        contentDiv.style.cssText = `
-            white-space: pre-wrap;
+        const self = this;
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = `
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
             font-size: 13px;
             line-height: 1.6;
             color: var(--text-primary);
         `;
-        contentDiv.textContent = content;
 
-        // Update content
+        const text = (content === undefined || content === null) ? '' : String(content);
+        const lines = text.split('\n');
+        const coordRegex = /(-?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s*,\s*(-?\d+(?:\.\d+)?(?:e[-+]?\d+)?)/i;
+
+        for (const rawLine of lines) {
+            const line = (rawLine === undefined || rawLine === null) ? '' : String(rawLine);
+
+            const row = document.createElement('div');
+            row.style.cssText = `
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 1px 0;
+            `;
+
+            const textSpan = document.createElement('span');
+            textSpan.style.cssText = `
+                white-space: pre-wrap;
+                word-break: break-word;
+            `;
+            textSpan.textContent = line || ' ';
+            row.appendChild(textSpan);
+
+            const hasPinMarker = line.includes('📍');
+            const m = hasPinMarker ? coordRegex.exec(line) : null;
+            if (m && m.length >= 3) {
+                const lng = Number(m[1]);
+                const lat = Number(m[2]);
+                if (Number.isFinite(lng) && Number.isFinite(lat)) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'sns-go-to-btn';
+                    btn.dataset.lng = String(lng);
+                    btn.dataset.lat = String(lat);
+                    btn.textContent = 'Go';
+                    btn.style.cssText = `
+                        padding: 4px 10px;
+                        font-size: 12px;
+                        font-weight: 700;
+                        border-radius: 8px;
+                        border: 1px solid rgba(0, 0, 0, 0.35);
+                        background: #1a73e8;
+                        color: #ffffff;
+                        cursor: pointer;
+                        letter-spacing: 0.2px;
+                    `;
+                    btn.addEventListener('mouseenter', () => {
+                        btn.style.filter = 'brightness(1.08)';
+                    });
+                    btn.addEventListener('mouseleave', () => {
+                        btn.style.filter = '';
+                    });
+                    btn.addEventListener('mousedown', () => {
+                        btn.style.transform = 'translateY(1px)';
+                    });
+                    btn.addEventListener('mouseup', () => {
+                        btn.style.transform = '';
+                    });
+                    row.appendChild(btn);
+                }
+            }
+
+            wrapper.appendChild(row);
+        }
+
         resourceSection.innerHTML = '';
-        resourceSection.appendChild(contentDiv);
+        resourceSection.appendChild(wrapper);
+
+        if (!resourceSection.dataset.snsGoToBound) {
+            resourceSection.dataset.snsGoToBound = '1';
+            resourceSection.addEventListener('click', (e) => {
+                const btn = e.target && e.target.closest ? e.target.closest('.sns-go-to-btn') : null;
+                if (!btn) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                const lng = Number(btn.dataset.lng);
+                const lat = Number(btn.dataset.lat);
+                if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+
+                const iframe = document.querySelector('#mapContainer iframe');
+                if (!iframe || !iframe.contentWindow) {
+                    console.warn('Map iframe not found or not ready');
+                    return;
+                }
+
+                const message = {
+                    type: 'mapGoTo',
+                    data: {
+                        lng,
+                        lat,
+                        zoom: 17
+                    }
+                };
+
+                try {
+                    self.safePostMessageToMap(iframe, message, self.getMapIframeTargetOrigin());
+                } catch (err) {
+                    console.warn('Failed to send mapGoTo to iframe:', err);
+                }
+            });
+        }
         console.log('Resource tab updated successfully');
     },
 

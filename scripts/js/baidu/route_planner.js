@@ -206,7 +206,7 @@ try {
 }
 
 // Geocode address to coordinate (Promise wrapper)
-function geocodeAddress(address, city) {
+function geocodeAddressbakok(address, city) {
     return new Promise((resolve, reject) => {
         new BMapGL.Geocoder().getPoint(address, point => {
             if (point) resolve(point);
@@ -221,22 +221,46 @@ function geocodeAddress(address, city) {
  * @param {string} [city] - optional city constraint
  * @returns {Promise<BMapGL.Point>} Promise that resolves to a coordinate point
  */
-function geocodeAddressnew(address, city) {
+function geocodeAddress(address, city) {
     return new Promise((resolve, reject) => {
         try {
+            let resolvedAddress = String(address || '').trim();
+            let resolvedCity = (city === undefined || city === null) ? '' : String(city).trim();
+
+            if (!resolvedCity) {
+                const commaIdx = resolvedAddress.lastIndexOf(',');
+                const cnCommaIdx = resolvedAddress.lastIndexOf('，');
+                const idx = Math.max(commaIdx, cnCommaIdx);
+                if (idx > 0 && idx < resolvedAddress.length - 1) {
+                    const inferredCity = resolvedAddress.slice(idx + 1).trim();
+                    const inferredAddr = resolvedAddress.slice(0, idx).trim();
+                    if (inferredCity) {
+                        resolvedCity = inferredCity;
+                        if (inferredAddr) {
+                            resolvedAddress = inferredAddr;
+                        }
+                    }
+                }
+                if (!resolvedCity) {
+                    resolvedCity = '北京市';
+                }
+            }
+
             // Create geocoder instance
             const geocoder = new BMapGL.Geocoder();
 
             // Execute geocoding
             geocoder.getPoint(
-                address,
+                resolvedAddress,
                 (point) => {
                     // Success callback
-                    point ? resolve(point) :
-
-                        alert(`Address resolution failed: "${address}"`);
+                    if (point) {
+                        resolve(point);
+                        return;
+                    }
+                    reject(new Error(`Address resolution failed: "${resolvedAddress}"`));
                 },
-                city,
+                resolvedCity,
                 (errorCode) => {  // Baidu map error callback
                     alert(`Geocoding error [${errorCode}]: ${getGeocodeErrorMsg(errorCode)}`);
                     reject(new Error(`Geocoding error [${errorCode}]: ${getGeocodeErrorMsg(errorCode)}`));
@@ -247,6 +271,207 @@ function geocodeAddressnew(address, city) {
             reject(new Error(`Failed to initialize geocoding: ${error.message}`));
         }
     });
+}
+
+function __withTimeout(promise, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            reject(new Error('timeout'));
+        }, Math.max(0, Number(timeoutMs) || 0));
+
+        Promise.resolve(promise)
+            .then((v) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(v);
+            })
+            .catch((e) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                reject(e);
+            });
+    });
+}
+
+async function __geocodeAddressWithRetry(address, city, timeoutMs = 1000, maxRetries = 10, label = '') {
+    let lastErr = null;
+    const retries = Math.max(1, Number(maxRetries) || 1);
+    const __labelText = String(label || '').trim();
+    const __progressTitle = __labelText ? `Geocoding ${__labelText} Address...` : 'Geocoding address...';
+    for (let i = 0; i < retries; i++) {
+        try {
+            console.log(`[geocode retry] attempt ${i + 1}/${retries}, timeout=${timeoutMs}ms, address=${String(address || '')}, city=${String(city || '')}`);
+        } catch (e0) {
+        }
+        try {
+            if (i > 0 && typeof setAlertProgress === 'function') {
+                setAlertProgress(__progressTitle, i + 1, retries, timeoutMs, '');
+            }
+        } catch (e0) {
+        }
+        try {
+            const point = await __withTimeout(geocodeAddress(address, city), timeoutMs);
+            try {
+                if (typeof clearAlertProgress === 'function') {
+                    clearAlertProgress();
+                }
+            } catch (e0) {
+            }
+            return point;
+        } catch (e) {
+            lastErr = e;
+            try {
+                const isTimeout = !!(e && (String(e.message || '').toLowerCase().includes('timeout')));
+                if (isTimeout) {
+                    console.log(`[geocode retry] timeout on attempt ${i + 1}/${retries} after ${timeoutMs}ms`);
+                    try {
+                        if (i > 0 && typeof setAlertProgress === 'function') {
+                            setAlertProgress(__progressTitle, i + 1, retries, timeoutMs, 'timeout');
+                        }
+                    } catch (e2) {
+                    }
+                } else {
+                    console.log(`[geocode retry] failed on attempt ${i + 1}/${retries}: ${String(e && (e.message || e))}`);
+                    try {
+                        if (i > 0 && typeof setAlertProgress === 'function') {
+                            setAlertProgress(__progressTitle, i + 1, retries, timeoutMs, 'failed');
+                        }
+                    } catch (e2) {
+                    }
+                }
+            } catch (e1) {
+            }
+        }
+    }
+    try {
+        if (typeof clearAlertProgress === 'function') {
+            clearAlertProgress();
+        }
+    } catch (e0) {
+    }
+    throw lastErr || new Error('geocode failed');
+}
+
+async function __drivingSearchWithRetry(startPoint, endPoint, timeoutMs = 1000, maxRetries = 10) {
+    let lastErr = null;
+    const retries = Math.max(1, Number(maxRetries) || 1);
+    for (let i = 0; i < retries; i++) {
+        try {
+            console.log(`[driving.search retry] attempt ${i + 1}/${retries}, timeout=${timeoutMs}ms`);
+        } catch (e0) {
+        }
+        try {
+            if (i > 0 && typeof setAlertProgress === 'function') {
+                setAlertProgress('Planning route...', i + 1, retries, timeoutMs, '');
+            }
+        } catch (e0) {
+        }
+        try {
+            let prevHook = undefined;
+            let hook = null;
+            const restoreHook = () => {
+                try {
+                    if (typeof window !== 'undefined' && window.__baiduDrivingSearchHook === hook) {
+                        window.__baiduDrivingSearchHook = prevHook;
+                    }
+                } catch (e) {
+                }
+            };
+
+            const attemptPromise = new Promise((resolve, reject) => {
+                prevHook = (typeof window !== 'undefined') ? window.__baiduDrivingSearchHook : undefined;
+                hook = (status, result) => {
+                    restoreHook();
+                    resolve({ status: status, result: result });
+                };
+
+                try {
+                    if (typeof window !== 'undefined') {
+                        window.__baiduDrivingSearchHook = hook;
+                    }
+                } catch (e) {
+                }
+
+                try {
+                    driving.search(startPoint, endPoint);
+                } catch (e) {
+                    restoreHook();
+                    reject(e);
+                }
+            });
+
+            const res = await __withTimeout(attemptPromise, timeoutMs).catch((e) => {
+                restoreHook();
+                throw e;
+            });
+
+            const status = res && typeof res.status !== 'undefined' ? res.status : null;
+            const ok = (status === 5) || (typeof BMAP_STATUS_SUCCESS !== 'undefined' && status === BMAP_STATUS_SUCCESS);
+            if (ok) {
+                try {
+                    console.log(`[driving.search retry] success on attempt ${i + 1}/${retries}, status=${String(status)}`);
+                } catch (e0) {
+                }
+                try {
+                    if (typeof clearAlertProgress === 'function') {
+                        clearAlertProgress();
+                    }
+                    if (typeof hideAlert === 'function') {
+                        hideAlert();
+                    }
+                } catch (e0) {
+                }
+                return res.result;
+            }
+
+            try {
+                console.log(`[driving.search retry] completed but not success on attempt ${i + 1}/${retries}, status=${String(status)}`);
+            } catch (e0) {
+            }
+            try {
+                if (i > 0 && typeof setAlertProgress === 'function') {
+                    setAlertProgress('Planning route...', i + 1, retries, timeoutMs, `status=${String(status)}`);
+                }
+            } catch (e0) {
+            }
+            lastErr = new Error('route search failed');
+        } catch (e) {
+            lastErr = e;
+            try {
+                const isTimeout = !!(e && (String(e.message || '').toLowerCase().includes('timeout')));
+                if (isTimeout) {
+                    console.log(`[driving.search retry] timeout on attempt ${i + 1}/${retries} after ${timeoutMs}ms`);
+                    try {
+                        if (i > 0 && typeof setAlertProgress === 'function') {
+                            setAlertProgress('Planning route...', i + 1, retries, timeoutMs, 'timeout');
+                        }
+                    } catch (e2) {
+                    }
+                } else {
+                    console.log(`[driving.search retry] failed on attempt ${i + 1}/${retries}: ${String(e && (e.message || e))}`);
+                    try {
+                        if (i > 0 && typeof setAlertProgress === 'function') {
+                            setAlertProgress('Planning route...', i + 1, retries, timeoutMs, 'failed');
+                        }
+                    } catch (e2) {
+                    }
+                }
+            } catch (e1) {
+            }
+        }
+    }
+    try {
+        if (typeof clearAlertProgress === 'function') {
+            clearAlertProgress();
+        }
+    } catch (e0) {
+    }
+    throw lastErr || new Error('route search failed');
 }
 
 /**
@@ -427,9 +652,72 @@ async function planRoute(isUserInitiated = true) {
     const end = document.getElementById("end").value.trim();
     const positionType = document.getElementById("position_type").value;
 
+    const splitAddressCity = (value) => {
+        const raw = String(value || '').trim();
+        const firstComma = raw.indexOf(',');
+        if (firstComma <= 0 || firstComma !== raw.lastIndexOf(',')) return null;
+        const address = raw.slice(0, firstComma).trim();
+        const city = raw.slice(firstComma + 1).trim();
+        if (!address || !city) return null;
+        return { address, city };
+    };
+
+    let startAddressForGeocode = start;
+    let startCityForGeocode = '北京市';
+    let endAddressForGeocode = end;
+    let endCityForGeocode = '北京市';
+
     if (!start || !end) {
-        showAlert("Please enter both a start and end location");
+        try {
+            showAlert("请输入起点和终点，格式：地址,城市", true);
+        } catch (e) {
+            showAlert("请输入起点和终点，格式：地址,城市", true);
+        }
         return;
+    }
+
+    if (isUserInitiated && positionType === 'address') {
+        const hasChinese = (s) => /[\u4e00-\u9fff]/.test(String(s || ''));
+        const hasLatin = (s) => /[A-Za-z]/.test(String(s || ''));
+        const validateAddressCity = (value) => {
+            const parts = splitAddressCity(value);
+            if (!parts) return null;
+            if (!hasChinese(parts.address) || !hasChinese(parts.city)) return null;
+            if (hasLatin(parts.address) || hasLatin(parts.city)) return null;
+            return parts;
+        };
+
+        const startParts = validateAddressCity(start);
+        if (!startParts) {
+            try {
+                showAlert('起点必须为中文地址，且包含城市，格式：地址,城市', true);
+            } catch (e) {
+                showAlert('起点必须为中文地址，且包含城市，格式：地址,城市', true);
+            }
+            return;
+        }
+
+        startAddressForGeocode = startParts.address;
+        startCityForGeocode = startParts.city;
+
+        const endParts = validateAddressCity(end);
+        if (!endParts) {
+            try {
+                showAlert('终点必须为中文地址，且包含城市，格式：地址,城市', true);
+            } catch (e) {
+                showAlert('终点必须为中文地址，且包含城市，格式：地址,城市', true);
+            }
+            return;
+        }
+
+        endAddressForGeocode = endParts.address;
+        endCityForGeocode = endParts.city;
+
+        try {
+            showAlert('开始规划路线,仅支持中文和中国城市', false);
+        } catch (e) {
+            showAlert('开始规划路线,仅支持中文和中国城市', false);
+        }
     }
 
     try {
@@ -438,42 +726,60 @@ async function planRoute(isUserInitiated = true) {
 
         let startPoint, endPoint;
 
+        function tryParseLngLat(value) {
+            if (typeof value !== 'string') return null;
+            const parts = value.split(',');
+            if (parts.length !== 2) return null;
+            const lng = parseFloat(String(parts[0]).trim());
+            const lat = parseFloat(String(parts[1]).trim());
+            if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+            return new BMapGL.Point(lng, lat);
+        }
+
         // Parse start point
-        if (start.includes(",")) {
-            // Start is coordinates
-            const startCoords = start.split(",");
-            if (startCoords.length === 2) {
-                // Ensure parse order: lng first, lat second
-                const startLng = parseFloat(startCoords[0]);
-                const startLat = parseFloat(startCoords[1]);
-                if (!isNaN(startLat) && !isNaN(startLng)) {
-                    startPoint = new BMapGL.Point(startLng, startLat);
-                } else {
-                    throw new Error("Invalid start coordinate format");
-                }
+        if (positionType === 'coordinates') {
+            const parsedStart = tryParseLngLat(start);
+            if (!parsedStart) {
+                throw new Error('Invalid coordinate format. Expected "lng,lat".');
             }
+            startPoint = parsedStart;
+        } else if (positionType === 'address') {
+            const parts = splitAddressCity(start);
+            if (parts) {
+                startAddressForGeocode = parts.address;
+                startCityForGeocode = parts.city;
+            }
+            console.log("getting start point");
+            startPoint = await __geocodeAddressWithRetry(startAddressForGeocode, startCityForGeocode, 1000, 30, 'Start');
+            console.log(startPoint);
         } else {
-            // Start is address
-            startPoint = await geocodeAddress(start, "北京市");
+            const parsedStart = tryParseLngLat(start);
+            console.log("getting start point");
+            startPoint = parsedStart ? parsedStart : await __geocodeAddressWithRetry(start, "北京市", 1000, 30, 'Start');
+            console.log(startPoint);
         }
 
         // Parse end point
-        if (end.includes(","))  {
-            // End is coordinates
-            const endCoords = end.split(",");
-            if (endCoords.length === 2) {
-                // Ensure parse order: lng first, lat second
-                const endLng = parseFloat(endCoords[0]);
-                const endLat = parseFloat(endCoords[1]);
-                if (!isNaN(endLat) && !isNaN(endLng)) {
-                    endPoint = new BMapGL.Point(endLng, endLat);
-                } else {
-                    throw new Error("Invalid end coordinate format");
-                }
+        if (positionType === 'coordinates') {
+            const parsedEnd = tryParseLngLat(end);
+            if (!parsedEnd) {
+                throw new Error('Invalid coordinate format. Expected "lng,lat".');
             }
+            endPoint = parsedEnd;
+        } else if (positionType === 'address') {
+            const parts = splitAddressCity(end);
+            if (parts) {
+                endAddressForGeocode = parts.address;
+                endCityForGeocode = parts.city;
+            }
+            console.log("getting end point");
+            endPoint = await __geocodeAddressWithRetry(endAddressForGeocode, endCityForGeocode, 1000, 30, 'End');
+            console.log(endPoint);
         } else {
-            // End is address
-            endPoint = await geocodeAddress(end, "北京市");
+            const parsedEnd = tryParseLngLat(end);
+            console.log("getting end point");
+            endPoint = parsedEnd ? parsedEnd : await __geocodeAddressWithRetry(end, "北京市", 1000, 30, 'End');
+            console.log(endPoint);
         }
 
         // Step 3: plan route using coordinates
@@ -482,13 +788,18 @@ async function planRoute(isUserInitiated = true) {
 
         // Note: driving.search() is async; success triggers onSearchComplete
         // State/UI will be updated in onSearchComplete; no immediate update needed here
-        driving.search(startPoint, endPoint);
+        console.log("Requesting route search and plan.");
+        await __drivingSearchWithRetry(startPoint, endPoint, 1000, 40);
 
         // Note: do not update state/UI here
         // Only update after confirming success in onSearchComplete
         // This avoids incorrect UI updates when planning fails
     } catch (error) {
-        showAlert(error.message || error); // Display geocoding error
+        try {
+            showAlert(error.message || error, true);
+        } catch (e2) {
+            showAlert(error.message || error, true);
+        }
     }
 }
 
@@ -536,7 +847,7 @@ function getAllGpsPositions(routeResult) {
         var color = choose[Math.floor(Math.random() * choose.length)];
         colorOffset.push(color);
     }
-    alert(move_duration);
+    console.log('move_duration:', move_duration);
 
     trackLine = new Track.LocalTrack({
         trackPath: trackData,
@@ -580,7 +891,7 @@ function getAllGpsPositions(routeResult) {
 
     track.addTrackLine(trackLine);
     // track.focusTrack(trackLine);
-    alert(init_route_current_position.lng);
+    console.log('init_route_current_position.lng:', init_route_current_position.lng);
     movePointbak = new Track.GroundPoint({
         point: (typeof init_route_current_position !== 'undefined' && init_route_current_position !== null)
                ? new BMapGL.Point(init_route_current_position.lng, init_route_current_position.lat)
@@ -658,7 +969,11 @@ function route_move_action_from_python(allowedDistanceM){
     }
 
     if (!hasLimit || __routeMoveTargetProcess === null) {
-        // Backward compatible behavior
+        // Backward compatible: pause after 10s; set a ceiling so pauseTrack can clamp
+        if (__routeTotalDistanceM > 0 && move_duration > 0) {
+            // Expected progress after 10 seconds of animation
+            __routeMoveTargetProcess = Math.min(1, 10 / move_duration + __routeCurrentProcess);
+        }
         setTimeout(() => {
             pauseTrack();
         }, 10000);
@@ -728,6 +1043,29 @@ function toggleTrack() {
 
 
 function startTrack() {
+        try {
+        const persistedPos = (typeof init_route_current_position !== 'undefined' && init_route_current_position !== null)
+            ? init_route_current_position
+            : null;
+        const fallbackPos = (movePoint && typeof movePoint.getPoint === 'function') ? movePoint.getPoint() : null;
+        const pos = (persistedPos && Number.isFinite(Number(persistedPos.lng)) && Number.isFinite(Number(persistedPos.lat)))
+            ? persistedPos
+            : fallbackPos;
+
+        if (map && pos) {
+            const lng = Number(pos.lng);
+            const lat = Number(pos.lat);
+            if (Number.isFinite(lng) && Number.isFinite(lat)) {
+                const p = new BMapGL.Point(lng, lat);
+                if (typeof map.panTo === 'function') {
+                    map.panTo(p);
+                } else if (typeof map.setCenter === 'function') {
+                    map.setCenter(p);
+                }
+            }
+        }
+    } catch (e) {
+    }
     driving.clearResults();  // Clear route planning results
     trackLine.startAnimation();
 }
@@ -843,48 +1181,81 @@ function stopTrack() {
 }
 
 function pauseTrack() {
+    // FREEZE animation immediately to prevent delta-time accumulation
+    trackLine.pauseAnimation();
+
+    // Read progress AFTER pausing so it reflects the frozen state
+    let progress = trackLine.process;
+
+    // Clamp progress to target to prevent overshoot from rAF throttling / timing spikes
+    if (__routeMoveTargetProcess !== null && Number.isFinite(__routeMoveTargetProcess) &&
+        progress > __routeMoveTargetProcess) {
+        progress = __routeMoveTargetProcess;
+    }
 
     const currentPoint = movePoint.getPoint();
+
     // Compute an offset position about 50 meters away
-    // On Earth, ~1 degree latitude is ~111km, so 50m is about 0.00045 degrees
-    const offsetDegrees = 0.00045; // About 50 meters
+    const offsetDegrees = 0.00090;
     const offsetPoint = new BMapGL.Point(
         currentPoint.lng + offsetDegrees,
         currentPoint.lat + offsetDegrees
     );
 
     setPersonModelPointByNationId(nation_id_me, offsetPoint);
-    alert('Paused position:');
-    alert(currentPoint);
-    alert(currentPoint.lng);
-    alert(currentPoint.lat);
-
-    // Get current track progress (0-1)
-    const progress = trackLine.process;
-    alert(progress);
-// Get precise point by progress
-    console.log(trackLine);
-    console.log(progress);
-    const pointInfo = trackLine.getInfoByProcess(progress);
-    console.log(pointInfo);
-    console.log("Precise point:", pointInfo.point);
-    alert("Precise point: " + pointInfo.point);
-
-    trackLine.pauseAnimation();
+    setPersonPointByNationId(nation_id_me, offsetPoint.lng, offsetPoint.lat);
+    findHim();
 
     __routeCurrentProcess = Number(progress) || 0;
     __routeCurrentDistanceM = (__routeTotalDistanceM > 0) ? (__routeCurrentProcess * __routeTotalDistanceM) : 0;
     currentDistance = __routeCurrentDistanceM;
-    const route_current_position = JSON.stringify(currentPoint);
-    update_map_setting("route_current_position", route_current_position);
+
+    const lng = Number(currentPoint.lng);
+    const lat = Number(currentPoint.lat);
+    const routeCurrentPos = { lng: lng, lat: lat };
+    try {
+        init_route_current_position = routeCurrentPos;
+    } catch (e) {
+    }
+    update_map_setting("route_current_position", routeCurrentPos);
     update_map_setting("route", currentDistance);
-    update_map_setting("current_position", route_current_position);
-
-
+    try {
+        if (typeof sync_current_position === 'function') {
+            sync_current_position(lng, lat, { throttleMs: 800 });
+        } else {
+            update_map_setting("current_position", routeCurrentPos);
+        }
+    } catch (e) {
+        update_map_setting("current_position", routeCurrentPos);
+    }
 }
 
 function continueTrack() {
     // trackLine.setProcess(0.1904666666666667);
+    // findHim();
+    try {
+        const persistedPos = (typeof init_route_current_position !== 'undefined' && init_route_current_position !== null)
+            ? init_route_current_position
+            : null;
+        const fallbackPos = (movePoint && typeof movePoint.getPoint === 'function') ? movePoint.getPoint() : null;
+        const pos = (persistedPos && Number.isFinite(Number(persistedPos.lng)) && Number.isFinite(Number(persistedPos.lat)))
+            ? persistedPos
+            : fallbackPos;
+
+        if (map && pos) {
+            const lng = Number(pos.lng);
+            const lat = Number(pos.lat);
+            if (Number.isFinite(lng) && Number.isFinite(lat)) {
+                const p = new BMapGL.Point(lng, lat);
+                if (typeof map.panTo === 'function') {
+                    map.panTo(p);
+                } else if (typeof map.setCenter === 'function') {
+                    map.setCenter(p);
+                }
+            }
+        }
+    } catch (e) {
+    }
     trackLine.setMovePoint(movePoint);
     trackLine.setProcess(__routeCurrentProcess);
     trackLine.resumeAnimation();
@@ -892,7 +1263,7 @@ function continueTrack() {
 
 function viewRoute() {
     // If a track line exists, fit the map viewport to it
-    alert("viewRoute");
+    console.log('viewRoute');
     if (trackLine) {
         // Get track bounding box
         const box = trackLine.getBBox();
@@ -907,15 +1278,13 @@ function viewRoute() {
 
         // If current position exists, move map center to it
         if (init_route_current_position && init_route_current_position.lng && init_route_current_position.lat) {
-            alert(1);
-            alert(JSON.stringify(init_route_current_position));
+            console.log('viewRoute: centering on current position', init_route_current_position);
             const currentPoint = new BMapGL.Point(init_route_current_position.lng, init_route_current_position.lat);
             map.setCenter(currentPoint);
         } else if (trackData && trackData.length > 0) {
             // Otherwise move to route start
-            alert(JSON.stringify(trackData[0].getPoint()));
+            console.log('viewRoute: centering on route start', trackData[0].getPoint());
             map.setCenter(trackData[0].getPoint());
-            alert(2);
         }
     }else{showAlert("Failed to load route. Check your network, refresh the page, or specify the route again.",true)}
 }

@@ -1,7 +1,7 @@
 const LogViewerPlugin = {
     info: {
         id: 'log-viewer',
-        name: 'Log Viewer',
+        name: 'LLM Log',
         version: '1.0.0',
         description: 'Browse backend LLM logs by date and file'
     },
@@ -13,7 +13,7 @@ const LogViewerPlugin = {
         container.innerHTML = `
             <div style="display:flex; flex-direction:column; gap:12px; padding:12px; height:100%; min-height:0; box-sizing:border-box;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                    <div style="font-weight:700; font-size:20px;">Log Viewer</div>
+                    <div style="font-weight:700; font-size:20px;">LLM Log</div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn btn-secondary" type="button" id="lv_reload">Reload</button>
                     </div>
@@ -137,13 +137,14 @@ const LogViewerPlugin = {
             }
 
             if (dateSel) {
-                dateSel.innerHTML = '<option value="" disabled selected>Please select a date...</option>';
+                dateSel.innerHTML = '';
                 for (const d of dates) {
                     const opt = document.createElement('option');
                     opt.value = String(d);
                     opt.textContent = String(d);
                     dateSel.appendChild(opt);
                 }
+                dateSel.value = String(dates[0]);
             }
             setStatus('');
         };
@@ -170,13 +171,14 @@ const LogViewerPlugin = {
             }
 
             if (fileSel) {
-                fileSel.innerHTML = '<option value="" disabled selected>Please select a file...</option>';
+                fileSel.innerHTML = '';
                 for (const f of files) {
                     const opt = document.createElement('option');
                     opt.value = String(f);
                     opt.textContent = String(f);
                     fileSel.appendChild(opt);
                 }
+                fileSel.value = String(files[files.length - 1]);
             }
             setStatus('');
         };
@@ -194,6 +196,11 @@ const LogViewerPlugin = {
                     dateSel.value = prevDate;
                     activeDate = prevDate;
                 }
+            }
+
+            if (!activeDate && dateSel) {
+                const current = String(dateSel.value || '').trim();
+                if (current) activeDate = current;
             }
 
             if (!activeDate) {
@@ -238,6 +245,7 @@ const LogViewerPlugin = {
                 const date = String(dateSel.value || '').trim();
                 setContent('');
                 await loadFiles(date);
+                await loadFileContent();
             });
         }
 
@@ -278,6 +286,10 @@ const LogViewerPlugin = {
 
         setContent('');
         await loadDates();
+        if (dateSel && String(dateSel.value || '').trim()) {
+            await loadFiles(String(dateSel.value || '').trim());
+            await loadFileContent();
+        }
     },
 
     dispose() {

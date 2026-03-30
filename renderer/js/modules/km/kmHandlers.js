@@ -1396,9 +1396,9 @@ const kmHandlers = {
             const result = await response.json();
             const results = result.data || [];
 
-            loading.close();
-
             if (results.length === 0) {
+                loading.update('No results found');
+                setTimeout(() => loading.close(), 2000);
                 searchResults.innerHTML = '<div class="empty-state">No results found</div>';
                 return;
             }
@@ -1415,7 +1415,8 @@ const kmHandlers = {
             `).join('');
 
             searchResults.innerHTML = html;
-            Toast.success(`Found ${results.length} results`);
+            loading.update(`Found ${results.length} results`);
+            setTimeout(() => loading.close(), 2000);
         } catch (error) {
             console.error('Search failed:', error);
             loading.close();

@@ -1427,8 +1427,6 @@ function initMap() {
 
     };
 
-
-
     const loadHouse = async () => {
 
         try {
@@ -1513,9 +1511,100 @@ function initMap() {
 
     };
 
+    const loadTower = async () => {
+
+        try {
+
+            // Load model with retry
+
+            const gltf = await loadModelWithRetry(loader, 'chinese_tower.glb');
+
+            modeltower = gltf.scene;
+
+            // Add ambient light
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+
+            //overlay.scene.add(ambientLight);
+
+            // Add directional light
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.25);
+
+            directionalLight.position.set(-1, -1, -1); // Place the light behind the model
+
+            // overlay.scene.add(directionalLight);
+
+            // Compute model bounding box
+
+            const box = new THREE.Box3().setFromObject(modeltower);
+
+            const size = box.getSize(new THREE.Vector3());
+
+            const height = size.y; // Model height
+
+            console.log("Tower model height:", height);
+
+            // Set model scale/rotation/position
+
+            // Adjust scale based on height
+
+            const desiredHeight = 450; // Desired height
+
+            const scale = desiredHeight / height;
+
+
+
+            modeltower.scale.set(6, 6, 6);
+
+            modeltower.rotation.x = (Math.PI / 15) * 0;
+
+            modeltower.rotation.y = (Math.PI / 15) * 1.6;
+            tower_position={
+
+                lng: 116.01984538680082,
+
+                lat: 40.35719706363071
+            }
+
+            const position3 = overlay.latLngAltitudeToVector3(tower_position, modeltower.position);
+
+            try {
+
+                if (tower_position && tower_position.lat !== undefined && tower_position.lng !== undefined) {
+
+                    registerGeoBoundObject(modeltower, { lat: Number(tower_position.lat), lng: Number(tower_position.lng), altitude: Number(tower_position.altitude) || 0 });
+
+                }
+
+            } catch (e) {
+
+            }
+
+            // Add model to scene
+
+            overlay.scene.add(modeltower);
+
+            console.log("Tower model loaded successfully");
+
+            modelLoadStatus.tower = true;
+
+            checkAnimationStart();
+
+        } catch (error) {
+
+            console.error('Failed to load tower model:', error);
+
+        }
+
+    };
+
+
     loadBuilding();
 
     loadHouse();
+
+    loadTower();
 
     const loadModel = async () => {
 
@@ -2196,7 +2285,7 @@ function initMap() {
 
                     // Estimate camera altitude from zoom level (meters)
 
-                    const altitudeM = 35200000 / Math.pow(2, Math.max(zoom - 1, 0));
+                    const altitudeM = 352000000 / Math.pow(2, Math.max(zoom - 1, 0));//352000000 is ok,the original value 35200000 will make the person model too bright.
 
 
 

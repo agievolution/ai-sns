@@ -3569,6 +3569,7 @@ body.theme-dark .chat-tree .tree-item.active {
     line-height: 1.6;
     margin-bottom: 16px;
     display: -webkit-box;
+    line-clamp: 3;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -4873,6 +4874,11 @@ body.theme-dark .chat-tree .tree-item.active {
     line-height: 1.6;
     flex: 1;
     margin-bottom: 16px;
+    display: -webkit-box;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .plugin-download-btn {
@@ -6439,6 +6445,7 @@ body.theme-dark .km-editor-content table tr:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     word-break: break-word;
@@ -8395,7 +8402,7 @@ body.theme-dark .dropdown-item:hover {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 4px 6px;
+    padding: 4px 16px 4px 6px;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
     height: 36px;
 }
@@ -8645,12 +8652,13 @@ body.theme-dark .control-send-btn:hover {
 
 /* KM Section Container - expanded content area */
 .km-section-container {
-
+    display: flex;
+    flex-direction: column;
 }
 
 /* KM User Section styles */
 .km-user-section {
-    padding: 0 ;
+    padding: 0;
 }
 
 /* KM search box */
@@ -8909,6 +8917,9 @@ body.theme-dark .control-send-btn:hover {
     margin: 16px;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
+    min-height: 0;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .km-search-header {
@@ -8970,6 +8981,7 @@ body.theme-dark .control-send-btn:hover {
 .km-search-results {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
 }
 
 .km-search-results .empty-state {

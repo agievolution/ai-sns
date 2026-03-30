@@ -436,6 +436,7 @@ class SNSService:
                     if friend:
                         if not friend.nick_name:
                             friend.nick_name = _to_account
+                        friend.new_message_flag = False
                     else:
                         friend = AIFriend(
                             account=_to_account,
@@ -483,6 +484,50 @@ class SNSService:
                 "success": False,
                 "message": str(e)
             }
+
+    async def mark_contact_read(self, account: str) -> dict:
+        """Mark a contact as read by clearing new_message_flag in DB."""
+        try:
+            account = (account or "").strip()
+            if not account:
+                return {"success": False, "message": "Account is required."}
+
+            config = await self._get_latest_user_config()
+            if not config:
+                return {"success": False, "message": "No user config found."}
+
+            from db.write_queue import db_write_async
+            _owner = config.account
+            _account = account
+
+            def _clear_flag(session):
+                friend = session.query(AIFriend).filter(
+                    AIFriend.is_delete == False,
+                    AIFriend.owner_sns_account == _owner,
+                    AIFriend.account == _account,
+                ).first()
+                if not friend:
+                    return None
+                friend.new_message_flag = False
+                return {
+                    'account': friend.account,
+                    'nick_name': friend.nick_name or friend.account,
+                    'new_message_flag': False,
+                    'last_message_time': friend.last_message_time.isoformat() if friend.last_message_time else None,
+                }
+
+            contact_payload = await db_write_async(_clear_flag, description="mark_contact_read")
+
+            if contact_payload:
+                await websocket_manager.broadcast({
+                    'type': 'contact_upserted',
+                    'data': contact_payload
+                })
+
+            return {"success": True, "message": "Contact marked as read."}
+        except Exception as e:
+            logger.error(f"Error marking contact as read: {e}")
+            return {"success": False, "message": str(e)}
 
     async def send_file(self, to_account: str, file) -> dict:
         """Send a file via XMPP using XEP-0363"""
@@ -542,6 +587,7 @@ class SNSService:
                         if friend:
                             if not friend.nick_name:
                                 friend.nick_name = _ta
+                            friend.new_message_flag = False
                         else:
                             friend = AIFriend(
                                 account=_ta,
@@ -975,6 +1021,46 @@ class SNSService:
 
                 if started_flag and map_task_status == "started" and taskmng is not None:
                     try:
+                        active = getattr(_social_engine_instance, "active_conversation", None)
+                    except Exception:
+                        active = None
+
+                    if active:
+                        last_line = ""
+                        try:
+                            hist = getattr(_social_engine_instance, "current_talk_history", None)
+                            if isinstance(hist, list) and hist:
+                                for item in reversed(hist):
+                                    if isinstance(item, str) and item.strip():
+                                        last_line = item.strip()
+                                        break
+                        except Exception:
+                            last_line = ""
+
+                        if last_line.startswith("Friend:"):
+                            try:
+                                logger.info("Exiting human control mode: triggering conversation review")
+                                asyncio.create_task(taskmng.process_task(
+                                    event="conversation_message_received",
+                                    talk_history_str=json.dumps(
+                                        getattr(_social_engine_instance, "current_talk_history", []) or [],
+                                        ensure_ascii=False,
+                                    ),
+                                ))
+                            except Exception as e:
+                                logger.error("Failed to trigger conversation review after exiting human control mode: %s", e)
+                        else:
+                            logger.info("Exiting human control mode: keeping active conversation idle (waiting for peer reply)")
+                        return {
+                            "success": True,
+                            "message": "Human control state updated",
+                            "data": {
+                                "human_take_over": _social_engine_instance.human_take_over,
+                                "human_talk_type": _social_engine_instance.human_talk_type
+                            }
+                        }
+
+                    try:
                         if hasattr(_social_engine_instance, "is_idle_for_auto_activity") and (not _social_engine_instance.is_idle_for_auto_activity()):
                             logger.info("Exiting human control mode: engine not idle, skipping process_activity resume")
                             return {
@@ -1038,7 +1124,59 @@ class SNSService:
         # Ensure engine is in started state (handle paused/stopped)
         await self._ensure_engine_running_for_priority_action()
 
-        _social_engine_instance.human_message_received(message)
+        engine = _social_engine_instance
+        try:
+            human_take_over = bool(getattr(engine, "human_take_over", False))
+        except Exception:
+            human_take_over = False
+
+        try:
+            human_talk_type = getattr(engine, "human_talk_type", 0)
+            human_talk_type = int(human_talk_type) if human_talk_type is not None else 0
+        except Exception:
+            human_talk_type = 0
+
+        if human_take_over and human_talk_type == 1:
+            current_talk_people = None
+            try:
+                current_talk_people = getattr(engine, "current_talk_people", None)
+            except Exception:
+                current_talk_people = None
+
+            account = ""
+            if isinstance(current_talk_people, dict):
+                try:
+                    account = (current_talk_people.get("account") or "").strip()
+                except Exception:
+                    account = ""
+
+            if not account:
+                await self._broadcast_engine_status()
+                return {
+                    "success": False,
+                    "message": "Message send failed: no active conversation.",
+                }
+
+            ok = False
+            try:
+                ok = bool(engine.sendMessage(message, by_click=True))
+            except Exception as e:
+                logger.error(f"Failed to send human message to target: {e}")
+                ok = False
+
+            await self._broadcast_engine_status()
+            if not ok:
+                return {
+                    "success": False,
+                    "message": "Failed to send message to the selected target.",
+                }
+
+            return {
+                "success": True,
+                "message": "Message sent",
+            }
+
+        engine.human_message_received(message)
         await self._broadcast_engine_status()
         return {
             "success": True,
@@ -1241,7 +1379,7 @@ class SNSService:
         if not active_account:
             return {
                 "success": True,
-                "message": "No active conversation",
+                "message": "No active conversation.",
             }
 
         try:

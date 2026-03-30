@@ -732,6 +732,12 @@ export default {
         const upserted = this.upsertContact(contactData);
         if (!upserted) return;
 
+        // Suppress red dot if chat window is open for this contact
+        const isCurrentChat = this.selectedContact && this.selectedContact.account === upserted.account;
+        if (isCurrentChat && upserted.new_message_flag) {
+            upserted.new_message_flag = false;
+        }
+
         this.renderContacts();
     },
 
@@ -779,9 +785,10 @@ export default {
             });
         }
 
-        // Check if currently chatting with this contact
-        if (this.selectedContact && this.selectedContact.account === from_account) {
-            // Display message in chat window immediately
+        const isCurrentChat = this.selectedContact && this.selectedContact.account === from_account;
+
+        if (isCurrentChat) {
+            // Chat window is open: display message and suppress red dot
             const chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
                 const messageDiv = document.createElement('div');
@@ -793,9 +800,16 @@ export default {
                 chatMessages.appendChild(messageDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
-        } else {
-            // Add red dot to contact in contact list
+            // Never show red dot when chat window is open; persist clear to DB
+            this.clearContactUnread(from_account);
+        } else if (flag !== 0) {
+            // Incoming message, chat not open: show red dot
             this.markContactUnread(from_account);
+        } else {
+            // Outgoing message (flag=0), chat not open: clear red dot locally
+            // (backend already persisted new_message_flag=False)
+            const c = this.contacts.find(x => x && x.account === from_account);
+            if (c) c.new_message_flag = false;
         }
 
         this.renderContacts();
@@ -1310,9 +1324,9 @@ export default {
     },
 
     /**
-     * Clear contact unread indicator
+     * Clear contact unread indicator and persist to DB
      */
-    clearContactUnread(account) {
+    async clearContactUnread(account) {
         const contactItem = document.querySelector(`.contact-item[data-account="${account}"]`);
         if (contactItem) {
             const badge = contactItem.querySelector('.contact-badge');
@@ -1325,6 +1339,16 @@ export default {
         const contact = this.contacts.find(c => c.account === account);
         if (contact) {
             contact.new_message_flag = false;
+        }
+
+        // Persist to DB
+        try {
+            const apiClient = getApiClient();
+            if (apiClient) {
+                await apiClient.post('/api/sns/mark-contact-read', { account });
+            }
+        } catch (e) {
+            console.error('Failed to persist mark-contact-read:', e);
         }
     },
 

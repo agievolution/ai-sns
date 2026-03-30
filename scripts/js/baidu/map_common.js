@@ -34,19 +34,27 @@ driving = new BMapGL.DrivingRouteLine(map, {
         enableDragging: true,
     },
     onSearchComplete: function (result) {
+        try {
+            const status = driving.getStatus();
+            const hook = (typeof window !== 'undefined') ? window.__baiduDrivingSearchHook : null;
+            if (hook) {
+                if (typeof hook === 'function') {
+                    hook(status, result);
+                } else if (hook && typeof hook.handle === 'function') {
+                    hook.handle(status, result);
+                }
+            }
+        } catch (e) {
+        }
         if (driving.getStatus() === BMAP_STATUS_SUCCESS || driving.getStatus() === 5) {
-            alert("Planning successful, number of coordinates:");
-            alert(result);
             console.log("Planning successful, number of coordinates:", result);
 
             // Get the route plan
             const plan = result.getPlan(0);
             if (plan) {
-                alert("Distance and duration");
                 distance = plan.getDistance(true);
                 duration = plan.getDuration(true);
-                alert(distance);
-                alert(duration);
+                console.log("Route distance:", distance, "duration:", duration);
 
                 // Convert distance to a float and compute move_duration
                 // First extract numeric value from strings like "35.5km"
@@ -133,7 +141,7 @@ driving = new BMapGL.DrivingRouteLine(map, {
             }
         } else {
             // Route planning failed; do not update status or UI
-            alert("Route planning failed, status code:" + driving.getStatus());
+            console.warn("Route planning failed, status code:", driving.getStatus());
         }
     }
 });

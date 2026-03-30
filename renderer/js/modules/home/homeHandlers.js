@@ -202,11 +202,11 @@ const homeHandlers = {
                         <input type="number" min="0" max="3650" step="1" class="setting-input" id="homeCfgLogRetentionDays" value="" placeholder="Default 3. Leave empty to disable deletion. Deletes folders older than N days." />
                     </div>
                     <div class="setting-group">
-                        <label>Tool Check Every N Rounds (0 = disabled)</label>
+                        <label>Run Tool Before Action Decision Every N Rounds (0 = disabled)</label>
                         <input type="number" min="0" max="100000" step="1" class="setting-input" id="homeCfgToolCheckEveryN" value="" placeholder="0" />
                     </div>
                     <div class="setting-group">
-                        <label>Enable Tool Check Before Review</label>
+                        <label>Run Tool Before Conversation Review</label>
                         <input type="checkbox" id="homeCfgToolCheckBeforeReviewEnabled" />
                     </div>
                     <div class="setting-group">

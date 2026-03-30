@@ -559,8 +559,15 @@ IMPORTANT Tool Usage Guidelines:
             return "Error: LLM client is not configured"
 
         try:
+            effective_use_tools = bool(use_tools)
+            try:
+                if isinstance(tool_choice, str) and tool_choice.strip().lower() == "none":
+                    effective_use_tools = False
+            except Exception:
+                pass
+
             # Ensure tools are loaded from the database
-            if use_tools and not self.tools_loaded:
+            if effective_use_tools and not self.tools_loaded:
                 await self.load_tools_from_db()
 
             # Build message list
@@ -605,7 +612,7 @@ IMPORTANT Tool Usage Guidelines:
                 messages.append({'role': 'user', 'content': user_text})
 
             # Prepare tools
-            tools = self._prepare_tools_schema() if use_tools else []
+            tools = self._prepare_tools_schema() if effective_use_tools else []
 
             print("[info]:Message Send to llm:", messages)
 
@@ -613,7 +620,7 @@ IMPORTANT Tool Usage Guidelines:
             kwargs = self._build_llm_kwargs(stream=False, show_token_usage=show_token_usage)
             kwargs['messages'] = messages
 
-            if use_tools and tools:
+            if effective_use_tools and tools:
                 kwargs['tools'] = tools
                 kwargs['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
@@ -639,13 +646,13 @@ IMPORTANT Tool Usage Guidelines:
 
             # Handle tool calls
             reply = assistant_message.content or ""
-            if use_tools and assistant_message.tool_calls:
+            if effective_use_tools and assistant_message.tool_calls:
                 # allow multi-round tool chaining (e.g. read_skill -> run_doc_skill)
                 max_rounds = 5
                 current_assistant_message = assistant_message
 
                 for _ in range(max_rounds):
-                    if not (use_tools and current_assistant_message.tool_calls):
+                    if not (effective_use_tools and current_assistant_message.tool_calls):
                         break
 
                     tool_messages = []
@@ -680,10 +687,10 @@ IMPORTANT Tool Usage Guidelines:
                     })
                     messages.extend(tool_messages)
 
-                    tools_schema = self._prepare_tools_schema() if use_tools else []
+                    tools_schema = self._prepare_tools_schema() if effective_use_tools else []
                     kwargs2 = self._build_llm_kwargs(stream=False, show_token_usage=show_token_usage)
                     kwargs2['messages'] = messages
-                    if use_tools and tools_schema:
+                    if effective_use_tools and tools_schema:
                         kwargs2['tools'] = tools_schema
                         kwargs2['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
@@ -756,8 +763,15 @@ IMPORTANT Tool Usage Guidelines:
             return
 
         try:
+            effective_use_tools = bool(use_tools)
+            try:
+                if isinstance(tool_choice, str) and tool_choice.strip().lower() == "none":
+                    effective_use_tools = False
+            except Exception:
+                pass
+
             # Ensure tools are loaded from the database
-            if use_tools and not self.tools_loaded:
+            if effective_use_tools and not self.tools_loaded:
                 await self.load_tools_from_db()
 
             # Build message list (same as chat method)
@@ -801,12 +815,12 @@ IMPORTANT Tool Usage Guidelines:
                 messages.append({'role': 'user', 'content': user_text})
 
             # Prepare tools
-            tools = self._prepare_tools_schema() if use_tools else []
+            tools = self._prepare_tools_schema() if effective_use_tools else []
 
             kwargs = self._build_llm_kwargs(stream=True, show_token_usage=show_token_usage)
             kwargs['messages'] = messages
 
-            if use_tools and tools:
+            if effective_use_tools and tools:
                 kwargs['tools'] = tools
                 kwargs['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
@@ -843,7 +857,7 @@ IMPORTANT Tool Usage Guidelines:
                     yield delta.content
 
                 # Handle tool calls (accumulate delta)
-                if use_tools and delta.tool_calls:
+                if effective_use_tools and delta.tool_calls:
                     for tc_delta in delta.tool_calls:
                         idx = tc_delta.index
                         if idx not in tool_calls_accumulator:
@@ -861,12 +875,12 @@ IMPORTANT Tool Usage Guidelines:
                                 tool_calls_accumulator[idx]['function']['arguments'] += tc_delta.function.arguments
 
             # If there are tool calls, execute tools and get final reply (allow multi-round tool chaining)
-            if use_tools and tool_calls_accumulator:
+            if effective_use_tools and tool_calls_accumulator:
                 max_rounds = 5
                 round_idx = 0
                 pending_tool_calls = tool_calls_accumulator
 
-                while use_tools and pending_tool_calls and round_idx < max_rounds:
+                while effective_use_tools and pending_tool_calls and round_idx < max_rounds:
                     logger.info(f"Detected {len(pending_tool_calls)} tool calls")
 
                     tool_messages = []
@@ -898,7 +912,7 @@ IMPORTANT Tool Usage Guidelines:
                         **self._build_llm_kwargs(stream=True, show_token_usage=show_token_usage),
                         'messages': messages,
                     }
-                    if use_tools and tools:
+                    if effective_use_tools and tools:
                         kwargs_final['tools'] = tools
                         kwargs_final['tool_choice'] = tool_choice if tool_choice is not None else 'auto'
 
@@ -928,7 +942,7 @@ IMPORTANT Tool Usage Guidelines:
                             content = delta.content
                             full_reply += content
                             yield content
-                        if use_tools and delta.tool_calls:
+                        if effective_use_tools and delta.tool_calls:
                             for tc_delta in delta.tool_calls:
                                 idx = tc_delta.index
                                 if idx not in pending_tool_calls:

@@ -193,26 +193,36 @@ class UIDisplayMixin:
         """
         content = ""
 
+        def _format_coord(value, decimals: int = 8) -> str:
+            try:
+                num = float(value)
+            except Exception:
+                return str(value)
+
+            s = f"{num:.{decimals}f}".rstrip('0').rstrip('.')
+            if s == "-0":
+                s = "0"
+            return s
+
         # Format tool list
         if service_list:
-            content += f"🌐 Service List (total {len(service_list)} items)\n"
-            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            content += f"☁️ Services List (total {len(service_list)} items)\n"
+            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
             for i, service in enumerate(service_list):
                 # Tool ID and name
-                content += f"#{service.get('id', '')} {service.get('name', '')}\n"
+                content += f"🌐 #{i+1} {service.get('name', '')}\n"
 
 
                 # Geo coordinates (if lng/lat are present and non-zero)
                 lng = service.get('lng', 0)
                 lat = service.get('lat', 0)
                 if lng and lat and lng != 0 and lat != 0:
-                    # Format coordinates (up to 8 digits), trim trailing zeros
-                    formatted_lng = f"{lng:.8g}"
-                    formatted_lat = f"{lat:.8g}"
-                    content += f"📍 Coordinates: {formatted_lng}, {formatted_lat}\n"
+                    formatted_lng = _format_coord(lng, 8)
+                    formatted_lat = _format_coord(lat, 8)
+                    content += f"📍  {formatted_lng}, {formatted_lat}\n"
                 elif 'place' in service and service['place']:
-                    content += f"🌍 Location: {service['place']}\n"
+                    content += f"🌍  {service['place']}\n"
 
                 # Description
                 if 'description' in service and service['description']:
@@ -252,18 +262,15 @@ class UIDisplayMixin:
                 # Name and profession
                 nick_name = person.get('nick_name', '')
                 profession = person.get('profession', '')
-                content += f"🧑‍ {nick_name} ｜ 👩‍💻 {profession}\n"
+                content += f"🧑‍ #{i+1} {nick_name} ｜ 👩‍💻 {profession}\n"
 
                 # Location
                 location = person.get('location', [])
                 if location and len(location) >= 2:
                     lng, lat = location[0], location[1]
-                    # City simplification (if any)
-
-                    # Format lng/lat (up to 8 decimals), no padding zeros
-                    formatted_lng = f"{lng:.8f}".rstrip('0').rstrip('.')
-                    formatted_lat = f"{lat:.8f}".rstrip('0').rstrip('.')
-                    content += f"📍 Location: {formatted_lng}, {formatted_lat}\n"
+                    formatted_lng = _format_coord(lng, 8)
+                    formatted_lat = _format_coord(lat, 8)
+                    content += f"📍  {formatted_lng}, {formatted_lat}\n"
 
                 # Account
                 account = person.get('account', '')
@@ -299,15 +306,14 @@ class UIDisplayMixin:
             for i, place in enumerate(place_list):
                 # Place name
                 place_name = place.get('place_name', '')
-                content += f"🏞️ {place_name}\n"
+                content += f"🏞️ #{i+1} {place_name}\n"
 
                 # Coordinates
                 position = place.get('place_position', [])
                 if position and len(position) >= 2:
                     lng, lat = position[0], position[1]
-                    # Format lng/lat (up to 8 decimals), no padding zeros
-                    formatted_lng = f"{lng:.8f}".rstrip('0').rstrip('.')
-                    formatted_lat = f"{lat:.8f}".rstrip('0').rstrip('.')
+                    formatted_lng = _format_coord(lng, 8)
+                    formatted_lat = _format_coord(lat, 8)
                     content += f"📍 {formatted_lng}, {formatted_lat}\n"
 
                 # Description

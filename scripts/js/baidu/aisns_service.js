@@ -39,6 +39,14 @@ function initModelConfigs() {
             modelUrl: 'aisnsbuilding.glb',
             scale: 0.02,
             rotation: {x: Math.PI / 2}
+        },
+        {
+            id: 'towerModel',
+            layerId: 'mainLayer',
+            position: [116.01984538680082, 40.35719706363071],
+            modelUrl: 'chinese_tower.glb',
+            scale: 24,
+            rotation: {x: Math.PI / 2}
         }
     ];
 }

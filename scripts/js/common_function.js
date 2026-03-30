@@ -90,7 +90,150 @@ const alertMessage = document.getElementById('alertMessage');
 
 let timeoutId; // Store the timeout ID
 
+let __alertProgressContainer = null;
+let __alertProgressBar = null;
+let __alertProgressText = null;
+let __alertProgressActive = false;
+let __alertProgressPrevMessage = '';
+let __alertProgressPrevShown = false;
+let __alertProgressPrevManualClose = false;
+let __alertProgressLastMessage = '';
+let __alertProgressClearing = false;
+
+let __lastAlertManualClose = false;
+let __lastAlertMessage = '';
+
+function __ensureAlertProgressElements() {
+    try {
+        if (!alertBox) return false;
+        if (__alertProgressContainer && __alertProgressBar && __alertProgressText) return true;
+
+        __alertProgressContainer = document.getElementById('alertProgressContainer');
+        __alertProgressBar = document.getElementById('alertProgressBar');
+        __alertProgressText = document.getElementById('alertProgressText');
+
+        if (__alertProgressContainer && __alertProgressBar && __alertProgressText) return true;
+
+        __alertProgressContainer = document.createElement('div');
+        __alertProgressContainer.id = 'alertProgressContainer';
+        __alertProgressContainer.style.marginTop = '10px';
+        __alertProgressContainer.style.width = '100%';
+        __alertProgressContainer.style.display = 'none';
+
+        const track = document.createElement('div');
+        track.style.width = '100%';
+        track.style.height = '8px';
+        track.style.background = 'rgba(0,0,0,0.12)';
+        track.style.borderRadius = '6px';
+        track.style.overflow = 'hidden';
+
+        __alertProgressBar = document.createElement('div');
+        __alertProgressBar.id = 'alertProgressBar';
+        __alertProgressBar.style.height = '100%';
+        __alertProgressBar.style.width = '0%';
+        __alertProgressBar.style.background = '#409EFF';
+        __alertProgressBar.style.transition = 'width 120ms linear';
+        track.appendChild(__alertProgressBar);
+
+        __alertProgressText = document.createElement('div');
+        __alertProgressText.id = 'alertProgressText';
+        __alertProgressText.style.marginTop = '6px';
+        __alertProgressText.style.fontSize = '12px';
+        __alertProgressText.style.color = '#333';
+        __alertProgressText.style.textAlign = 'center';
+        __alertProgressText.style.whiteSpace = 'nowrap';
+
+        __alertProgressContainer.appendChild(track);
+        __alertProgressContainer.appendChild(__alertProgressText);
+
+        alertBox.appendChild(__alertProgressContainer);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function setAlertProgress(message, current, total, timeoutMs, extraText) {
+    try {
+        const ok = __ensureAlertProgressElements();
+        if (!ok) return;
+        const cur = Math.max(0, Number(current) || 0);
+        const tot = Math.max(1, Number(total) || 1);
+        const pct = Math.min(100, Math.max(0, (cur / tot) * 100));
+
+        if (!__alertProgressActive) {
+            try {
+                __alertProgressPrevMessage = alertMessage ? String(alertMessage.textContent || '') : '';
+                __alertProgressPrevShown = !!(alertBox && alertBox.classList && alertBox.classList.contains('show'));
+                __alertProgressPrevManualClose = !!__lastAlertManualClose;
+            } catch (e) {
+                __alertProgressPrevMessage = '';
+                __alertProgressPrevShown = false;
+                __alertProgressPrevManualClose = false;
+            }
+            __alertProgressActive = true;
+        }
+
+        __alertProgressLastMessage = String(message || '');
+        showAlert(__alertProgressLastMessage, true);
+        __alertProgressContainer.style.display = 'block';
+        __alertProgressBar.style.width = pct + '%';
+        const t = (timeoutMs !== undefined && timeoutMs !== null) ? `, timeout=${timeoutMs}ms` : '';
+        const extra = extraText ? ` ${String(extraText)}` : '';
+        __alertProgressText.textContent = `${cur}/${tot}${t}${extra}`;
+    } catch (e) {
+    }
+}
+
+function clearAlertProgress() {
+    try {
+        if (__alertProgressClearing) return;
+        __alertProgressClearing = true;
+
+        if (!__alertProgressContainer) {
+            __alertProgressContainer = document.getElementById('alertProgressContainer');
+        }
+        if (__alertProgressContainer) {
+            __alertProgressContainer.style.display = 'none';
+        }
+        if (__alertProgressBar) {
+            __alertProgressBar.style.width = '0%';
+        }
+        if (__alertProgressText) {
+            __alertProgressText.textContent = '';
+        }
+
+        if (__alertProgressActive) {
+            const shouldHide = (!__alertProgressPrevShown) || (!__alertProgressPrevManualClose);
+            const prevMsg = __alertProgressPrevMessage;
+            __alertProgressActive = false;
+            __alertProgressPrevMessage = '';
+            __alertProgressPrevShown = false;
+            __alertProgressPrevManualClose = false;
+            __alertProgressLastMessage = '';
+
+            try {
+                if (shouldHide) {
+                    if (typeof hideAlert === 'function') {
+                        hideAlert();
+                    }
+                } else {
+                    if (alertMessage) {
+                        alertMessage.textContent = prevMsg;
+                    }
+                }
+            } catch (e) {
+            }
+        }
+    } catch (e) {
+    } finally {
+        __alertProgressClearing = false;
+    }
+}
+
 function showAlert(message, manualClose = false, timeout = 1500) {
+    __lastAlertManualClose = !!manualClose;
+    __lastAlertMessage = String(message || '');
     alertMessage.textContent = message; // Set the message content
     alertBox.classList.add('show');
 
@@ -106,6 +249,10 @@ function showAlert(message, manualClose = false, timeout = 1500) {
 
 function hideAlert() {
     alertBox.classList.remove('show');
+    try {
+        clearAlertProgress();
+    } catch (e) {
+    }
 }
 
 function refresh() {

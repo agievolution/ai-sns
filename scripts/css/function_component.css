@@ -49,6 +49,105 @@
     overflow: hidden;
     min-width: 70px;
 }
+#position_type_custom_container {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+#position_type_custom_container > #position_type {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#position_type_custom {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 28px 0 10px;
+    color: #333;
+    box-sizing: border-box;
+    outline: none;
+}
+
+#position_type_custom_container #position_type_custom {
+    background: #fff !important;
+    color: #333 !important;
+    border: 1px solid #ccc !important;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+#position_type_custom_container #position_type_custom:hover,
+#position_type_custom_container #position_type_custom:active,
+#position_type_custom_container #position_type_custom:focus {
+    background: #fff !important;
+    color: #333 !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+#position_type_custom::after {
+    content: '';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #666;
+}
+
+.position-type-dropdown-portal {
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+    z-index: 99999;
+    overflow: hidden;
+}
+
+.position-type-dropdown-portal button {
+    width: 100%;
+    background: #fff !important;
+    border: none;
+    padding: 8px 10px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333 !important;
+}
+
+.position-type-dropdown-portal button:hover,
+.position-type-dropdown-portal button[aria-selected="true"] {
+    background: #f2f2f2 !important;
+}
+
+#setroute {
+    bottom: calc(6.5rem + 60px);
+    width: max-content;
+}
+
+#setroute > div {
+    flex-wrap: nowrap !important;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
 
 /* 设置家位置 */
 #sethomeposition {

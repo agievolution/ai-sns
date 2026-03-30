@@ -207,6 +207,13 @@ class MapService:
             except Exception:
                 parsed = {}
 
+            # Handle double-encoded JSON strings, e.g. "\"{\\\"lng\\\":116,\\\"lat\\\":39}\""
+            if isinstance(parsed, str):
+                try:
+                    parsed = json.loads(parsed)
+                except Exception:
+                    parsed = {}
+
         if isinstance(parsed, list) and len(parsed) >= 2:
             try:
                 return {"lng": float(parsed[0]), "lat": float(parsed[1])}
@@ -319,6 +326,22 @@ class MapService:
         if cfg:
             normalized_current_position = MapService._ensure_current_position(cfg)
             route_distance_m = MapService._coerce_route_distance_m(cfg)
+
+            home_position: Dict[str, Any] = {}
+            try:
+                raw_home = getattr(cfg, 'home_position', None)
+                home_position = json.loads(raw_home) if raw_home else {}
+                if isinstance(home_position, str):
+                    try:
+                        home_position = json.loads(home_position)
+                    except Exception:
+                        home_position = {}
+                if not isinstance(home_position, dict):
+                    home_position = {}
+            except Exception:
+                home_position = {}
+
+            route_current_position = MapService._normalize_position(getattr(cfg, 'route_current_position', None))
             return {
                 "success": True,
                 "data": {
@@ -327,11 +350,11 @@ class MapService:
                     "map_api_key": getattr(cfg, 'map_api_key', ''),
                     "map_id": getattr(cfg, 'map_id', ''),
                     "current_position": normalized_current_position,
-                    "home_position": json.loads(getattr(cfg, 'home_position', '{}')) if getattr(cfg, 'home_position', None) else {},
+                    "home_position": home_position,
                     "route_status": getattr(cfg, 'route_status', 'stopped'),
                     "route_start": getattr(cfg, 'route_start', ''),
                     "route_end": getattr(cfg, 'route_end', ''),
-                    "route_current_position": json.loads(getattr(cfg, 'route_current_position', '{}')) if getattr(cfg, 'route_current_position', None) else {},
+                    "route_current_position": route_current_position,
                     "route_distance": route_distance_m,
                     "route_points": getattr(cfg, 'route_points', '') or "",
                     "avatar3d": getattr(cfg, 'avatar3d', 'default.glb'),
@@ -405,7 +428,7 @@ class MapService:
                         return {"success": False, "message": "Invalid current_position: lng/lat out of range", "data": {}}
                 except Exception:
                     return {"success": False, "message": "Invalid current_position", "data": {}}
-            updates["current_position"] = json.dumps(payload.get("current_position"), ensure_ascii=False) if payload.get("current_position") else "{}"
+            updates["current_position"] = json.dumps(pos if pos else {}, ensure_ascii=False)
         if "home_position" in payload:
             updates["home_position"] = json.dumps(payload.get("home_position"), ensure_ascii=False) if payload.get("home_position") else "{}"
 
@@ -416,7 +439,8 @@ class MapService:
         if "route_end" in payload:
             updates["route_end"] = payload.get("route_end")
         if "route_current_position" in payload:
-            updates["route_current_position"] = json.dumps(payload.get("route_current_position"), ensure_ascii=False) if payload.get("route_current_position") else "{}"
+            route_pos = MapService._normalize_position(payload.get("route_current_position"))
+            updates["route_current_position"] = json.dumps(route_pos if route_pos else {}, ensure_ascii=False)
         if "route" in payload:
             updates["route"] = payload.get("route")
         elif "route_distance" in payload:

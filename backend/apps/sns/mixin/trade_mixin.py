@@ -294,7 +294,7 @@ class TradeMixin:
             place_list_str = place_list_str + ("\n" if not place_list_str.endswith("\n") else "")
 
         result = f"""
-        💳You paid {fee} and received the following information:
+        You paid {fee} and received the following information:
         ### People List:
         {people_list_str}
         ### Place List:
@@ -353,7 +353,7 @@ class TradeMixin:
                 money_after=float(self.aichatcfg_record.money or 0),
             )
 
-        result = f"💳You paid {fee} for food. ⚡Your energy is now {self.aichatcfg_record.energy_point}%"
+        result = f"You paid {fee} for food. Your energy is now {self.aichatcfg_record.energy_point}%"
         return result
 
     def set_taxi_order(self, current_position, target_position, target_place):
@@ -387,7 +387,7 @@ class TradeMixin:
         command = ("move_to_a_place", str(new_pos[0]), str(new_pos[1]))
         self.send_msg_to_map(command)
 
-        result = f"💳You paid {fee:.2f} for the taxi. You have arrived at {target_place}, coordinates: {target_position}"
+        result = f"You paid {fee:.2f} for the taxi. You have arrived at {target_place}, coordinates: {target_position}"
         return result
 
     def call_a_doctor(self):
@@ -432,7 +432,7 @@ class TradeMixin:
                 money_after=float(self.aichatcfg_record.money or 0),
             )
 
-        result = f"💳You paid {fee} for remote medical service. ❤️Your life is now {self.aichatcfg_record.life_point}%"
+        result = f"You paid {fee} for remote medical service. Your life is now {self.aichatcfg_record.life_point}%"
         return result
 
     def sell_to_a_people(self, action_str, instrunction):
@@ -823,10 +823,11 @@ class TradeMixin:
         message = result["next_message"]
 
         goods_name = result.get("goods_name", "")
-        buy_score = result.get("buy_score", False)
+        buyer = result.get("buyer", "")
+        buy_score = result.get("buy_score", 0)
         price = result.get("price", 0)
 
-        if buy_score >= 80 and price >= 0:
+        if buy_score >= 80 and price >= 0 and  buyer.lower()=="me":
             self.send_pay(price, good_name=goods_name)
             # self.end_active_conversation(
             #     reason="pay",

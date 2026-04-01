@@ -11,6 +11,7 @@ body.theme-light {
     --color-primary-dark: #4338CA;
     --color-primary-hover: #5B52E8;
     --color-primary-bg: rgba(79, 70, 229, 0.08);
+    --color-primary-disabled: #A5A1DB;
 
     /* Secondary colors */
     --color-secondary: #7C3AED;
@@ -82,6 +83,7 @@ body.theme-dark {
     --color-primary-dark: #005A9E;
     --color-primary-hover: #1A85D4;
     --color-primary-bg: rgba(0, 120, 212, 0.15);
+    --color-primary-disabled: #5A7A94;
 
     /* Secondary colors */
     --color-secondary: #9CDCFE;
@@ -609,6 +611,11 @@ body.theme-dark .sns-status-panel {
     border-left-color: var(--border-color);
 }
 
+body.theme-dark .agent-settings-panel {
+    background: var(--bg-sidebar);
+    border-left-color: var(--border-color);
+}
+
 body.theme-dark .status-section {
     border-bottom-color: var(--border-color);
 }
@@ -918,6 +925,10 @@ body.theme-dark .tree-children {
     color: var(--text-secondary);
 }
 
+body.theme-dark .km-tree-children {
+    color: var(--text-secondary);
+}
+
 body.theme-dark .tree-item.active {
     background: var(--color-primary);
     color: white;
@@ -940,6 +951,9 @@ body.theme-dark .agent-list .agent-item:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
 }
+
+/* Message context menu dark theme - uses CSS variables from components.css */
+/* No additional overrides needed as components.css uses CSS variables */
 
 body.theme-dark .message.assistant .message-content {
     background: var(--bg-tertiary);

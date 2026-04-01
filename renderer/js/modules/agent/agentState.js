@@ -13,10 +13,8 @@ const agentState = {
     // Per-agent state { agent_id: { chatHistory, conversationId, modelConfig, roleConfig, ... } }
     agentStates: {},
 
-    // Current request ID (for streaming responses)
+    // Global fields kept for backward compatibility. Do not use these for multi-agent logic.
     currentRequestId: null,
-
-    // Current streaming content
     currentStreamingContent: '',
 
     // Model list
@@ -39,6 +37,7 @@ const agentState = {
                 currentRoleConfig: null,
                 streamingContent: '',
                 requestId: null,
+                cancelledRequestId: null,
                 attachments: []
             };
         }
@@ -53,6 +52,7 @@ const agentState = {
                 currentRoleConfig: null,
                 streamingContent: '',
                 requestId: null,
+                cancelledRequestId: null,
                 attachments: []
             };
         }
@@ -104,6 +104,13 @@ const agentState = {
      */
     addMessage(role, content) {
         const state = this.getCurrentAgentState();
+        if (state) {
+            state.chatHistory.push({ role, content });
+        }
+    },
+
+    addMessageForAgent(agentId, role, content) {
+        const state = this.ensureAgentState(agentId);
         if (state) {
             state.chatHistory.push({ role, content });
         }
@@ -224,28 +231,98 @@ const agentState = {
      * Set request ID (for streaming responses)
      */
     setRequestId(id) {
-        this.currentRequestId = id;
         const state = this.getCurrentAgentState();
         if (state) {
             state.requestId = id;
         }
+        this.currentRequestId = id;
+    },
+
+    setRequestIdForAgent(agentId, id) {
+        const state = this.ensureAgentState(agentId);
+        if (state) {
+            state.requestId = id;
+        }
+        if (String(agentId) === String(this.currentAgentId || '')) {
+            this.currentRequestId = id;
+        }
+    },
+
+    /**
+     * Set cancelled flag for an agent
+     */
+    setCancelledForAgent(agentId, cancelled) {
+        const state = this.ensureAgentState(agentId);
+        if (state) {
+            state.cancelled = cancelled;
+        }
+    },
+
+    /**
+     * Check if an agent's request is cancelled
+     */
+    isCancelledForAgent(agentId) {
+        const state = this.ensureAgentState(agentId);
+        return state ? !!state.cancelled : false;
+    },
+
+    setCancelledRequestIdForAgent(agentId, requestId) {
+        const state = this.ensureAgentState(agentId);
+        if (state) {
+            state.cancelledRequestId = requestId ? String(requestId) : null;
+        }
+    },
+
+    getCancelledRequestIdForAgent(agentId) {
+        const state = this.ensureAgentState(agentId);
+        return state ? (state.cancelledRequestId || null) : null;
+    },
+
+    clearCancelledRequestIdForAgent(agentId) {
+        const state = this.ensureAgentState(agentId);
+        if (state) {
+            state.cancelledRequestId = null;
+        }
+    },
+
+    isCancelledRequestForAgent(agentId, requestId) {
+        if (!requestId) return false;
+        const state = this.ensureAgentState(agentId);
+        return state ? (String(state.cancelledRequestId || '') === String(requestId)) : false;
     },
 
     /**
      * Get request ID
      */
     getRequestId() {
+        const state = this.getCurrentAgentState();
+        if (state && state.requestId) return state.requestId;
         return this.currentRequestId;
+    },
+
+    getRequestIdForAgent(agentId) {
+        const state = this.ensureAgentState(agentId);
+        return state ? (state.requestId || null) : null;
     },
 
     /**
      * Clear request ID
      */
     clearRequestId() {
-        this.currentRequestId = null;
         const state = this.getCurrentAgentState();
         if (state) {
             state.requestId = null;
+        }
+        this.currentRequestId = null;
+    },
+
+    clearRequestIdForAgent(agentId) {
+        const state = this.ensureAgentState(agentId);
+        if (state) {
+            state.requestId = null;
+        }
+        if (String(agentId) === String(this.currentAgentId || '')) {
+            this.currentRequestId = null;
         }
     },
 
@@ -253,10 +330,20 @@ const agentState = {
      * Append streaming content
      */
     appendStreamingContent(content) {
-        this.currentStreamingContent += content;
         const state = this.getCurrentAgentState();
         if (state) {
             state.streamingContent += content;
+        }
+        this.currentStreamingContent = state ? state.streamingContent : (this.currentStreamingContent + content);
+    },
+
+    appendStreamingContentForAgent(agentId, content) {
+        const state = this.ensureAgentState(agentId);
+        if (state) {
+            state.streamingContent += content;
+        }
+        if (String(agentId) === String(this.currentAgentId || '')) {
+            this.currentStreamingContent = state ? state.streamingContent : this.currentStreamingContent;
         }
     },
 
@@ -264,17 +351,34 @@ const agentState = {
      * Get streaming content
      */
     getStreamingContent() {
+        const state = this.getCurrentAgentState();
+        if (state) return state.streamingContent || '';
         return this.currentStreamingContent;
+    },
+
+    getStreamingContentForAgent(agentId) {
+        const state = this.ensureAgentState(agentId);
+        return state ? (state.streamingContent || '') : '';
     },
 
     /**
      * Clear streaming content
      */
     clearStreamingContent() {
-        this.currentStreamingContent = '';
         const state = this.getCurrentAgentState();
         if (state) {
             state.streamingContent = '';
+        }
+        this.currentStreamingContent = state ? state.streamingContent : '';
+    },
+
+    clearStreamingContentForAgent(agentId) {
+        const state = this.ensureAgentState(agentId);
+        if (state) {
+            state.streamingContent = '';
+        }
+        if (String(agentId) === String(this.currentAgentId || '')) {
+            this.currentStreamingContent = state ? state.streamingContent : '';
         }
     },
 

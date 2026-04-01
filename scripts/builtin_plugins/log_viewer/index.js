@@ -11,7 +11,24 @@ const LogViewerPlugin = {
             container.style.height = '100%';
         }
         container.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:12px; padding:12px; height:100%; min-height:0; box-sizing:border-box;">
+            <style>
+                .lv-log-viewer {
+                    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+                }
+                .lv-log-viewer #lv_content {
+                    font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+                    font-size: 12px;
+                    line-height: 1.55;
+                    tab-size: 2;
+                }
+                .lv-log-viewer .lv-json-key { color: #0f766e; }
+                .lv-log-viewer .lv-json-string { color: #1d4ed8; }
+                .lv-log-viewer .lv-json-number { color: #b45309; }
+                .lv-log-viewer .lv-json-boolean { color: #7c3aed; }
+                .lv-log-viewer .lv-json-null { color: #6b7280; }
+                .lv-log-viewer .lv-index { color: #6b7280; font-weight: 600; }
+            </style>
+            <div class="lv-log-viewer" style="display:flex; flex-direction:column; gap:12px; padding:12px; height:100%; min-height:0; box-sizing:border-box;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                     <div style="font-weight:700; font-size:20px;">LLM Log</div>
                     <div style="display:flex; gap:8px;">
@@ -38,13 +55,22 @@ const LogViewerPlugin = {
                     <div class="form-group" style="margin:0; width:100%; display:flex; flex-direction:column; gap:12px; flex:1 1 auto; min-height:0;">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
                             <label style="margin:0;">Content</label>
-                            <button type="button" id="lv_copy" class="btn btn-secondary" title="Copy" aria-label="Copy" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center;">
-                                <span style="display:inline-flex; width:16px; height:16px;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-        </svg>
-                                </span>
-                            </button>
+                            <div style="display:flex; gap:8px;">
+                                <button type="button" id="lv_format" class="btn btn-secondary" title="Format JSON" aria-label="Format JSON" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center;">
+                                    <span style="display:inline-flex; width:16px; height:16px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M7 5h2v2H7v10h2v2H7c-1.1 0-2-.9-2-2V7c0-1.1.9-2 2-2zm10 0h-2v2h2v10h-2v2h2c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zM10 9h4v2h-4V9zm0 4h4v2h-4v-2z"/>
+                                        </svg>
+                                    </span>
+                                </button>
+                                <button type="button" id="lv_copy" class="btn btn-secondary" title="Copy" aria-label="Copy" style="padding:6px 8px; display:inline-flex; align-items:center; justify-content:center;">
+                                    <span style="display:inline-flex; width:16px; height:16px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                                        </svg>
+                                    </span>
+                                </button>
+                            </div>
                         </div>
                         <div style="font-size:12px; color:var(--text-secondary,#666);" id="lv_status"></div>
                         <pre id="lv_content" style="white-space:pre-wrap; word-break:break-word; background: var(--bg-secondary,#f5f5f5); padding:10px; border-radius:6px; overflow:auto; user-select:text; width:100%; box-sizing:border-box; flex:1 1 auto; min-height:0;"></pre>
@@ -59,21 +85,55 @@ const LogViewerPlugin = {
         const statusEl = container.querySelector('#lv_status');
         const reloadBtn = container.querySelector('#lv_reload');
         const copyBtn = container.querySelector('#lv_copy');
+        const formatBtn = container.querySelector('#lv_format');
 
         const EMPTY_PLACEHOLDER = 'No log content loaded yet.';
-        let lastRawText = '';
+        let lastCopyText = '';
+        let lastFileRawContent = '';
+        let viewMode = 'raw';
+        let isFormatting = false;
 
         const setStatus = (t) => {
             if (statusEl) statusEl.textContent = t ? String(t) : '';
         };
 
-        const setContent = (t) => {
+        const setContentPlain = (t) => {
             const v = (t === undefined || t === null) ? '' : String(t);
-            lastRawText = v;
+            lastCopyText = v;
             if (!contentEl) return;
             const show = v ? v : EMPTY_PLACEHOLDER;
             contentEl.textContent = show;
+            contentEl.style.whiteSpace = 'pre-wrap';
+            contentEl.style.wordBreak = 'break-word';
             contentEl.style.color = v ? '' : 'var(--text-secondary,#666)';
+        };
+
+        const setContentHtml = (html, copyText, opts) => {
+            const v = (copyText === undefined || copyText === null) ? '' : String(copyText);
+            lastCopyText = v;
+            if (!contentEl) return;
+            const has = !!String(v || '').trim();
+            contentEl.innerHTML = has ? String(html || '') : escapeHtml(EMPTY_PLACEHOLDER);
+            const wrap = !!(opts && opts.wrap);
+            contentEl.style.whiteSpace = wrap ? 'pre-wrap' : 'pre';
+            contentEl.style.wordBreak = wrap ? 'break-word' : 'normal';
+            contentEl.style.color = has ? '' : 'var(--text-secondary,#666)';
+        };
+
+        const getNextMode = (mode) => {
+            if (mode === 'raw') return 'pretty';
+            if (mode === 'pretty') return 'highlight';
+            return 'raw';
+        };
+
+        const updateFormatButtonTooltip = () => {
+            if (!formatBtn) return;
+            const next = getNextMode(viewMode);
+            const label = next === 'pretty'
+                ? 'Pretty print + highlight'
+                : (next === 'highlight' ? 'Highlight only' : 'Show raw');
+            formatBtn.title = label;
+            formatBtn.setAttribute('aria-label', label);
         };
 
         const copyTextToClipboard = async (text) => {
@@ -96,6 +156,39 @@ const LogViewerPlugin = {
             return false;
         };
 
+        const escapeHtml = (s) => {
+            const v = (s === undefined || s === null) ? '' : String(s);
+            return v
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+
+        const escapeHtmlForJsonHighlight = (s) => {
+            const v = (s === undefined || s === null) ? '' : String(s);
+            return v
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        };
+
+        const syntaxHighlightJson = (jsonText) => {
+            const escaped = escapeHtmlForJsonHighlight(jsonText);
+            return escaped.replace(
+                /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\\"])*\"\s*:|\"(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\\"])*\"|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+                (m) => {
+                    const t = String(m);
+                    if (t === 'true' || t === 'false') return `<span class="lv-json-boolean">${t}</span>`;
+                    if (t === 'null') return `<span class="lv-json-null">${t}</span>`;
+                    if (/^-?\d/.test(t)) return `<span class="lv-json-number">${t}</span>`;
+                    if (/^\".*\"\s*:$/.test(t)) return `<span class="lv-json-key">${t}</span>`;
+                    return `<span class="lv-json-string">${t}</span>`;
+                }
+            );
+        };
+
         const _formatNdjson = (raw) => {
             const text = (raw === undefined || raw === null) ? '' : String(raw);
             if (!text.trim()) return '';
@@ -109,6 +202,122 @@ const LogViewerPlugin = {
                 idx += 1;
             }
             return out.join('\n\n\n');
+        };
+
+        const buildPrettyHtmlFromRaw = (raw) => {
+            const text = (raw === undefined || raw === null) ? '' : String(raw);
+            const lines = text.split(/\r?\n/);
+            const blocks = [];
+            const copyBlocks = [];
+            let idx = 1;
+
+            for (const line of lines) {
+                const rawLine = (line === undefined || line === null) ? '' : String(line);
+                if (!rawLine.trim()) continue;
+
+                let parsed = null;
+                try {
+                    parsed = JSON.parse(rawLine);
+                } catch (e) {
+                    parsed = null;
+                }
+
+                const headerHtml = `<span class="lv-index">【${idx}】</span>\n`;
+                const headerCopy = `【${idx}】\n`;
+
+                if (parsed !== null) {
+                    const pretty = JSON.stringify(parsed, null, 2);
+                    blocks.push(headerHtml + syntaxHighlightJson(pretty));
+                    copyBlocks.push(headerCopy + pretty);
+                } else {
+                    blocks.push(headerHtml + escapeHtml(rawLine));
+                    copyBlocks.push(headerCopy + rawLine);
+                }
+
+                idx += 1;
+            }
+
+            return {
+                html: blocks.join('\n\n\n'),
+                copyText: copyBlocks.join('\n\n\n')
+            };
+        };
+
+        const buildHighlightOnlyHtmlFromRaw = (raw) => {
+            const text = (raw === undefined || raw === null) ? '' : String(raw);
+            const lines = text.split(/\r?\n/);
+            const blocks = [];
+            const copyBlocks = [];
+            let idx = 1;
+
+            for (const line of lines) {
+                const rawLine = (line === undefined || line === null) ? '' : String(line);
+                if (!rawLine.trim()) continue;
+
+                let parsed = null;
+                try {
+                    parsed = JSON.parse(rawLine);
+                } catch (e) {
+                    parsed = null;
+                }
+
+                const headerHtml = `<span class="lv-index">【${idx}】</span>\n`;
+                const headerCopy = `【${idx}】\n`;
+
+                if (parsed !== null) {
+                    blocks.push(headerHtml + syntaxHighlightJson(rawLine));
+                    copyBlocks.push(headerCopy + rawLine);
+                } else {
+                    blocks.push(headerHtml + escapeHtml(rawLine));
+                    copyBlocks.push(headerCopy + rawLine);
+                }
+
+                idx += 1;
+            }
+
+            return {
+                html: blocks.join('\n\n\n'),
+                copyText: copyBlocks.join('\n\n\n')
+            };
+        };
+
+        const applyPrettyMode = () => {
+            if (!contentEl) return;
+            const raw = String(lastFileRawContent || '').trim();
+            if (!raw) {
+                setStatus('No content to format');
+                return;
+            }
+
+            const { html, copyText } = buildPrettyHtmlFromRaw(lastFileRawContent);
+            if (!String(copyText || '').trim()) {
+                setStatus('No content to format');
+                return;
+            }
+            setContentHtml(html, copyText, { wrap: false });
+            viewMode = 'pretty';
+            updateFormatButtonTooltip();
+        };
+
+        const applyHighlightOnlyMode = () => {
+            const raw = String(lastFileRawContent || '').trim();
+            if (!raw) {
+                setContentPlain('');
+                viewMode = 'highlight';
+                updateFormatButtonTooltip();
+                return;
+            }
+            const { html, copyText } = buildHighlightOnlyHtmlFromRaw(lastFileRawContent);
+            setContentHtml(html, copyText, { wrap: true });
+            viewMode = 'highlight';
+            updateFormatButtonTooltip();
+        };
+
+        const applyRawMode = () => {
+            const formatted = _formatNdjson(lastFileRawContent);
+            setContentPlain(formatted);
+            viewMode = 'raw';
+            updateFormatButtonTooltip();
         };
 
         const safeJson = async (path) => {
@@ -226,7 +435,10 @@ const LogViewerPlugin = {
             if (!date || !name) return;
 
             setStatus('Loading file...');
-            setContent('');
+            lastFileRawContent = '';
+            viewMode = 'raw';
+            updateFormatButtonTooltip();
+            setContentPlain('');
 
             const res = await safeJson(`/api/system/logs/file?date=${encodeURIComponent(date)}&name=${encodeURIComponent(name)}`);
             if (!res || res.success === false) {
@@ -235,15 +447,18 @@ const LogViewerPlugin = {
             }
 
             const content = res.data && typeof res.data === 'object' ? (res.data.content || '') : '';
-            const formatted = _formatNdjson(content);
-            setContent(formatted);
+            lastFileRawContent = (content === undefined || content === null) ? '' : String(content);
+            applyRawMode();
             setStatus('');
         };
 
         if (dateSel) {
             dateSel.addEventListener('change', async () => {
                 const date = String(dateSel.value || '').trim();
-                setContent('');
+                lastFileRawContent = '';
+                viewMode = 'raw';
+                updateFormatButtonTooltip();
+                setContentPlain('');
                 await loadFiles(date);
                 await loadFileContent();
             });
@@ -263,14 +478,17 @@ const LogViewerPlugin = {
                 if (hasDate && hasFile) {
                     await loadFileContent();
                 } else {
-                    setContent('');
+                    lastFileRawContent = '';
+                    viewMode = 'raw';
+                    updateFormatButtonTooltip();
+                    setContentPlain('');
                 }
             });
         }
 
         if (copyBtn) {
             copyBtn.addEventListener('click', async () => {
-                const ok = await copyTextToClipboard(lastRawText);
+                const ok = await copyTextToClipboard(lastCopyText);
                 if (!ok) {
                     setStatus('Copy failed');
                     return;
@@ -284,7 +502,35 @@ const LogViewerPlugin = {
             });
         }
 
-        setContent('');
+        if (formatBtn) {
+            formatBtn.addEventListener('click', async () => {
+                if (isFormatting) return;
+                isFormatting = true;
+                formatBtn.disabled = true;
+                setStatus('Formatting...');
+
+                try {
+                    await new Promise(r => setTimeout(r, 0));
+                    const next = getNextMode(viewMode);
+                    if (next === 'pretty') {
+                        applyPrettyMode();
+                    } else if (next === 'highlight') {
+                        applyHighlightOnlyMode();
+                    } else {
+                        applyRawMode();
+                    }
+                } finally {
+                    if (statusEl && statusEl.textContent === 'Formatting...') {
+                        statusEl.textContent = '';
+                    }
+                    isFormatting = false;
+                    formatBtn.disabled = false;
+                }
+            });
+        }
+
+        setContentPlain('');
+        updateFormatButtonTooltip();
         await loadDates();
         if (dateSel && String(dateSel.value || '').trim()) {
             await loadFiles(String(dateSel.value || '').trim());

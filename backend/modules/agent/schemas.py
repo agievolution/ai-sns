@@ -136,6 +136,8 @@ class AgentModelParamsUpdate(BaseModel):
     frequency_penalty: Optional[float] = None
     presence_penalty: Optional[float] = None
     stream: Optional[bool] = None
+    thinking_effort_enabled: Optional[bool] = None
+    thinking_effort_level: Optional[str] = None
     custom_params: Optional[Dict[str, Any]] = None
 
 

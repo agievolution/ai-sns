@@ -153,6 +153,18 @@ class AgentInstance:
         url = self._get_openai_compatible_chat_completions_url()
         api_key = str(self.llm_config.get('api_key') or '')
 
+        try:
+            extra_body = request_json.get('extra_body')
+            if isinstance(extra_body, dict) and extra_body:
+                merged = dict(request_json)
+                merged.pop('extra_body', None)
+                for k, v in extra_body.items():
+                    if k not in merged:
+                        merged[k] = v
+                request_json = merged
+        except Exception:
+            pass
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
                 'POST',
@@ -247,59 +259,145 @@ class AgentInstance:
         tools_anthropic = ClaudeClient.openai_tools_to_anthropic(tools_openai) if tools_openai else []
         system_text, anthropic_messages = ClaudeClient.openai_messages_to_anthropic(messages)
 
-        max_rounds = 5
-        reply = ""
-        for _round in range(max_rounds):
-            result = await self._claude_client.create(
-                model=self.get_model_name(),
-                system=system_text,
-                messages=anthropic_messages,
-                tools=tools_anthropic if effective_use_tools and tools_anthropic else None,
-                max_tokens=self.get_max_tokens(),
-                temperature=self.get_temperature(),
-            )
+        thinking_cfg: Optional[Dict[str, Any]] = None
+        output_cfg: Optional[Dict[str, Any]] = None
+        if self.get_thinking_effort_enabled():
+            mapped = self._map_effort_level(self.get_thinking_effort_level(), 'claude', self.get_model_name())
+            if mapped:
+                if self._is_claude_effort_model(self.get_model_name()):
+                    output_cfg = {'effort': mapped}
+                if self._is_claude_adaptive_model(self.get_model_name()):
+                    thinking_cfg = {'type': 'adaptive'}
 
-            reply = (result.get('text') or "")
-            if show_token_usage and result.get('usage'):
-                self._set_last_usage(conversation_id, result.get('usage'))
-
-            tool_uses = result.get('tool_uses') or []
-            if not (effective_use_tools and tool_uses):
-                break
-
-            assistant_blocks: List[Dict[str, Any]] = []
-            if reply:
-                assistant_blocks.append({'type': 'text', 'text': reply})
-            for tu in tool_uses:
+        try:
+            max_rounds = 5
+            reply = ""
+            for _round in range(max_rounds):
+                request_id = new_request_id()
+                request_json = {
+                    "provider": "claude",
+                    "round": _round,
+                    "model": self.get_model_name(),
+                    "system": system_text,
+                    "messages": anthropic_messages,
+                    "tools": tools_anthropic if effective_use_tools and tools_anthropic else None,
+                    "tool_choice": tool_choice if effective_use_tools else None,
+                    "max_tokens": self.get_max_tokens(),
+                    "temperature": self.get_temperature(),
+                    "thinking": thinking_cfg,
+                    "output_config": output_cfg,
+                }
                 try:
-                    assistant_blocks.append({
-                        'type': 'tool_use',
-                        'id': tu.get('id'),
-                        'name': tu.get('name'),
-                        'input': tu.get('input') or {},
-                    })
+                    log_llm_request(
+                        request_id=request_id,
+                        source="backend.modules.agent.agent_instance.AgentInstance._claude_chat",
+                        request_json=request_json,
+                    )
                 except Exception:
+                    pass
+
+                try:
+                    result = await self._claude_client.create(
+                        model=self.get_model_name(),
+                        system=system_text,
+                        messages=anthropic_messages,
+                        tools=tools_anthropic if effective_use_tools and tools_anthropic else None,
+                        tool_choice=tool_choice,
+                        max_tokens=self.get_max_tokens(),
+                        temperature=self.get_temperature(),
+                        thinking=thinking_cfg,
+                        output_config=output_cfg,
+                    )
+                except Exception as e:
+                    try:
+                        log_llm_error(
+                            request_id=request_id,
+                            source="backend.modules.agent.agent_instance.AgentInstance._claude_chat",
+                            error=e,
+                        )
+                    except Exception:
+                        pass
+                    raise
+
+                reply = (result.get('text') or "")
+                if show_token_usage and result.get('usage'):
+                    self._set_last_usage(conversation_id, result.get('usage'))
+
+                try:
+                    raw_obj = result.get('raw')
+                    if hasattr(raw_obj, 'model_dump'):
+                        raw_dump = raw_obj.model_dump()
+                    else:
+                        raw_dump = getattr(raw_obj, '__dict__', str(raw_obj))
+                    log_llm_response(
+                        request_id=request_id,
+                        source="backend.modules.agent.agent_instance.AgentInstance._claude_chat",
+                        response_json={
+                            "text": reply,
+                            "tool_uses": result.get('tool_uses') or [],
+                            "usage": result.get('usage'),
+                            "raw": raw_dump,
+                        },
+                    )
+                except Exception:
+                    pass
+
+                tool_uses = result.get('tool_uses') or []
+                raw_result = result.get('raw')
+                raw_stop_reason = getattr(raw_result, 'stop_reason', None)
+                if raw_stop_reason is None and isinstance(raw_result, dict):
+                    raw_stop_reason = raw_result.get('stop_reason')
+                if effective_use_tools and not tool_uses and raw_stop_reason == 'tool_use' and _round < (max_rounds - 1):
+                    logger.warning(
+                        "Claude returned stop_reason=tool_use without tool_use blocks; retrying round",
+                        extra={
+                            'agent_id': self.agent_id,
+                            'round': _round,
+                            'model': self.get_model_name(),
+                        },
+                    )
+                    anthropic_messages.append({'role': 'assistant', 'content': reply or ''})
+                    anthropic_messages.append({'role': 'user', 'content': 'Please proceed by calling the appropriate tool now.'})
                     continue
-            anthropic_messages.append({'role': 'assistant', 'content': assistant_blocks or ''})
+                if not (effective_use_tools and tool_uses):
+                    break
 
-            tool_result_blocks: List[Dict[str, Any]] = []
-            for tu in tool_uses:
-                tool_name = tu.get('name')
-                tool_args = tu.get('input') or {}
-                tool_id = tu.get('id')
-                if not (tool_name and tool_id):
-                    continue
-                tool_result = await self._execute_tool(tool_name, tool_args)
-                formatted_result = self._format_tool_result(tool_result)
-                tool_result_blocks.append(build_tool_result_block(tool_id, formatted_result))
+                assistant_blocks: List[Dict[str, Any]] = []
+                if reply:
+                    assistant_blocks.append({'type': 'text', 'text': reply})
+                for tu in tool_uses:
+                    try:
+                        assistant_blocks.append({
+                            'type': 'tool_use',
+                            'id': tu.get('id'),
+                            'name': tu.get('name'),
+                            'input': tu.get('input') or {},
+                        })
+                    except Exception:
+                        continue
+                anthropic_messages.append({'role': 'assistant', 'content': assistant_blocks or ''})
 
-            anthropic_messages.append({'role': 'user', 'content': tool_result_blocks})
+                tool_result_blocks: List[Dict[str, Any]] = []
+                for tu in tool_uses:
+                    tool_name = tu.get('name')
+                    tool_args = tu.get('input') or {}
+                    tool_id = tu.get('id')
+                    if not (tool_name and tool_id):
+                        continue
+                    tool_result = await self._execute_tool(tool_name, tool_args)
+                    formatted_result = self._format_tool_result(tool_result)
+                    tool_result_blocks.append(build_tool_result_block(tool_id, formatted_result))
 
-        if use_memory:
-            self._add_to_memory('user', message, conversation_id)
-            self._add_to_memory('assistant', reply, conversation_id)
+                anthropic_messages.append({'role': 'user', 'content': tool_result_blocks})
 
-        return reply
+            if use_memory:
+                self._add_to_memory('user', message, conversation_id)
+                self._add_to_memory('assistant', reply, conversation_id)
+
+            return reply
+        except Exception as e:
+            logger.error(f"Claude chat failed: {e}", exc_info=True)
+            return f"Error: {str(e)}"
 
     async def _claude_chat_stream(
         self,
@@ -358,68 +456,177 @@ class AgentInstance:
         tools_anthropic = ClaudeClient.openai_tools_to_anthropic(tools_openai) if tools_openai else []
         system_text, anthropic_messages = ClaudeClient.openai_messages_to_anthropic(messages)
 
-        full_reply = ""
-        max_rounds = 5
-        round_idx = 0
-        while round_idx < max_rounds:
-            gen, done_fut = self._claude_client.stream(
-                model=self.get_model_name(),
-                system=system_text,
-                messages=anthropic_messages,
-                tools=tools_anthropic if effective_use_tools and tools_anthropic else None,
-                max_tokens=self.get_max_tokens(),
-                temperature=self.get_temperature(),
-            )
+        thinking_cfg: Optional[Dict[str, Any]] = None
+        output_cfg: Optional[Dict[str, Any]] = None
+        if self.get_thinking_effort_enabled():
+            mapped = self._map_effort_level(self.get_thinking_effort_level(), 'claude', self.get_model_name())
+            if mapped:
+                if self._is_claude_effort_model(self.get_model_name()):
+                    output_cfg = {'effort': mapped}
+                if self._is_claude_adaptive_model(self.get_model_name()):
+                    thinking_cfg = {'type': 'adaptive'}
 
-            round_text = ""
-            async for chunk in gen:
-                round_text += chunk
-                full_reply += chunk
-                yield chunk
-
-            result = await done_fut
-            if show_token_usage and result.get('usage'):
-                self._set_last_usage(conversation_id, result.get('usage'))
-
-            tool_uses = result.get('tool_uses') or []
-            if not (effective_use_tools and tool_uses):
-                break
-
-            assistant_blocks: List[Dict[str, Any]] = []
-            if round_text:
-                assistant_blocks.append({'type': 'text', 'text': round_text})
-            for tu in tool_uses:
+        try:
+            full_reply = ""
+            max_rounds = 5
+            round_idx = 0
+            while round_idx < max_rounds:
+                request_id = new_request_id()
+                request_json = {
+                    "provider": "claude",
+                    "round": round_idx,
+                    "model": self.get_model_name(),
+                    "system": system_text,
+                    "messages": anthropic_messages,
+                    "tools": tools_anthropic if effective_use_tools and tools_anthropic else None,
+                    "tool_choice": tool_choice if effective_use_tools else None,
+                    "max_tokens": self.get_max_tokens(),
+                    "temperature": self.get_temperature(),
+                    "stream": True,
+                    "thinking": thinking_cfg,
+                    "output_config": output_cfg,
+                }
                 try:
-                    assistant_blocks.append({
-                        'type': 'tool_use',
-                        'id': tu.get('id'),
-                        'name': tu.get('name'),
-                        'input': tu.get('input') or {},
-                    })
+                    log_llm_request(
+                        request_id=request_id,
+                        source="backend.modules.agent.agent_instance.AgentInstance._claude_chat_stream",
+                        request_json=request_json,
+                    )
                 except Exception:
+                    pass
+
+                try:
+                    gen, done_fut = self._claude_client.stream(
+                        model=self.get_model_name(),
+                        system=system_text,
+                        messages=anthropic_messages,
+                        tools=tools_anthropic if effective_use_tools and tools_anthropic else None,
+                        tool_choice=tool_choice,
+                        max_tokens=self.get_max_tokens(),
+                        temperature=self.get_temperature(),
+                        thinking=thinking_cfg,
+                        output_config=output_cfg,
+                    )
+                except Exception as e:
+                    try:
+                        log_llm_error(
+                            request_id=request_id,
+                            source="backend.modules.agent.agent_instance.AgentInstance._claude_chat_stream",
+                            error=e,
+                        )
+                    except Exception:
+                        pass
+                    raise
+
+                round_text = ""
+                async for chunk in gen:
+                    round_text += chunk
+                    full_reply += chunk
+                    try:
+                        log_llm_stream_chunk(
+                            request_id=request_id,
+                            source="backend.modules.agent.agent_instance.AgentInstance._claude_chat_stream",
+                            stream_raw={"type": "text_delta", "text": chunk, "round": round_idx},
+                        )
+                    except Exception:
+                        pass
+                    yield chunk
+
+                try:
+                    result = await done_fut
+                except Exception as e:
+                    try:
+                        log_llm_error(
+                            request_id=request_id,
+                            source="backend.modules.agent.agent_instance.AgentInstance._claude_chat_stream",
+                            error=e,
+                        )
+                    except Exception:
+                        pass
+                    raise
+
+                if show_token_usage and result.get('usage'):
+                    self._set_last_usage(conversation_id, result.get('usage'))
+
+                try:
+                    raw_obj = result.get('raw')
+                    if hasattr(raw_obj, 'model_dump'):
+                        raw_dump = raw_obj.model_dump()
+                    else:
+                        raw_dump = getattr(raw_obj, '__dict__', str(raw_obj))
+                    log_llm_response(
+                        request_id=request_id,
+                        source="backend.modules.agent.agent_instance.AgentInstance._claude_chat_stream",
+                        response_json={
+                            "text": result.get('text') or "",
+                            "tool_uses": result.get('tool_uses') or [],
+                            "usage": result.get('usage'),
+                            "raw": raw_dump,
+                        },
+                    )
+                except Exception:
+                    pass
+
+                tool_uses = result.get('tool_uses') or []
+                raw_result = result.get('raw')
+                raw_stop_reason = getattr(raw_result, 'stop_reason', None)
+                if raw_stop_reason is None and isinstance(raw_result, dict):
+                    raw_stop_reason = raw_result.get('stop_reason')
+                if effective_use_tools and not tool_uses and raw_stop_reason == 'tool_use' and round_idx < (max_rounds - 1):
+                    logger.warning(
+                        "Claude streaming response returned stop_reason=tool_use without tool_use blocks; retrying round",
+                        extra={
+                            'agent_id': self.agent_id,
+                            'round': round_idx,
+                            'model': self.get_model_name(),
+                        },
+                    )
+                    anthropic_messages.append({'role': 'assistant', 'content': round_text or ''})
+                    anthropic_messages.append({'role': 'user', 'content': 'Please proceed by calling the appropriate tool now.'})
+                    round_idx += 1
                     continue
-            anthropic_messages.append({'role': 'assistant', 'content': assistant_blocks or ''})
+                if not (effective_use_tools and tool_uses):
+                    break
 
-            tool_result_blocks: List[Dict[str, Any]] = []
-            for tu in tool_uses:
-                tool_name = tu.get('name')
-                tool_args = tu.get('input') or {}
-                tool_id = tu.get('id')
-                if not (tool_name and tool_id):
-                    continue
-                tool_result = await self._execute_tool(tool_name, tool_args)
-                formatted_result = self._format_tool_result(tool_result)
-                tool_result_blocks.append(build_tool_result_block(tool_id, formatted_result))
+                assistant_blocks: List[Dict[str, Any]] = []
+                if round_text:
+                    assistant_blocks.append({'type': 'text', 'text': round_text})
+                for tu in tool_uses:
+                    try:
+                        assistant_blocks.append({
+                            'type': 'tool_use',
+                            'id': tu.get('id'),
+                            'name': tu.get('name'),
+                            'input': tu.get('input') or {},
+                        })
+                    except Exception:
+                        continue
+                anthropic_messages.append({'role': 'assistant', 'content': assistant_blocks or ''})
 
-            anthropic_messages.append({'role': 'user', 'content': tool_result_blocks})
-            round_idx += 1
+                tool_result_blocks: List[Dict[str, Any]] = []
+                for tu in tool_uses:
+                    tool_name = tu.get('name')
+                    tool_args = tu.get('input') or {}
+                    tool_id = tu.get('id')
+                    if not (tool_name and tool_id):
+                        continue
+                    tool_result = await self._execute_tool(tool_name, tool_args)
+                    formatted_result = self._format_tool_result(tool_result)
+                    tool_result_blocks.append(build_tool_result_block(tool_id, formatted_result))
 
-        if use_memory:
-            self._add_to_memory('user', message, conversation_id)
-            self._add_to_memory('assistant', full_reply, conversation_id)
+                anthropic_messages.append({'role': 'user', 'content': tool_result_blocks})
+                round_idx += 1
 
-        if show_token_usage and self.get_last_usage(conversation_id):
-            pass
+            if use_memory:
+                self._add_to_memory('user', message, conversation_id)
+                self._add_to_memory('assistant', full_reply, conversation_id)
+
+            if show_token_usage and self.get_last_usage(conversation_id):
+                pass
+        except Exception as e:
+            logger.error(f"Claude streaming chat failed: {e}", exc_info=True)
+            yield f"Error: {str(e)}"
+            return
 
     def get_system_prompt(self) -> str:
         """Get the system prompt."""
@@ -480,6 +687,60 @@ IMPORTANT Tool Usage Guidelines:
         v = self.llm_config.get('custom_params', None)
         return v if isinstance(v, dict) else None
 
+    def get_thinking_effort_enabled(self) -> bool:
+        return bool(self.llm_config.get('thinking_effort_enabled', False))
+
+    def get_thinking_effort_level(self) -> str:
+        v = self.llm_config.get('thinking_effort_level', None)
+        if not v:
+            return 'medium'
+        s = str(v).strip().lower()
+        if s in {'minimal', 'low', 'medium', 'high', 'max'}:
+            return s
+        return 'medium'
+
+    def _map_effort_level(self, level: str, provider: str, model_name: Optional[str] = None) -> Optional[str]:
+        l = str(level or '').strip().lower()
+        p = str(provider or '').strip().lower()
+        model = str(model_name or '').strip().lower()
+        if not l:
+            return None
+
+        if p == 'claude':
+            if l == 'minimal':
+                l = 'low'
+            if l == 'max' and model and ('claude-opus-4-6' not in model):
+                l = 'high'
+            if l in {'low', 'medium', 'high', 'max'}:
+                return l
+            return None
+
+        if p == 'gemini':
+            if l in {'minimal', 'low', 'medium', 'high'}:
+                return l
+            if l == 'max':
+                return 'high'
+            return None
+
+        if p == 'openai':
+            if l in {'minimal', 'low'}:
+                return 'low'
+            if l == 'medium':
+                return 'medium'
+            if l in {'high', 'max'}:
+                return 'high'
+            return None
+
+        return None
+
+    def _is_claude_adaptive_model(self, model_name: Optional[str]) -> bool:
+        m = str(model_name or '').strip().lower()
+        return m in {'claude-opus-4-6', 'claude-sonnet-4-6'}
+
+    def _is_claude_effort_model(self, model_name: Optional[str]) -> bool:
+        m = str(model_name or '').strip().lower()
+        return m in {'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-opus-4-5'}
+
     def get_last_usage(self, conversation_id: Optional[str]) -> Optional[Dict[str, Any]]:
         key = conversation_id or 'default'
         return self._usage_cache.get(key)
@@ -531,6 +792,16 @@ IMPORTANT Tool Usage Guidelines:
             kwargs['stream'] = True
             if show_token_usage:
                 kwargs['stream_options'] = {'include_usage': True}
+
+        if self.get_thinking_effort_enabled() and self._provider in {'openai', 'gemini'}:
+            effort = self._map_effort_level(self.get_thinking_effort_level(), self._provider, self.get_model_name())
+            if effort:
+                extra_body = kwargs.get('extra_body')
+                if not isinstance(extra_body, dict):
+                    extra_body = {}
+                if 'reasoning_effort' not in extra_body:
+                    extra_body['reasoning_effort'] = effort
+                kwargs['extra_body'] = extra_body
 
         if self._provider == 'gemini':
             kwargs.pop('frequency_penalty', None)

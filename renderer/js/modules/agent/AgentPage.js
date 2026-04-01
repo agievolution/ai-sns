@@ -144,7 +144,7 @@ const AgentPage = {
                     <div class="agent-chat-input-area">
                         <div style="display: none;" class="input-hint">Input @@ to load tools selector; Ctrl+i To load preset question; Ctrl+/ To insert chat template.</div>
                         <div class="input-wrapper">
-                            <textarea class="agent-chat-input" id="chatInput-${agent.id}" data-agent-id="${agent.id}" placeholder="Type a message..."></textarea>
+                            <textarea class="agent-chat-input" id="chatInput-${agent.id}" data-agent-id="${agent.id}" placeholder="Type a message..." spellcheck="false"></textarea>
                         </div>
                         <div class="input-toolbar">
                             <div class="toolbar-buttons">
@@ -175,9 +175,14 @@ const AgentPage = {
                                 </button>
 
                             </div>
-                            <button class="send-btn" id="sendMessageBtn-${agent.id}" data-agent-id="${agent.id}">
+                            <button class="send-btn" id="sendMessageBtn-${agent.id}" data-agent-id="${agent.id}" title="Send message">
                                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                                     <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12l-8-8z"/>
+                                </svg>
+                            </button>
+                            <button class="cancel-btn" id="cancelMessageBtn-${agent.id}" data-agent-id="${agent.id}" title="Stop generating">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                    <rect x="6" y="6" width="12" height="12" rx="2"/>
                                 </svg>
                             </button>
                         </div>
@@ -257,6 +262,24 @@ const AgentPage = {
                                         <span>Show token usage</span>
                                         <input type="checkbox" data-agent-id="${agent.id}">
                                         <span class="toggle-slider"></span>
+                                    </label>
+                                    <label class="param-toggle">
+                                        <span>Thinking effort</span>
+                                        <input type="checkbox" data-agent-id="${agent.id}">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <label class="param-label thinking-effort-wrapper" style="display:none;">
+                                        <span>Effort level</span>
+                                        <select class="param-input thinking-effort-select" data-agent-id="${agent.id}">
+                                            <option value="minimal">minimal</option>
+                                            <option value="low">low</option>
+                                            <option value="medium" selected>medium</option>
+                                            <option value="high">high</option>
+                                            <option value="max">max</option>
+                                        </select>
+                                        <div class="thinking-effort-doc-link" style="display:none;">
+                                            <a class="thinking-effort-doc-anchor" href="#" data-external-url="" target="_blank" rel="noopener noreferrer">View documentation</a>
+                                        </div>
                                     </label>
                                 </div>
                             </div>

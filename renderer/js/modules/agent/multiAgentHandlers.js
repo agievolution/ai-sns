@@ -218,19 +218,25 @@ const multiAgentHandlers = {
         const pane = document.createElement('div');
         pane.className = 'tab-pane';
         pane.dataset.tab = tabId;
-        pane.innerHTML = `
-            <div class="settings-section">
-                <div class="settings-section-title">
-                    <span>${name}</span>
+        if (pluginKey === 'PL_BUILTIN_LOG_VIEWER') {
+            pane.innerHTML = `<div class="status-section"><div class="status-rows"><div class="sns-plugin-host" style="min-height: 120px;"></div></div></div>`;
+        } else {
+            pane.innerHTML = `
+                <div class="settings-section">
+                    <div class="settings-section-title">
+                        <span>${name}</span>
+                    </div>
+                    <div class="plugin-content" id="plugin-content-ext-${pluginKey}-${agentKey}"></div>
                 </div>
-                <div class="plugin-content" id="plugin-content-ext-${pluginKey}-${agentKey}"></div>
-            </div>
-        `;
+            `;
+        }
         tabContent.appendChild(pane);
 
         tabButton.click();
 
-        const container = pane.querySelector(`#plugin-content-ext-${CSS.escape(pluginKey)}-${CSS.escape(agentKey)}`);
+        const container = (pluginKey === 'PL_BUILTIN_LOG_VIEWER')
+            ? pane.querySelector('.sns-plugin-host')
+            : pane.querySelector(`#plugin-content-ext-${CSS.escape(pluginKey)}-${CSS.escape(agentKey)}`);
         if (!container) return;
 
         const api = {
@@ -726,6 +732,7 @@ const multiAgentHandlers = {
      * Bind UI events for all agents
      */
     bindAllAgentEvents() {
+        console.log('[MultiAgentHandlers] === bindAllAgentEvents START ===');
         console.log('[MultiAgentHandlers] Binding UI events for all agents...');
 
         if (!this._agentTabReloadMenuInitialized) {
@@ -959,6 +966,650 @@ const multiAgentHandlers = {
             });
         }
 
+        if (!this._agentSettingsContextMenuInitialized) {
+            this._agentSettingsContextMenuInitialized = true;
+
+            if (!this._agentSettingsSearchControllers || typeof this._agentSettingsSearchControllers !== 'object') {
+                this._agentSettingsSearchControllers = new Map();
+            }
+
+            const copyTextToClipboard = async (text) => {
+                const v = (text === undefined || text === null) ? '' : String(text);
+                if (!v) return { success: false, error: 'Empty text' };
+
+                try {
+                    if (window.electronAPI && typeof window.electronAPI.writeClipboardText === 'function') {
+                        const result = await window.electronAPI.writeClipboardText(v);
+                        if (result && result.success) {
+                            return { success: true };
+                        }
+                        const errMsg = result && result.error ? String(result.error) : 'Unknown error';
+                        throw new Error(errMsg);
+                    }
+                } catch (e) {
+                    console.warn('[MultiAgentHandlers] electron clipboard copy failed, falling back', e);
+                }
+
+                try {
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                        await navigator.clipboard.writeText(v);
+                        return { success: true };
+                    }
+                } catch (e) {
+                    console.warn('[MultiAgentHandlers] navigator.clipboard copy failed, falling back', e);
+                }
+
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = v;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.top = '-9999px';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    return ok ? { success: true } : { success: false, error: 'execCommand(copy) returned false' };
+                } catch (e) {
+                    return { success: false, error: e && e.message ? e.message : String(e) };
+                }
+            };
+
+            const ensureSearchBarForAgent = (agentId) => {
+                const agentKey = String(agentId || '').trim();
+                if (!agentKey) return null;
+
+                const panel = document.getElementById(`agentSettingsPanel-${agentKey}`);
+                const tabContent = document.getElementById(`settingsTabContent-${agentKey}`);
+                if (!panel || !tabContent) return null;
+
+                const existing = document.getElementById(`agentSettingsSearchBar-${agentKey}`);
+                if (existing) return existing;
+
+                const bar = document.createElement('div');
+                bar.className = 'status-search-bar';
+                bar.id = `agentSettingsSearchBar-${agentKey}`;
+                bar.style.display = 'none';
+                bar.innerHTML = `
+                    <div class="search-input-wrapper">
+                        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                        </svg>
+                        <input type="text" class="search-input" id="agentSettingsSearchInput-${agentKey}" placeholder="Search within the current tab...">
+                        <button class="search-clear-btn" id="agentSettingsSearchClear-${agentKey}" title="Close search">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="search-results-info" id="agentSettingsSearchResultsInfo-${agentKey}" style="display: none;">
+                        <span id="agentSettingsSearchResultsText-${agentKey}">Found 0 results</span>
+                        <div class="search-navigation">
+                            <button class="search-nav-btn" id="agentSettingsSearchPrevBtn-${agentKey}" title="Previous">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"/>
+                                </svg>
+                            </button>
+                            <button class="search-nav-btn" id="agentSettingsSearchNextBtn-${agentKey}" title="Next">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                panel.insertBefore(bar, panel.firstChild);
+                return bar;
+            };
+
+            const ensureSearchControllerForAgent = (agentId) => {
+                const agentKey = String(agentId || '').trim();
+                if (!agentKey) return null;
+
+                const existingCtrl = this._agentSettingsSearchControllers.get(agentKey);
+                if (existingCtrl) return existingCtrl;
+
+                ensureSearchBarForAgent(agentKey);
+
+                const searchInput = document.getElementById(`agentSettingsSearchInput-${agentKey}`);
+                const searchClear = document.getElementById(`agentSettingsSearchClear-${agentKey}`);
+                const searchResultsInfo = document.getElementById(`agentSettingsSearchResultsInfo-${agentKey}`);
+                const searchResultsText = document.getElementById(`agentSettingsSearchResultsText-${agentKey}`);
+                const searchPrevBtn = document.getElementById(`agentSettingsSearchPrevBtn-${agentKey}`);
+                const searchNextBtn = document.getElementById(`agentSettingsSearchNextBtn-${agentKey}`);
+                const tabContent = document.getElementById(`settingsTabContent-${agentKey}`);
+
+                if (!searchInput || !tabContent || !searchClear || !searchResultsInfo || !searchPrevBtn || !searchNextBtn) {
+                    return null;
+                }
+
+                let currentMatches = [];
+                let currentMatchIndex = -1;
+                let _searchJobToken = 0;
+                let _lastSearchedText = '';
+                let _pendingNavigate = null;
+                let _lastActivePaneKey = null;
+
+                const clearLocalSearchState = () => {
+                    currentMatches = [];
+                    currentMatchIndex = -1;
+                };
+
+                const clearSelectionHighlight = () => {
+                    try {
+                        const sel = window.getSelection();
+                        if (sel && typeof sel.removeAllRanges === 'function') {
+                            sel.removeAllRanges();
+                        }
+                    } catch (e) {
+                    }
+                };
+
+                const cancelActiveSearchJob = () => {
+                    _searchJobToken += 1;
+                };
+
+                const getSearchBlocks = (activePane) => {
+                    if (!activePane) return [];
+
+                    const blocks = [];
+                    const seen = new Set();
+                    const pushUnique = (el) => {
+                        if (!el || seen.has(el)) return;
+                        seen.add(el);
+                        blocks.push(el);
+                    };
+
+                    Array.from(activePane.querySelectorAll('.settings-section-title')).forEach(pushUnique);
+                    Array.from(activePane.querySelectorAll('.settings-section')).forEach(pushUnique);
+                    Array.from(activePane.querySelectorAll('.preset-item')).forEach(pushUnique);
+                    Array.from(activePane.querySelectorAll('.param-label')).forEach(pushUnique);
+                    Array.from(activePane.querySelectorAll('.param-toggle')).forEach(pushUnique);
+                    Array.from(activePane.querySelectorAll('pre')).forEach(pushUnique);
+
+                    if (blocks.length > 0) return blocks;
+
+                    try {
+                        const children = Array.from(activePane.children || []).filter(Boolean);
+                        if (children.length > 0) return children;
+                    } catch (e) {
+                    }
+
+                    return [activePane];
+                };
+
+                const createRangeFromTextOffsets = (root, start, end) => {
+                    if (!root || start < 0 || end <= start) return null;
+                    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+                    let node = null;
+                    let pos = 0;
+                    let startNode = null;
+                    let startOffset = 0;
+                    let endNode = null;
+                    let endOffset = 0;
+
+                    while ((node = walker.nextNode())) {
+                        const value = node.nodeValue || '';
+                        const len = value.length;
+                        if (!startNode && pos + len >= start) {
+                            startNode = node;
+                            startOffset = Math.max(0, start - pos);
+                        }
+                        if (pos + len >= end) {
+                            endNode = node;
+                            endOffset = Math.max(0, end - pos);
+                            break;
+                        }
+                        pos += len;
+                    }
+
+                    if (!startNode || !endNode) return null;
+                    try {
+                        const range = document.createRange();
+                        range.setStart(startNode, startOffset);
+                        range.setEnd(endNode, endOffset);
+                        return range;
+                    } catch (e) {
+                        return null;
+                    }
+                };
+
+                const highlightCurrentMatch = (match) => {
+                    try {
+                        if (!match || !match.el) return;
+                        const q = String(_lastSearchedText || '');
+                        if (!q) return;
+
+                        const start = Number(match.start);
+                        const end = start + q.length;
+                        if (!Number.isFinite(start) || start < 0) return;
+
+                        clearSelectionHighlight();
+                        const range = createRangeFromTextOffsets(match.el, start, end);
+                        if (!range) return;
+
+                        const sel = window.getSelection();
+                        if (!sel) return;
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    } catch (e) {
+                    }
+                };
+
+                const scrollToMatch = (index) => {
+                    if (index < 0 || index >= currentMatches.length) return;
+
+                    const match = currentMatches[index];
+                    const el = match && match.el;
+                    if (!el) return;
+
+                    const q = String(_lastSearchedText || '');
+                    const start = Number(match.start);
+                    const end = start + q.length;
+                    const range = (q && Number.isFinite(start) && start >= 0)
+                        ? createRangeFromTextOffsets(el, start, end)
+                        : null;
+
+                    if (range) {
+                        const rect = range.getBoundingClientRect();
+                        const scrollContainer = tabContent;
+                        if (scrollContainer) {
+                            const containerRect = scrollContainer.getBoundingClientRect();
+                            const offsetTop = rect.top - containerRect.top + scrollContainer.scrollTop;
+                            scrollContainer.scrollTo({
+                                top: offsetTop - scrollContainer.clientHeight / 2 + rect.height / 2,
+                                behavior: 'smooth'
+                            });
+                        }
+
+                        requestAnimationFrame(() => {
+                            highlightCurrentMatch(match);
+                        });
+                    } else if (typeof el.scrollIntoView === 'function') {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+
+                    if (searchResultsText) {
+                        searchResultsText.textContent = `${index + 1} / ${currentMatches.length}`;
+                    }
+                };
+
+                const buildMatchesAsync = (searchText) => {
+                    const token = _searchJobToken;
+                    clearLocalSearchState();
+
+                    const raw = (searchText === undefined || searchText === null) ? '' : String(searchText);
+                    const normalized = raw.trim();
+                    _lastSearchedText = normalized;
+
+                    if (!normalized) {
+                        searchResultsInfo.style.display = 'none';
+                        return;
+                    }
+
+                    const activePane = tabContent.querySelector('.tab-pane.active');
+                    if (!activePane) return;
+
+                    const blocks = getSearchBlocks(activePane);
+                    const query = normalized.toLowerCase();
+                    const maxMatches = 2000;
+
+                    searchResultsInfo.style.display = 'flex';
+                    if (searchResultsText) searchResultsText.textContent = 'Searching...';
+
+                    let blockIndex = 0;
+
+                    const processBatch = () => {
+                        if (token !== _searchJobToken) return;
+
+                        const startMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+                        while (blockIndex < blocks.length) {
+                            const el = blocks[blockIndex];
+                            blockIndex += 1;
+
+                            if (!el) continue;
+
+                            let text = '';
+                            try {
+                                text = String(el.textContent || '');
+                            } catch (e) {
+                                text = '';
+                            }
+
+                            if (!text) {
+                                const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                                if (nowMs - startMs > 10) break;
+                                continue;
+                            }
+
+                            const lower = text.toLowerCase();
+                            let fromIndex = 0;
+                            while (fromIndex < lower.length) {
+                                const found = lower.indexOf(query, fromIndex);
+                                if (found === -1) break;
+                                currentMatches.push({ el, start: found });
+                                if (currentMatches.length >= maxMatches) break;
+                                fromIndex = found + query.length;
+                            }
+
+                            if (currentMatches.length >= maxMatches) {
+                                break;
+                            }
+
+                            const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                            if (nowMs - startMs > 10) {
+                                break;
+                            }
+                        }
+
+                        if (token !== _searchJobToken) return;
+
+                        if (blockIndex < blocks.length && currentMatches.length < maxMatches) {
+                            requestAnimationFrame(processBatch);
+                            return;
+                        }
+
+                        searchResultsInfo.style.display = 'flex';
+                        if (currentMatches.length > 0) {
+                            if (searchResultsText) {
+                                if (currentMatches.length >= maxMatches) {
+                                    searchResultsText.textContent = `Found ${currentMatches.length}+ results`;
+                                } else {
+                                    searchResultsText.textContent = `Found ${currentMatches.length} results`;
+                                }
+                            }
+                            const targetIndex = (_pendingNavigate === 'last') ? (currentMatches.length - 1) : 0;
+                            _pendingNavigate = null;
+                            currentMatchIndex = targetIndex;
+                            scrollToMatch(currentMatchIndex);
+                        } else {
+                            if (searchResultsText) searchResultsText.textContent = 'No results found';
+                            currentMatchIndex = -1;
+                        }
+                    };
+
+                    requestAnimationFrame(processBatch);
+                };
+
+                const ensureSearchAndNavigate = (direction) => {
+                    const v = String(searchInput.value || '').trim();
+                    const sameQuery = v && _lastSearchedText && v === _lastSearchedText;
+
+                    if (!sameQuery) {
+                        cancelActiveSearchJob();
+                        _pendingNavigate = (direction === 'prev') ? 'last' : null;
+                        buildMatchesAsync(v);
+                        return true;
+                    }
+                    return false;
+                };
+
+                const closeSearchUI = () => {
+                    cancelActiveSearchJob();
+                    clearLocalSearchState();
+                    clearSelectionHighlight();
+                    _lastSearchedText = '';
+                    _pendingNavigate = null;
+                    searchResultsInfo.style.display = 'none';
+                    const searchBar = document.getElementById(`agentSettingsSearchBar-${agentKey}`);
+                    if (searchBar) searchBar.style.display = 'none';
+                    searchInput.value = '';
+                };
+
+                searchInput.addEventListener('input', () => {
+                    cancelActiveSearchJob();
+                    clearLocalSearchState();
+                    searchResultsInfo.style.display = 'none';
+                });
+
+                searchClear.addEventListener('click', () => {
+                    searchInput.value = '';
+                    cancelActiveSearchJob();
+                    clearLocalSearchState();
+                    clearSelectionHighlight();
+                    searchResultsInfo.style.display = 'none';
+                    const searchBar = document.getElementById(`agentSettingsSearchBar-${agentKey}`);
+                    if (searchBar) {
+                        searchBar.style.display = 'none';
+                    }
+                });
+
+                searchPrevBtn.addEventListener('click', () => {
+                    if (ensureSearchAndNavigate('prev')) return;
+                    if (currentMatches.length === 0) return;
+                    currentMatchIndex = (currentMatchIndex - 1 + currentMatches.length) % currentMatches.length;
+                    scrollToMatch(currentMatchIndex);
+                });
+
+                searchNextBtn.addEventListener('click', () => {
+                    if (ensureSearchAndNavigate('next')) return;
+                    if (currentMatches.length === 0) return;
+                    currentMatchIndex = (currentMatchIndex + 1) % currentMatches.length;
+                    scrollToMatch(currentMatchIndex);
+                });
+
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            if (ensureSearchAndNavigate('prev')) return;
+                            if (currentMatches.length === 0) {
+                                ensureSearchAndNavigate('prev');
+                                return;
+                            }
+                            currentMatchIndex = (currentMatchIndex - 1 + currentMatches.length) % currentMatches.length;
+                            scrollToMatch(currentMatchIndex);
+                            return;
+                        }
+
+                        if (ensureSearchAndNavigate('next')) return;
+                        if (currentMatches.length === 0) {
+                            ensureSearchAndNavigate('next');
+                            return;
+                        }
+                        currentMatchIndex = (currentMatchIndex + 1) % currentMatches.length;
+                        scrollToMatch(currentMatchIndex);
+                    } else if (e.key === 'Escape') {
+                        closeSearchUI();
+                    }
+                });
+
+                document.addEventListener('click', (e) => {
+                    const tab = e.target.closest(`.settings-tab[data-agent-id="${agentKey}"]`);
+                    if (tab) {
+                        closeSearchUI();
+                    }
+                });
+
+                try {
+                    const observer = new MutationObserver(() => {
+                        const pane = tabContent.querySelector('.tab-pane.active');
+                        const key = pane ? (pane.getAttribute('data-tab') || '') : '';
+                        if (key && key !== _lastActivePaneKey) {
+                            _lastActivePaneKey = key;
+                            closeSearchUI();
+                        }
+                    });
+                    observer.observe(tabContent, { attributes: true, subtree: true, attributeFilter: ['class', 'style'] });
+                } catch (e) {
+                }
+
+                const ctrl = {
+                    closeSearchUI,
+                    buildMatchesAsync
+                };
+
+                this._agentSettingsSearchControllers.set(agentKey, ctrl);
+                return ctrl;
+            };
+
+            const existingMenu = document.getElementById('agentSettingsContextMenu');
+            const contextMenu = existingMenu || (() => {
+                const el = document.createElement('div');
+                el.id = 'agentSettingsContextMenu';
+                el.className = 'status-context-menu';
+                el.style.display = 'none';
+                el.innerHTML = `
+                    <button class="context-menu-item" data-action="copy">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        <span>Copy</span>
+                    </button>
+                    <button class="context-menu-item" data-action="selectAll">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                        </svg>
+                        <span>Select All</span>
+                    </button>
+                    <div class="context-menu-divider"></div>
+                    <button class="context-menu-item" data-action="search">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                        </svg>
+                        <span>Search</span>
+                    </button>
+                `;
+                document.body.appendChild(el);
+                return el;
+            })();
+
+            let currentAgentId = null;
+            let currentTabContent = null;
+
+            const hideContextMenu = () => {
+                contextMenu.style.display = 'none';
+                currentAgentId = null;
+                currentTabContent = null;
+            };
+
+            const showMenuAt = (x, y) => {
+                contextMenu.style.display = 'block';
+
+                const menuWidth = 180;
+                const menuHeight = 120;
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+
+                let left = x;
+                let top = y;
+
+                if (left + menuWidth > viewportWidth) {
+                    left = viewportWidth - menuWidth - 10;
+                }
+                if (top + menuHeight > viewportHeight) {
+                    top = viewportHeight - menuHeight - 10;
+                }
+
+                contextMenu.style.left = left + 'px';
+                contextMenu.style.top = top + 'px';
+            };
+
+            const getSelectedTextFromActiveElement = () => {
+                try {
+                    const el = document.activeElement;
+                    if (!el) return '';
+                    const tag = String(el.tagName || '').toLowerCase();
+                    if (tag !== 'textarea' && tag !== 'input') return '';
+                    if (tag === 'input' && el.type && String(el.type).toLowerCase() !== 'text') return '';
+                    if (typeof el.selectionStart !== 'number' || typeof el.selectionEnd !== 'number') return '';
+                    const start = el.selectionStart;
+                    const end = el.selectionEnd;
+                    if (end <= start) return '';
+                    const value = String(el.value || '');
+                    return value.slice(start, end);
+                } catch (e) {
+                    return '';
+                }
+            };
+
+            document.addEventListener('click', (e) => {
+                if (!contextMenu.contains(e.target)) {
+                    hideContextMenu();
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    hideContextMenu();
+                }
+            });
+
+            window.addEventListener('blur', hideContextMenu);
+
+            contextMenu.addEventListener('click', (e) => {
+                const menuItem = e.target.closest('.context-menu-item');
+                if (!menuItem) return;
+
+                const action = menuItem.dataset.action;
+                const tabContent = currentTabContent;
+                const activePane = tabContent ? tabContent.querySelector('.tab-pane.active') : null;
+
+                if (action === 'copy') {
+                    const selected = window.getSelection ? window.getSelection().toString() : '';
+                    const selectedText = selected || getSelectedTextFromActiveElement();
+                    if (selectedText) {
+                        copyTextToClipboard(selectedText).catch(() => {
+                        });
+                    }
+                } else if (action === 'selectAll') {
+                    if (activePane) {
+                        const range = document.createRange();
+                        range.selectNodeContents(activePane);
+                        const selection = window.getSelection();
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                    }
+                } else if (action === 'search') {
+                    if (currentAgentId) {
+                        ensureSearchControllerForAgent(currentAgentId);
+                        const searchBar = document.getElementById(`agentSettingsSearchBar-${currentAgentId}`);
+                        const searchInput = document.getElementById(`agentSettingsSearchInput-${currentAgentId}`);
+                        if (searchBar) {
+                            searchBar.style.display = 'flex';
+                            setTimeout(() => {
+                                if (searchInput) {
+                                    searchInput.focus();
+                                    const selected = window.getSelection ? window.getSelection().toString() : '';
+                                    const selectedText = selected || getSelectedTextFromActiveElement();
+                                    if (selectedText) {
+                                        searchInput.value = selectedText;
+                                    }
+                                }
+                            }, 100);
+                        }
+                    }
+                }
+
+                hideContextMenu();
+            });
+
+            document.addEventListener('contextmenu', (e) => {
+                const tabContent = e.target.closest('.settings-tab-content');
+                if (!tabContent) return;
+                const panel = tabContent.closest('.agent-settings-panel[data-agent-id]');
+                if (!panel) return;
+                const agentId = panel.dataset.agentId;
+                if (!agentId) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                currentAgentId = String(agentId);
+                currentTabContent = tabContent;
+                ensureSearchControllerForAgent(currentAgentId);
+                showMenuAt(e.clientX, e.clientY);
+            });
+        }
+
         // Drag to resize agent right-side settings panel (similar to SNS right-side status panel)
         let isResizingPanel = false;
         let resizingAgentId = null;
@@ -1102,6 +1753,62 @@ const multiAgentHandlers = {
                 this._paramSaveTimers = new Map();
             }
 
+            const resolveThinkingEffortDocUrl = (agentId) => {
+                try {
+                    const state = agentState.ensureAgentState(agentId);
+                    const cfg = state ? state.currentModelConfig : null;
+                    const provider = String((cfg && cfg.provider) ? cfg.provider : '').trim().toLowerCase();
+                    if (provider === 'gemini') return 'https://ai.google.dev/gemini-api/docs/openai?authuser=1&hl=zh-cn#thinking';
+                    if (provider === 'claude') return 'https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking';
+                    return 'https://developers.openai.com/api/docs/models/all';
+                } catch (e) {
+                    return 'https://developers.openai.com/api/docs/models/all';
+                }
+            };
+
+            const openExternalUrl = (url) => {
+                const u = url ? String(url) : '';
+                if (!u) return;
+                try {
+                    if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
+                        window.electronAPI.openUrl(u);
+                        return;
+                    }
+                } catch (e) {
+                }
+                try {
+                    window.open(u, '_blank', 'noopener');
+                } catch (e) {
+                }
+            };
+
+            const syncThinkingEffortVisibility = (agentId) => {
+                const paramPane = document.querySelector(`#settingsTabContent-${agentId} [data-tab="param"]`);
+                if (!paramPane) return;
+                const checkboxes = Array.from(paramPane.querySelectorAll('input[type="checkbox"]'));
+                let enabled = false;
+                for (const cb of checkboxes) {
+                    const label = cb.closest('label.param-toggle');
+                    const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+                    if (labelText === 'Thinking effort') {
+                        enabled = !!cb.checked;
+                        break;
+                    }
+                }
+
+                const wrapper = paramPane.querySelector('.thinking-effort-wrapper');
+                if (wrapper) wrapper.style.display = enabled ? '' : 'none';
+
+                const linkBox = paramPane.querySelector('.thinking-effort-doc-link');
+                const link = paramPane.querySelector('.thinking-effort-doc-anchor');
+                const url = enabled ? resolveThinkingEffortDocUrl(agentId) : '';
+                if (link) {
+                    link.dataset.externalUrl = url;
+                    link.href = url || '#';
+                }
+                if (linkBox) linkBox.style.display = enabled ? '' : 'none';
+            };
+
             const scheduleParamSave = (agentId) => {
                 const key = String(agentId);
                 const prev = this._paramSaveTimers.get(key);
@@ -1111,6 +1818,17 @@ const multiAgentHandlers = {
                 }, 800);
                 this._paramSaveTimers.set(key, t);
             };
+
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (!target) return;
+                const anchor = target.closest('a.thinking-effort-doc-anchor[data-external-url]');
+                if (!anchor) return;
+                const url = anchor.dataset.externalUrl || anchor.getAttribute('href');
+                if (!url || url === '#') return;
+                e.preventDefault();
+                openExternalUrl(url);
+            });
 
             document.addEventListener('change', (e) => {
                 const target = e.target;
@@ -1137,6 +1855,12 @@ const multiAgentHandlers = {
                 }
 
                 if (target.type === 'checkbox' && toggleText === 'Stream mode') {
+                    scheduleParamSave(agentId);
+                    return;
+                }
+
+                if (target.type === 'checkbox' && toggleText === 'Thinking effort') {
+                    syncThinkingEffortVisibility(agentId);
                     scheduleParamSave(agentId);
                 }
             });
@@ -1339,6 +2063,416 @@ const multiAgentHandlers = {
         }, true);
 
         console.log('[MultiAgentHandlers] All events bound');
+
+        // Message bubble right-click context menu for copy functionality
+        this.initMessageContextMenu();
+        
+        // Message copy button click handler
+        this.initMessageCopyButtons();
+        
+        // Auto-resize textarea for input
+        this.initAutoResizeTextarea();
+        
+        // Cancel message button handler
+        this.initCancelMessageButton();
+        
+        console.log('[MultiAgentHandlers] Context menu initialized');
+        console.log('[MultiAgentHandlers] === bindAllAgentEvents END ===');
+    },
+
+    /**
+     * Initialize right-click context menu for message bubbles
+     */
+    initMessageContextMenu() {
+        console.log('[MultiAgentHandlers] initMessageContextMenu called');
+        
+        // Create context menu element if not exists
+        let contextMenu = document.getElementById('messageContextMenu');
+        if (!contextMenu) {
+            contextMenu = document.createElement('div');
+            contextMenu.id = 'messageContextMenu';
+            contextMenu.className = 'message-context-menu';
+            contextMenu.innerHTML = `
+                <div class="context-menu-item" id="copyMessageBtn">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                    </svg>
+                    <span>Copy</span>
+                </div>
+            `;
+            document.body.appendChild(contextMenu);
+            console.log('[MultiAgentHandlers] Context menu DOM element created and appended to body');
+        }
+
+        // Copy message text to clipboard
+        const copyMessageText = async (text) => {
+            try {
+                if (window.electronAPI && typeof window.electronAPI.writeClipboardText === 'function') {
+                    const result = await window.electronAPI.writeClipboardText(text);
+                    if (result && result.success) {
+                        console.log('[MultiAgentHandlers] Message copied via electron API');
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn('[MultiAgentHandlers] Electron clipboard failed, falling back:', e);
+            }
+
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(text);
+                    console.log('[MultiAgentHandlers] Message copied via navigator.clipboard');
+                    return true;
+                }
+            } catch (e) {
+                console.warn('[MultiAgentHandlers] Navigator clipboard failed, falling back:', e);
+            }
+
+            // Fallback method
+            try {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.top = '-9999px';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (ok) {
+                    console.log('[MultiAgentHandlers] Message copied via execCommand');
+                    return true;
+                }
+            } catch (e) {
+                console.warn('[MultiAgentHandlers] Fallback copy failed:', e);
+            }
+
+            return false;
+        };
+
+        // Hide context menu
+        const hideMenu = () => {
+            if (contextMenu) {
+                contextMenu.style.display = 'none';
+            }
+        };
+
+        // Show context menu at position
+        const showMenuAt = (x, y) => {
+            if (contextMenu) {
+                contextMenu.style.display = 'block';
+                const rect = contextMenu.getBoundingClientRect();
+                const maxX = window.innerWidth - rect.width - 10;
+                const maxY = window.innerHeight - rect.height - 10;
+                contextMenu.style.left = Math.min(x, maxX) + 'px';
+                contextMenu.style.top = Math.min(y, maxY) + 'px';
+            }
+        };
+
+        // Track current target message body
+        let currentTargetMessageBody = null;
+
+        // Show menu on right-click on message-body
+        document.addEventListener('contextmenu', (e) => {
+            const messageBody = e.target.closest('.message-body');
+            if (!messageBody) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            currentTargetMessageBody = messageBody;
+            showMenuAt(e.clientX, e.clientY);
+            console.log('[MultiAgentHandlers] Right-click detected on message body, showing menu at', e.clientX, e.clientY);
+        }, true);
+
+        // Handle copy action
+        contextMenu.addEventListener('click', async (e) => {
+            const copyBtn = e.target.closest('#copyMessageBtn');
+            if (!copyBtn || !currentTargetMessageBody) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Get text content from message body
+            const textToCopy = currentTargetMessageBody.innerText || currentTargetMessageBody.textContent || '';
+            if (!textToCopy.trim()) {
+                hideMenu();
+                return;
+            }
+
+            const success = await copyMessageText(textToCopy);
+            if (success) {
+                console.log('[MultiAgentHandlers] Message copied successfully');
+            }
+            hideMenu();
+        });
+
+        // Hide menu on click elsewhere
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#messageContextMenu')) {
+                hideMenu();
+            }
+        }, true);
+
+        // Hide menu on scroll
+        document.addEventListener('scroll', () => {
+            hideMenu();
+        }, true);
+
+        // Hide menu on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideMenu();
+            }
+        });
+    },
+
+    /**
+     * Initialize message copy buttons click handlers
+     */
+    initMessageCopyButtons() {
+        console.log('[MultiAgentHandlers] initMessageCopyButtons called');
+        
+        // Use event delegation to handle copy button clicks
+        document.addEventListener('click', async (e) => {
+            const copyBtn = e.target.closest('.message-copy-btn');
+            if (!copyBtn) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Find the parent message item
+            const messageItem = copyBtn.closest('.message-item');
+            if (!messageItem) return;
+
+            // Get the message body content
+            const messageBody = messageItem.querySelector('.message-body');
+            if (!messageBody) return;
+
+            // Get text content from message body
+            const textToCopy = messageBody.innerText || messageBody.textContent || '';
+            if (!textToCopy.trim()) return;
+
+            // Copy to clipboard
+            const success = await this.copyToClipboard(textToCopy);
+            if (success) {
+                console.log('[MultiAgentHandlers] Message copied successfully via copy button');
+                
+                // Show visual feedback
+                this.showCopyFeedback(copyBtn);
+            }
+        }, true);
+    },
+
+    /**
+     * Copy text to clipboard with multiple fallback strategies
+     */
+    async copyToClipboard(text) {
+        try {
+            // Try Electron API first
+            if (window.electronAPI && typeof window.electronAPI.writeClipboardText === 'function') {
+                const result = await window.electronAPI.writeClipboardText(text);
+                if (result && result.success) {
+                    console.log('[MultiAgentHandlers] Copied via electron API');
+                    return true;
+                }
+            }
+        } catch (e) {
+            console.warn('[MultiAgentHandlers] Electron clipboard failed:', e);
+        }
+
+        try {
+            // Try Navigator Clipboard API
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                await navigator.clipboard.writeText(text);
+                console.log('[MultiAgentHandlers] Copied via navigator.clipboard');
+                return true;
+            }
+        } catch (e) {
+            console.warn('[MultiAgentHandlers] Navigator clipboard failed:', e);
+        }
+
+        // Fallback to execCommand
+        try {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-9999px';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(textarea);
+            if (ok) {
+                console.log('[MultiAgentHandlers] Copied via execCommand');
+                return true;
+            }
+        } catch (e) {
+            console.warn('[MultiAgentHandlers] Fallback copy failed:', e);
+        }
+
+        return false;
+    },
+
+    /**
+     * Show visual feedback after copying
+     */
+    showCopyFeedback(button) {
+        // Add success class to button
+        const originalHtml = button.innerHTML;
+        
+        // Change icon to checkmark
+        button.innerHTML = `
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        `;
+        button.classList.add('copy-success');
+        
+        // Reset after 2 seconds
+        setTimeout(() => {
+            button.innerHTML = originalHtml;
+            button.classList.remove('copy-success');
+        }, 2000);
+    },
+
+    /**
+     * Initialize auto-resize textarea for chat input
+     */
+    initAutoResizeTextarea() {
+        console.log('[MultiAgentHandlers] initAutoResizeTextarea called');
+        
+        // Initialize all existing textareas
+        document.querySelectorAll('.agent-chat-input').forEach((textarea) => {
+            this.autoResizeTextarea(textarea);
+        });
+        
+        // Use event delegation to handle input events on all chat textareas
+        document.addEventListener('input', (e) => {
+            const textarea = e.target;
+            if (!textarea.classList.contains('agent-chat-input')) return;
+
+            // Auto-resize the textarea
+            this.autoResizeTextarea(textarea);
+        });
+
+        // Also handle initial resize and focus events
+        document.addEventListener('focus', (e) => {
+            const textarea = e.target;
+            if (!textarea.classList.contains('agent-chat-input')) return;
+            
+            // Resize on focus to ensure correct height
+            this.autoResizeTextarea(textarea);
+        }, true);
+    },
+
+    /**
+     * Auto-resize textarea based on content
+     * @param {HTMLTextAreaElement} textarea - The textarea element to resize
+     */
+    autoResizeTextarea(textarea) {
+        if (!textarea) return;
+
+        // Temporarily collapse to get the right scrollHeight
+        textarea.style.height = 'auto';
+
+        // Calculate new height
+        const newHeight = textarea.scrollHeight;
+        
+        // Get computed styles for min/max constraints
+        const style = window.getComputedStyle(textarea);
+        const minHeight = parseFloat(style.minHeight) || 0;
+        const maxHeight = parseFloat(style.maxHeight) || Infinity;
+
+        // Apply constraints
+        let finalHeight = newHeight;
+        if (finalHeight < minHeight) {
+            finalHeight = minHeight;
+        } else if (finalHeight > maxHeight) {
+            finalHeight = maxHeight;
+            textarea.style.overflowY = 'auto';
+        } else {
+            textarea.style.overflowY = 'hidden';
+        }
+
+        // Set the new height
+        textarea.style.height = finalHeight + 'px';
+    },
+
+    /**
+     * Initialize cancel message button click handler
+     */
+    initCancelMessageButton() {
+        console.log('[MultiAgentHandlers] initCancelMessageButton called');
+        
+        // Use event delegation to handle cancel button clicks
+        document.addEventListener('click', (e) => {
+            const cancelBtn = e.target.closest('.cancel-btn');
+            if (!cancelBtn) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const agentId = parseInt(cancelBtn.dataset.agentId);
+            if (agentId) {
+                console.log('[MultiAgentHandlers] Cancelling message for agent:', agentId);
+
+                const activeRequestId = agentState.getRequestIdForAgent(agentId);
+                if (activeRequestId) {
+                    agentState.setCancelledRequestIdForAgent(agentId, activeRequestId);
+                }
+                
+                // Cancel the active stream (for streaming mode)
+                if (window.agentApi && typeof window.agentApi.cancelActiveStream === 'function') {
+                    const cancelled = window.agentApi.cancelActiveStream(agentId);
+                    if (cancelled) {
+                        console.log('[MultiAgentHandlers] Stream cancelled successfully');
+                    }
+                }
+
+                // Cancel active non-stream requests
+                if (window.agentApi && typeof window.agentApi.cancelActiveNonStream === 'function') {
+                    const cancelled = window.agentApi.cancelActiveNonStream(agentId, activeRequestId);
+                    if (cancelled) {
+                        console.log('[MultiAgentHandlers] Non-stream request cancelled successfully');
+                    }
+                }
+                
+                // Immediately update UI to show cancelled message
+                const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
+                const streamingMsg = (messagesContainer && activeRequestId)
+                    ? messagesContainer.querySelector(`.message-item[data-request-id="${String(activeRequestId)}"]`)
+                    : (messagesContainer ? messagesContainer.querySelector('.message-item.streaming') : null);
+                if (streamingMsg) {
+                    streamingMsg.classList.remove('streaming');
+                    const streamingBody = streamingMsg.querySelector('.message-body');
+                    if (streamingBody) {
+                        streamingBody.innerHTML = '<em>Reply cancelled</em>';
+                    }
+                }
+                
+                // Clear request ID to reset UI state
+                agentState.clearRequestIdForAgent(agentId);
+                
+                // Re-enable send button
+                const sendBtn = document.getElementById(`sendMessageBtn-${agentId}`);
+                const inputToolbar = sendBtn?.closest('.input-toolbar');
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('sending');
+                }
+                if (inputToolbar) {
+                    inputToolbar.classList.remove('sending');
+                }
+                
+                // Notify user
+                if (typeof Notification !== 'undefined' && Notification.info) {
+                    Notification.info('Generation cancelled');
+                }
+            }
+        }, true);
     },
 
     openAttachmentPicker(agentId) {
@@ -1906,7 +3040,7 @@ const multiAgentHandlers = {
         if (!message) return;
 
         // Do not allow sending new messages while streaming is in progress
-        if (agentState.getRequestId()) {
+        if (agentState.getRequestIdForAgent(agentId)) {
             return;
         }
 
@@ -1925,10 +3059,16 @@ const multiAgentHandlers = {
 
         console.log('[MultiAgentHandlers] Sending message with agent:', currentAgent.name, 'ID:', agentId);
 
-        // Disable send button
+        // Disable send button and show cancel button
         if (sendBtn) {
             sendBtn.disabled = true;
             sendBtn.classList.add('sending');
+        }
+        
+        // Add sending class to toolbar to toggle buttons
+        const inputToolbar = sendBtn?.closest('.input-toolbar');
+        if (inputToolbar) {
+            inputToolbar.classList.add('sending');
         }
 
         // Hide welcome message
@@ -1958,6 +3098,15 @@ const multiAgentHandlers = {
             : '';
 
         // Add user message
+        const copyIconSvg = `
+            <button class="message-copy-btn" title="Copy message" aria-label="Copy message">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
+        `;
+        
         const userMessageHtml = `
             <div class="message-item user-message">
                 <div class="message-header">
@@ -1968,11 +3117,16 @@ const multiAgentHandlers = {
                     <span class="message-time">${timeStr}</span>
                 </div>
                 <div class="message-body">${this.escapeHtml(message)}${attachmentBlock}</div>
+                <div class="message-footer">
+                    ${copyIconSvg}
+                </div>
             </div>
         `;
         messagesContainer.insertAdjacentHTML('beforeend', userMessageHtml);
 
         input.value = '';
+        // Reset textarea height after sending
+        input.style.height = 'auto';
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
         // Save user message to history
@@ -1987,9 +3141,12 @@ const multiAgentHandlers = {
             console.log('[MultiAgentHandlers] Generated new conversation ID:', conversationId);
         }
 
+        agentState.clearCancelledRequestIdForAgent(agentId);
+
         // Add AI reply container (with thinking animation, show agent name)
+        const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         const assistantMessageHtml = `
-            <div class="message-item assistant-message streaming">
+            <div class="message-item assistant-message streaming" data-request-id="${this.escapeHtml(String(requestId))}">
                 <div class="message-header">
                     <div class="message-avatar assistant-avatar">            
                     <svg viewBox="0 0 48 48" width="26" height="26" xmlns="http://www.w3.org/2000/svg"  fill="currentColor"><g transform="translate(4.8, 4.8) scale(0.8)"><path d="M24 7v3 M21 7h6 M16 12h16a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3z M19 19h2 M27 19h2 M11 34c0-3 3-5 6-5h14c3 0 6 2 6 5v4H11v-4z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="19" r="1.5" fill="currentColor"/><circle cx="28" cy="19" r="1.5" fill="currentColor"/></g></svg>
@@ -2005,21 +3162,27 @@ const multiAgentHandlers = {
                         <span class="thinking-text">Thinking...</span>
                     </div>
                 </div>
+                <div class="message-footer">
+                    ${copyIconSvg}
+                </div>
             </div>
         `;
         messagesContainer.insertAdjacentHTML('beforeend', assistantMessageHtml);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-        // Generate request ID
-        const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        agentState.setRequestId(requestId);
-        agentState.clearStreamingContent();
+        agentState.setRequestIdForAgent(agentId, requestId);
+        agentState.clearStreamingContentForAgent(agentId);
 
         // Helper to re-enable the send button
         const enableSendBtn = () => {
             if (sendBtn) {
                 sendBtn.disabled = false;
                 sendBtn.classList.remove('sending');
+            }
+            // Remove sending class from toolbar to show send button again
+            const inputToolbar = sendBtn?.closest('.input-toolbar');
+            if (inputToolbar) {
+                inputToolbar.classList.remove('sending');
             }
         };
 
@@ -2039,11 +3202,20 @@ const multiAgentHandlers = {
                 // Prepare callbacks (bound to agentId)
                 const callbacks = {
                     onData: (content) => {
-                        agentState.appendStreamingContent(content);
-                        this.updateStreamingMessageForAgent(agentState.getStreamingContent(), agentId);
+                        // Check if cancelled before appending content
+                        if (agentState.getRequestIdForAgent(agentId) !== requestId || agentState.isCancelledRequestForAgent(agentId, requestId)) {
+                            return;
+                        }
+                        agentState.appendStreamingContentForAgent(agentId, content);
+                        this.updateStreamingMessageForAgent(agentState.getStreamingContentForAgent(agentId), agentId, requestId);
                     },
                     onEnd: (savedAttachments, usage) => {
-                        this.finalizeStreamingMessageForAgent(agentId);
+                        // Check if cancelled before finalizing
+                        if (agentState.getRequestIdForAgent(agentId) !== requestId || agentState.isCancelledRequestForAgent(agentId, requestId)) {
+                            console.log('[MultiAgentHandlers] Stream completed but was cancelled, ignoring');
+                            return;
+                        }
+                        this.finalizeStreamingMessageForAgent(agentId, requestId);
                         this.clearAttachments(agentId);
                         if (savedAttachments && savedAttachments.length > 0) {
                             this.updateLastUserMessageAttachmentIds(agentId, conversationId, savedAttachments);
@@ -2051,15 +3223,35 @@ const multiAgentHandlers = {
                         if (usage && showTokenUsage) {
                             this.appendTokenUsageToLastAssistantMessageForAgent(agentId, usage);
                         }
-                        agentState.clearRequestId();
-                        enableSendBtn();
+                        if (agentState.getRequestIdForAgent(agentId) === requestId) {
+                            agentState.clearRequestIdForAgent(agentId);
+                            enableSendBtn();
+                        }
                         // Reload chat list
                         this.loadChatListForAgent(agentId);
                     },
                     onError: (error) => {
-                        this.showStreamErrorForAgent(error, agentId);
-                        agentState.clearRequestId();
-                        enableSendBtn();
+                        // Check if this is a cancellation error
+                        if ((error && (error.name === 'AbortError')) || agentState.isCancelledRequestForAgent(agentId, requestId)) {
+                            console.log('[MultiAgentHandlers] Request was cancelled');
+                            
+                            // Show cancelled message in the bubble
+                            const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
+                            const streamingMsg = messagesContainer ? messagesContainer.querySelector(`.message-item.streaming[data-request-id="${String(requestId)}"]`) : null;
+                            if (streamingMsg) {
+                                streamingMsg.classList.remove('streaming');
+                                const streamingBody = streamingMsg.querySelector('.message-body');
+                                if (streamingBody) {
+                                    streamingBody.innerHTML = '<em>Reply cancelled</em>';
+                                }
+                            }
+                        } else {
+                            this.showStreamErrorForAgent(error, agentId, requestId);
+                        }
+                        if (agentState.getRequestIdForAgent(agentId) === requestId) {
+                            agentState.clearRequestIdForAgent(agentId);
+                            enableSendBtn();
+                        }
                     }
                 };
 
@@ -2094,6 +3286,7 @@ const multiAgentHandlers = {
                 }
             } else {
                 console.log('[MultiAgentHandlers] Calling agent-specific endpoint:', `/api/agent/${agentId}/chat`);
+
                 const result = await agentApi.agentChat(
                     agentId,
                     message,
@@ -2101,15 +3294,46 @@ const multiAgentHandlers = {
                     {
                         use_memory: true,
                         use_knowledge_base: true,
-                        show_token_usage: showTokenUsage
+                        show_token_usage: showTokenUsage,
+                        requestId: requestId
                     }
                 );
+
+                // Check if cancelled before processing response
+                if (agentState.isCancelledRequestForAgent(agentId, requestId)) {
+                    console.log('[MultiAgentHandlers] Non-stream request was cancelled, ignoring response');
+                    
+                    // Update the streaming message to show cancelled
+                    const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
+                    const streamingMsg = messagesContainer ? messagesContainer.querySelector(`.message-item.streaming[data-request-id="${String(requestId)}"]`) : null;
+                    if (streamingMsg) {
+                        streamingMsg.classList.remove('streaming');
+                        const streamingBody = streamingMsg.querySelector('.message-body');
+                        if (streamingBody) {
+                            streamingBody.innerHTML = '<em>Reply cancelled</em>';
+                        }
+                    }
+                    
+                    // Clear request ID and re-enable send button
+                    if (agentState.getRequestIdForAgent(agentId) === requestId) {
+                        agentState.clearRequestIdForAgent(agentId);
+                        enableSendBtn();
+                    }
+                    return;
+                }
+                
+                // Verify this response is for the current request (not from an old/cancelled request)
+                const latestRequestId = agentState.getRequestIdForAgent(agentId);
+                if (latestRequestId !== requestId) {
+                    console.log('[MultiAgentHandlers] Ignoring response from old/cancelled request');
+                    return;
+                }
 
                 const reply = result && result.success && result.data ? (result.data.reply || '') : '';
                 const usage = result && result.success && result.data ? result.data.usage : null;
 
                 const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
-                const streamingMsg = messagesContainer ? messagesContainer.querySelector('.message-item.streaming') : null;
+                const streamingMsg = messagesContainer ? messagesContainer.querySelector(`.message-item.streaming[data-request-id="${String(requestId)}"]`) : null;
                 if (streamingMsg) {
                     streamingMsg.classList.remove('streaming');
                     const body = streamingMsg.querySelector('.message-body');
@@ -2126,25 +3350,42 @@ const multiAgentHandlers = {
                 if (usage && showTokenUsage) {
                     this.appendTokenUsageToLastAssistantMessageForAgent(agentId, usage);
                 }
-                agentState.clearRequestId();
+                agentState.clearRequestIdForAgent(agentId);
                 enableSendBtn();
                 this.loadChatListForAgent(agentId);
             }
 
             // Setup timeout handling
             setTimeout(() => {
-                if (agentState.getRequestId() === requestId) {
-                    this.showStreamErrorForAgent('Request timed out. Please try again.', agentId);
-                    agentState.clearRequestId();
+                if (agentState.getRequestIdForAgent(agentId) === requestId) {
+                    this.showStreamErrorForAgent('Request timed out. Please try again.', agentId, requestId);
+                    agentState.clearRequestIdForAgent(agentId);
                     enableSendBtn();
                 }
             }, 120000); // 2 minute timeout
 
         } catch (error) {
             console.error(`[MultiAgentHandlers] Agent ${agentId} failed to send message:`, error);
-            this.showStreamErrorForAgent(error.message, agentId);
-            agentState.clearRequestId();
-            enableSendBtn();
+            const isAbort = error && error.name === 'AbortError';
+            const isCancelled = isAbort || agentState.isCancelledRequestForAgent(agentId, requestId);
+            if (isCancelled) {
+                const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
+                const msg = messagesContainer ? messagesContainer.querySelector(`.message-item[data-request-id="${String(requestId)}"]`) : null;
+                if (msg) {
+                    msg.classList.remove('streaming');
+                    const body = msg.querySelector('.message-body');
+                    if (body) {
+                        body.innerHTML = '<em>Reply cancelled</em>';
+                    }
+                }
+            } else {
+                this.showStreamErrorForAgent(error && error.message ? error.message : String(error), agentId, requestId);
+            }
+
+            if (agentState.getRequestIdForAgent(agentId) === requestId) {
+                agentState.clearRequestIdForAgent(agentId);
+                enableSendBtn();
+            }
         }
     },
 
@@ -2190,11 +3431,14 @@ const multiAgentHandlers = {
     /**
      * Update streaming message display (per-agent)
      */
-    updateStreamingMessageForAgent(content, agentId) {
+    updateStreamingMessageForAgent(content, agentId, requestId = null) {
         const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
         if (!messagesContainer) return;
 
-        const streamingBody = messagesContainer.querySelector('.message-item.streaming .message-body');
+        const selector = requestId
+            ? `.message-item.streaming[data-request-id="${String(requestId)}"] .message-body`
+            : '.message-item.streaming .message-body';
+        const streamingBody = messagesContainer.querySelector(selector);
         if (streamingBody) {
             streamingBody.innerHTML = this.renderMarkdown(content, true) + '<span class="cursor-blink"></span>';
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -2204,16 +3448,19 @@ const multiAgentHandlers = {
     /**
      * Finalize streaming message (per-agent)
      */
-    finalizeStreamingMessageForAgent(agentId) {
+    finalizeStreamingMessageForAgent(agentId, requestId = null) {
         const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
         if (!messagesContainer) return;
 
-        const streamingMsg = messagesContainer.querySelector('.message-item.streaming');
+        const selector = requestId
+            ? `.message-item.streaming[data-request-id="${String(requestId)}"]`
+            : '.message-item.streaming';
+        const streamingMsg = messagesContainer.querySelector(selector);
         if (streamingMsg) {
             streamingMsg.classList.remove('streaming');
             const streamingBody = streamingMsg.querySelector('.message-body');
             if (streamingBody) {
-                const content = agentState.getStreamingContent();
+                const content = agentState.getStreamingContentForAgent(agentId);
                 streamingBody.innerHTML = this.renderMarkdown(content);
                 this.highlightCodeBlocks(streamingBody);
 
@@ -2225,18 +3472,21 @@ const multiAgentHandlers = {
         }
 
         // Save to history
-        agentState.addMessage('assistant', agentState.getStreamingContent());
-        agentState.clearStreamingContent();
+        agentState.addMessageForAgent(agentId, 'assistant', agentState.getStreamingContentForAgent(agentId));
+        agentState.clearStreamingContentForAgent(agentId);
     },
 
     /**
      * Show streaming error (per-agent)
      */
-    showStreamErrorForAgent(error, agentId) {
+    showStreamErrorForAgent(error, agentId, requestId = null) {
         const messagesContainer = document.getElementById(`chatMessages-${agentId}`);
         if (!messagesContainer) return;
 
-        const streamingMsg = messagesContainer.querySelector('.message-item.streaming');
+        const selector = requestId
+            ? `.message-item.streaming[data-request-id="${String(requestId)}"]`
+            : '.message-item.streaming';
+        const streamingMsg = messagesContainer.querySelector(selector);
         if (streamingMsg) {
             streamingMsg.classList.remove('streaming');
             streamingMsg.classList.add('error-message');
@@ -2707,6 +3957,46 @@ const multiAgentHandlers = {
             if (labelText === 'Show token usage') {
                 cb.checked = this.getShowTokenUsageForAgent(agentId);
             }
+            if (labelText === 'Thinking effort') {
+                cb.checked = !!modelConfig.thinking_effort_enabled;
+            }
+        }
+
+        const effortSelect = paramPane.querySelector('select.thinking-effort-select');
+        if (effortSelect) {
+            const v = String(modelConfig.thinking_effort_level || '').trim().toLowerCase();
+            if (v) effortSelect.value = v;
+        }
+
+        try {
+            const checkboxes2 = Array.from(paramPane.querySelectorAll('input[type="checkbox"]'));
+            for (const cb of checkboxes2) {
+                const label = cb.closest('label.param-toggle');
+                const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+                if (labelText === 'Thinking effort') {
+                    const enabled = !!cb.checked;
+                    const wrapper = paramPane.querySelector('.thinking-effort-wrapper');
+                    if (wrapper) wrapper.style.display = enabled ? '' : 'none';
+                    const linkBox = paramPane.querySelector('.thinking-effort-doc-link');
+                    const link = paramPane.querySelector('.thinking-effort-doc-anchor');
+                    let url = '';
+                    try {
+                        const provider = String(modelConfig.provider || '').trim().toLowerCase();
+                        if (provider === 'gemini') url = 'https://ai.google.dev/gemini-api/docs/openai?authuser=1&hl=zh-cn#thinking';
+                        else if (provider === 'claude') url = 'https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking';
+                        else url = 'https://developers.openai.com/api/docs/models/all';
+                    } catch (e) {
+                        url = 'https://developers.openai.com/api/docs/models/all';
+                    }
+                    if (link) {
+                        link.dataset.externalUrl = enabled ? url : '';
+                        link.href = enabled ? url : '#';
+                    }
+                    if (linkBox) linkBox.style.display = enabled ? '' : 'none';
+                    break;
+                }
+            }
+        } catch (e) {
         }
     },
 
@@ -2751,6 +4041,14 @@ const multiAgentHandlers = {
             if (labelText === 'Stream mode') {
                 params.stream = !!cb.checked;
             }
+            if (labelText === 'Thinking effort') {
+                params.thinking_effort_enabled = !!cb.checked;
+            }
+        }
+
+        const effortSelect = paramPane.querySelector('select.thinking-effort-select');
+        if (effortSelect) {
+            params.thinking_effort_level = String(effortSelect.value || '').trim();
         }
 
         try {
@@ -2938,7 +4236,8 @@ const multiAgentHandlers = {
                 const builtin = [
                     { id: 'mindmap', name: 'Mind map plugin', description: 'Convert Markdown mindmap syntax in chat messages into a visual mind map' },
                     { id: 'code', name: 'Code execution plugin', description: 'Extract code blocks from chat messages and provide edit/run features (supports JavaScript, Python, HTML/CSS/JS)' },
-                    { id: 'avatar3d', name: '3D Avatar', description: 'Open the 3D Avatar page in the right settings panel' }
+                    { id: 'avatar3d', name: '3D Avatar', description: 'Open the 3D Avatar page in the right settings panel' },
+                    { id: 'llm-log', name: 'LLM Log', description: 'Browse backend LLM logs by date and file.' }
                 ];
 
                 const loadIntoUi = async () => {
@@ -3122,6 +4421,12 @@ const multiAgentHandlers = {
                 description: 'Extract code from chat messages and run it in the browser',
                 icon: '<path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>'
             },
+            'llm-log': {
+                name: 'LLM Log',
+                fullName: 'LLM Log',
+                description: 'Browse backend LLM logs by date and file.',
+                icon: '<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>'
+            },
             'calendar': {
                 name: 'Calendar',
                 fullName: 'Calendar plugin',
@@ -3145,6 +4450,20 @@ const multiAgentHandlers = {
         const config = pluginConfigs[pluginId];
         if (!config) {
             console.error('[MultiAgentHandlers] Unknown plugin ID:', pluginId);
+            return;
+        }
+
+        if (pluginId === 'llm-log') {
+            const builtinPlugin = {
+                plugin_id: 'PL_BUILTIN_LOG_VIEWER',
+                name: 'LLM Log',
+                version: '1.0.0',
+                alias_name: 'log-viewer',
+                description: 'Browse backend LLM logs by date and file.',
+                filename: '/scripts/builtin_plugins/log_viewer/index.js',
+                plugin_type: 'renderer'
+            };
+            this.loadRendererPluginForAgent(builtinPlugin, agentId);
             return;
         }
 

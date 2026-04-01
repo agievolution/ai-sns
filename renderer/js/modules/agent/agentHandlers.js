@@ -172,20 +172,26 @@ const agentHandlers = {
         const pane = document.createElement('div');
         pane.className = 'tab-pane';
         pane.dataset.tab = tabId;
-        pane.innerHTML = `
-            <div class="settings-section">
-                <div class="settings-section-title">
-                    <span>${name}</span>
+        if (pluginKey === 'PL_BUILTIN_LOG_VIEWER') {
+            pane.innerHTML = `<div class="status-section"><div class="status-rows"><div class="sns-plugin-host" style="min-height: 120px;"></div></div></div>`;
+        } else {
+            pane.innerHTML = `
+                <div class="settings-section">
+                    <div class="settings-section-title">
+                        <span>${name}</span>
+                    </div>
+                    <div class="plugin-content" id="plugin-content-ext-${pluginKey}"></div>
                 </div>
-                <div class="plugin-content" id="plugin-content-ext-${pluginKey}"></div>
-            </div>
-        `;
+            `;
+        }
         tabContent.appendChild(pane);
 
         // Activate tab
         tabButton.click();
 
-        const container = pane.querySelector(`#plugin-content-ext-${CSS.escape(pluginKey)}`);
+        const container = (pluginKey === 'PL_BUILTIN_LOG_VIEWER')
+            ? pane.querySelector('.sns-plugin-host')
+            : pane.querySelector(`#plugin-content-ext-${CSS.escape(pluginKey)}`);
         if (!container) return;
 
         const api = {
@@ -684,7 +690,7 @@ const agentHandlers = {
                         const builtin = [
                             { id: 'mindmap', name: 'Mind map plugin', description: 'Convert Markdown mindmap syntax in chat messages into a visual mind map' },
                             { id: 'code', name: 'Code execution plugin', description: 'Extract code blocks from chat messages and provide edit/run features (supports JavaScript, Python, HTML/CSS/JS)' },
-
+                            { id: 'llm-log', name: 'LLM Log', description: 'Browse backend LLM logs by date and file.' },
                         ];
                         if (builtin.length) {
                             const group = document.createElement('optgroup');
@@ -867,6 +873,12 @@ const agentHandlers = {
                 description: 'Extract code from chat messages and run it in the browser',
                 icon: '<path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>'
             },
+            'llm-log': {
+                name: 'LLM Log',
+                fullName: 'LLM Log',
+                description: 'Browse backend LLM logs by date and file.',
+                icon: '<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>'
+            },
             'calendar': {
                 name: 'Calendar',
                 fullName: 'Calendar plugin',
@@ -884,6 +896,20 @@ const agentHandlers = {
         const config = pluginConfigs[pluginId];
         if (!config) {
             console.error('[AgentHandlers] Unknown plugin ID:', pluginId);
+            return;
+        }
+
+        if (pluginId === 'llm-log') {
+            const builtinPlugin = {
+                plugin_id: 'PL_BUILTIN_LOG_VIEWER',
+                name: 'LLM Log',
+                version: '1.0.0',
+                alias_name: 'log-viewer',
+                description: 'Browse backend LLM logs by date and file.',
+                filename: '/scripts/builtin_plugins/log_viewer/index.js',
+                plugin_type: 'renderer'
+            };
+            this.loadAgentRendererPlugin(builtinPlugin);
             return;
         }
 
@@ -1107,8 +1133,15 @@ const agentHandlers = {
         this._streamHandlers = {
             onData: (data) => {
                 if (data.requestId === agentState.getRequestId()) {
-                    agentState.appendStreamingContent(data.content);
-                    this.updateStreamingMessage(agentState.getStreamingContent());
+                    const currentAgent = agentState.getCurrentAgent();
+                    const agentId = currentAgent ? currentAgent.id : null;
+                    if (agentId !== null && agentId !== undefined) {
+                        agentState.appendStreamingContentForAgent(agentId, data.content);
+                        this.updateStreamingMessage(agentState.getStreamingContentForAgent(agentId));
+                    } else {
+                        agentState.appendStreamingContent(data.content);
+                        this.updateStreamingMessage(agentState.getStreamingContent());
+                    }
                 }
             },
             onEnd: (data) => {
@@ -1483,6 +1516,16 @@ const agentHandlers = {
             '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>' :
             '<svg viewBox="0 0 48 48" width="26" height="26" xmlns="http://www.w3.org/2000/svg"  fill="currentColor"><g transform="translate(4.8, 4.8) scale(0.8)"><path d="M24 7v3 M21 7h6 M16 12h16a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3z M19 19h2 M27 19h2 M11 34c0-3 3-5 6-5h14c3 0 6 2 6 5v4H11v-4z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="19" r="1.5" fill="currentColor"/><circle cx="28" cy="19" r="1.5" fill="currentColor"/></g></svg>';
 
+        // Copy icon SVG
+        const copyIconSvg = `
+            <button class="message-copy-btn" title="Copy message" aria-label="Copy message">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
+        `;
+
         return `
             <div class="message-item ${isUser ? 'user-message' : 'assistant-message'}">
                 <div class="message-header">
@@ -1493,6 +1536,9 @@ const agentHandlers = {
                     <span class="message-time">${time}</span>
                 </div>
                 <div class="message-body">${this.renderMarkdown(content)}</div>
+                <div class="message-footer">
+                    ${copyIconSvg}
+                </div>
             </div>
         `;
     },
@@ -1566,10 +1612,16 @@ const agentHandlers = {
         const agentId = currentAgent.id;
         console.log('[AgentHandlers] Sending message with agent:', currentAgent.name, 'ID:', agentId);
 
-        // Disable send button
+        // Disable send button and show cancel button
         if (sendBtn) {
             sendBtn.disabled = true;
             sendBtn.classList.add('sending');
+        }
+        
+        // Add sending class to toolbar to toggle buttons
+        const inputToolbar = sendBtn?.closest('.input-toolbar');
+        if (inputToolbar) {
+            inputToolbar.classList.add('sending');
         }
 
         // Hide welcome message
@@ -1599,11 +1651,16 @@ const agentHandlers = {
                     <span class="message-time">${timeStr}</span>
                 </div>
                 <div class="message-body">${this.escapeHtml(message)}</div>
+                <div class="message-footer">
+                    ${copyIconSvg}
+                </div>
             </div>
         `;
         messagesContainer.insertAdjacentHTML('beforeend', userMessageHtml);
 
         input.value = '';
+        // Reset textarea height after sending
+        input.style.height = 'auto';
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
         // Save user message to history
@@ -1618,6 +1675,15 @@ const agentHandlers = {
         }
 
         // Add AI reply container (with thinking animation)
+        const copyIconSvg = `
+            <button class="message-copy-btn" title="Copy message" aria-label="Copy message">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
+        `;
+        
         const assistantMessageHtml = `
             <div class="message-item assistant-message streaming">
                 <div class="message-header">
@@ -1635,6 +1701,9 @@ const agentHandlers = {
                         <span class="thinking-text">Thinking...</span>
                     </div>
                 </div>
+                <div class="message-footer">
+                    ${copyIconSvg}
+                </div>
             </div>
         `;
         messagesContainer.insertAdjacentHTML('beforeend', assistantMessageHtml);
@@ -1642,14 +1711,19 @@ const agentHandlers = {
 
         // Generate request ID (for streaming response tracking)
         const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        agentState.setRequestId(requestId);
-        agentState.clearStreamingContent();
+        agentState.setRequestIdForAgent(agentId, requestId);
+        agentState.clearStreamingContentForAgent(agentId);
 
         // Helper to re-enable the send button
         const enableSendBtn = () => {
             if (sendBtn) {
                 sendBtn.disabled = false;
                 sendBtn.classList.remove('sending');
+            }
+            // Remove sending class from toolbar to show send button again
+            const inputToolbar = sendBtn?.closest('.input-toolbar');
+            if (inputToolbar) {
+                inputToolbar.classList.remove('sending');
             }
         };
 
@@ -1658,19 +1732,46 @@ const agentHandlers = {
             // Prepare callbacks
             const callbacks = {
                 onData: (content) => {
-                    agentState.appendStreamingContent(content);
-                    this.updateStreamingMessage(agentState.getStreamingContent());
+                    // Check if cancelled before appending content
+                    if (agentState.isCancelledForAgent(agentId)) {
+                        return;
+                    }
+                    agentState.appendStreamingContentForAgent(agentId, content);
+                    this.updateStreamingMessage(agentState.getStreamingContentForAgent(agentId));
                 },
                 onEnd: () => {
+                    // Check if cancelled before finalizing
+                    if (agentState.isCancelledForAgent(agentId)) {
+                        console.log('[AgentHandlers] Stream completed but was cancelled, ignoring');
+                        agentState.setCancelledForAgent(agentId, false);
+                        return;
+                    }
                     this.finalizeStreamingMessage();
-                    agentState.clearRequestId();
+                    agentState.clearRequestIdForAgent(agentId);
                     enableSendBtn();
                     // After streaming completes, reload chat list to show the new conversation
                     this.loadChatList();
                 },
                 onError: (error) => {
-                    this.showStreamError(error);
-                    agentState.clearRequestId();
+                    // Check if this is a cancellation error
+                    if (error.name === 'AbortError' || agentState.isCancelledForAgent(agentId)) {
+                        console.log('[AgentHandlers] Request was cancelled');
+                        agentState.setCancelledForAgent(agentId, false);
+                        
+                        // Show cancelled message in the bubble
+                        const messagesContainer = document.getElementById('chatMessages');
+                        const streamingMsg = messagesContainer ? messagesContainer.querySelector('.message-item.streaming') : null;
+                        if (streamingMsg) {
+                            streamingMsg.classList.remove('streaming');
+                            const streamingBody = streamingMsg.querySelector('.message-body');
+                            if (streamingBody) {
+                                streamingBody.innerHTML = '<em>Reply cancelled</em>';
+                            }
+                        }
+                    } else {
+                        this.showStreamError(error);
+                    }
+                    agentState.clearRequestIdForAgent(agentId);
                     enableSendBtn();
                 }
             };
@@ -1692,7 +1793,7 @@ const agentHandlers = {
             setTimeout(() => {
                 if (agentState.getRequestId() === requestId) {
                     this.showStreamError('Request timed out. Please try again.');
-                    agentState.clearRequestId();
+                    agentState.clearRequestIdForAgent(agentId);
                     enableSendBtn();
                 }
             }, 120000); // 2 minute timeout
@@ -1700,7 +1801,7 @@ const agentHandlers = {
         } catch (error) {
             console.error('Failed to send message:', error);
             this.showStreamError(error.message);
-            agentState.clearRequestId();
+            agentState.clearRequestIdForAgent(agentId);
             enableSendBtn();
         }
 
@@ -1729,7 +1830,11 @@ const agentHandlers = {
             streamingMsg.classList.remove('streaming');
             const streamingBody = streamingMsg.querySelector('.message-body');
             if (streamingBody) {
-                const content = agentState.getStreamingContent();
+                const currentAgent = agentState.getCurrentAgent();
+                const agentId = currentAgent ? currentAgent.id : null;
+                const content = (agentId !== null && agentId !== undefined)
+                    ? agentState.getStreamingContentForAgent(agentId)
+                    : agentState.getStreamingContent();
                 streamingBody.innerHTML = this.renderMarkdown(content);
                 // Highlight code blocks
                 this.highlightCodeBlocks(streamingBody);
@@ -1741,8 +1846,15 @@ const agentHandlers = {
             }
         }
         // Save to history
-        agentState.addMessage('assistant', agentState.getStreamingContent());
-        agentState.clearStreamingContent();
+        const currentAgent = agentState.getCurrentAgent();
+        const agentId = currentAgent ? currentAgent.id : null;
+        if (agentId !== null && agentId !== undefined) {
+            agentState.addMessageForAgent(agentId, 'assistant', agentState.getStreamingContentForAgent(agentId));
+            agentState.clearStreamingContentForAgent(agentId);
+        } else {
+            agentState.addMessage('assistant', agentState.getStreamingContent());
+            agentState.clearStreamingContent();
+        }
     },
 
     /**
@@ -2129,10 +2241,50 @@ If you have more questions, feel free to ask!`;
             }
         });
 
-        // Stream mode
-        const streamCheckbox = paramTab.querySelector('input[type="checkbox"]');
-        if (streamCheckbox && modelConfig.stream !== undefined) {
-            streamCheckbox.checked = modelConfig.stream;
+        const checkboxes = Array.from(paramTab.querySelectorAll('input[type="checkbox"]'));
+        for (const cb of checkboxes) {
+            const label = cb.closest('label.param-toggle');
+            const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+            if (labelText === 'Stream mode' && modelConfig.stream !== undefined) {
+                cb.checked = !!modelConfig.stream;
+            }
+        }
+
+        for (const cb of checkboxes) {
+            const label = cb.closest('label.param-toggle');
+            const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+            if (labelText === 'Thinking effort') {
+                cb.checked = !!modelConfig.thinking_effort_enabled;
+            }
+        }
+
+        const effortSelect = paramTab.querySelector('select.thinking-effort-select');
+        if (effortSelect) {
+            const v = String(modelConfig.thinking_effort_level || '').trim().toLowerCase();
+            if (v) effortSelect.value = v;
+        }
+
+        try {
+            const wrapper = paramTab.querySelector('.thinking-effort-wrapper');
+            const enabled = !!modelConfig.thinking_effort_enabled;
+            if (wrapper) wrapper.style.display = enabled ? '' : 'none';
+            const linkBox = paramTab.querySelector('.thinking-effort-doc-link');
+            const link = paramTab.querySelector('.thinking-effort-doc-anchor');
+            let url = '';
+            try {
+                const provider = String(modelConfig.provider || '').trim().toLowerCase();
+                if (provider === 'gemini') url = 'https://ai.google.dev/gemini-api/docs/openai?authuser=1&hl=zh-cn#thinking';
+                else if (provider === 'claude') url = 'https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking';
+                else url = 'https://developers.openai.com/api/docs/models/all';
+            } catch (e) {
+                url = 'https://developers.openai.com/api/docs/models/all';
+            }
+            if (link) {
+                link.dataset.externalUrl = enabled ? url : '';
+                link.href = enabled ? url : '#';
+            }
+            if (linkBox) linkBox.style.display = enabled ? '' : 'none';
+        } catch (e) {
         }
     },
 
@@ -2155,6 +2307,68 @@ If you have more questions, feel free to ask!`;
         const paramTab = document.querySelector('[data-tab="param"]');
         if (!paramTab) return;
 
+        const resolveThinkingEffortDocUrl = () => {
+            try {
+                const cfg = agentState.currentModelConfig;
+                const provider = String((cfg && cfg.provider) ? cfg.provider : '').trim().toLowerCase();
+                if (provider === 'gemini') return 'https://ai.google.dev/gemini-api/docs/openai?authuser=1&hl=zh-cn#thinking';
+                if (provider === 'claude') return 'https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking';
+                return 'https://developers.openai.com/api/docs/models/all';
+            } catch (e) {
+                return 'https://developers.openai.com/api/docs/models/all';
+            }
+        };
+
+        const openExternalUrl = (url) => {
+            const u = url ? String(url) : '';
+            if (!u) return;
+            try {
+                if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
+                    window.electronAPI.openUrl(u);
+                    return;
+                }
+            } catch (e) {
+            }
+            try {
+                window.open(u, '_blank', 'noopener');
+            } catch (e) {
+            }
+        };
+
+        const syncThinkingEffortVisibility = () => {
+            const checkboxes = Array.from(paramTab.querySelectorAll('input[type="checkbox"]'));
+            let enabled = false;
+            for (const cb of checkboxes) {
+                const label = cb.closest('label.param-toggle');
+                const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+                if (labelText === 'Thinking effort') {
+                    enabled = !!cb.checked;
+                    break;
+                }
+            }
+
+            const wrapper = paramTab.querySelector('.thinking-effort-wrapper');
+            if (wrapper) wrapper.style.display = enabled ? '' : 'none';
+
+            const linkBox = paramTab.querySelector('.thinking-effort-doc-link');
+            const link = paramTab.querySelector('.thinking-effort-doc-anchor');
+            const url = enabled ? resolveThinkingEffortDocUrl() : '';
+            if (link) {
+                link.dataset.externalUrl = url;
+                link.href = url || '#';
+            }
+            if (linkBox) linkBox.style.display = enabled ? '' : 'none';
+        };
+
+        paramTab.addEventListener('click', (e) => {
+            const anchor = e.target.closest('a.thinking-effort-doc-anchor[data-external-url]');
+            if (!anchor) return;
+            const url = anchor.dataset.externalUrl || anchor.getAttribute('href');
+            if (!url || url === '#') return;
+            e.preventDefault();
+            openExternalUrl(url);
+        });
+
         // Use debouncing to avoid frequent saves
         let saveTimeout;
         const debouncedSave = () => {
@@ -2175,6 +2389,16 @@ If you have more questions, feel free to ask!`;
         checkboxes.forEach(checkbox => {
             checkbox.addEventListener('change', debouncedSave);
         });
+
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                const label = checkbox.closest('label.param-toggle');
+                const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+                if (labelText === 'Thinking effort') {
+                    syncThinkingEffortVisibility();
+                }
+            });
+        });
     },
 
     /**
@@ -2184,6 +2408,13 @@ If you have more questions, feel free to ask!`;
         const currentConfig = agentState.currentModelConfig;
         if (!currentConfig || !currentConfig.config_id) {
             console.warn('[AgentHandlers] No current model config; cannot save');
+            return;
+        }
+
+        const currentAgent = agentState.getCurrentAgent();
+        const agentId = currentAgent ? currentAgent.id : null;
+        if (!agentId) {
+            console.warn('[AgentHandlers] No current agent selected; cannot save agent model params');
             return;
         }
 
@@ -2214,13 +2445,32 @@ If you have more questions, feel free to ask!`;
         });
 
         // Stream mode
-        const streamCheckbox = paramTab.querySelector('input[type="checkbox"]');
-        if (streamCheckbox) {
-            params.stream = streamCheckbox.checked;
+        const streamCheckboxes = Array.from(paramTab.querySelectorAll('input[type="checkbox"]'));
+        for (const cb of streamCheckboxes) {
+            const label = cb.closest('label.param-toggle');
+            const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+            if (labelText === 'Stream mode') {
+                params.stream = !!cb.checked;
+                break;
+            }
+        }
+
+        const checkboxes = streamCheckboxes;
+        for (const cb of checkboxes) {
+            const label = cb.closest('label.param-toggle');
+            const labelText = label ? (label.querySelector('span')?.textContent || '').trim() : '';
+            if (labelText === 'Thinking effort') {
+                params.thinking_effort_enabled = !!cb.checked;
+            }
+        }
+
+        const effortSelect = paramTab.querySelector('select.thinking-effort-select');
+        if (effortSelect) {
+            params.thinking_effort_level = String(effortSelect.value || '').trim();
         }
 
         try {
-            const response = await fetch(this.resolve(`/api/agent/llm-configs/${currentConfig.config_id}`), {
+            const response = await fetch(this.resolve(`/api/agent/${agentId}/model-params`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(params)

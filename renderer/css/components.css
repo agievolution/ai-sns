@@ -2895,7 +2895,7 @@ body.theme-dark .thinking-log-nav-btn:hover {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 20px;
+    padding: 8px 20px;
     border-bottom: 1px solid var(--border-light);
     background: #fff;
     flex-shrink: 0; /* Prevent being compressed */
@@ -2977,33 +2977,35 @@ body.theme-dark .thinking-log-nav-btn:hover {
 
 /* Input area */
 .agent-chat-input-area {
-    padding: 16px 24px;
+    padding: 8px 20px;
     background: #fff;
     border-top: 1px solid var(--border-light);
     flex-shrink: 0; /* Prevent being compressed */
 }
 
 .input-hint {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
-    margin-bottom: 12px;
+    margin-bottom: 6px;
 }
 
 .input-wrapper {
-    margin-bottom: 12px;
+    margin-bottom: 6px;
 }
 
 .agent-chat-input {
     width: 100%;
-    min-height: 60px;
-    max-height: 150px;
-    padding: 12px 16px;
+    min-height: calc(1.5em * 2 + 16px);  /* 2 lines minimum */
+    max-height: calc(1.5em * 5 + 16px);  /* 5 lines maximum */
+    padding: 8px 12px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    font-size: 14px;
+    font-size: 13px;
     font-family: inherit;
+    line-height: 1.5;
     resize: none;
     outline: none;
+    overflow-y: auto;
 }
 
 .agent-chat-input:focus {
@@ -3014,6 +3016,7 @@ body.theme-dark .thinking-log-nav-btn:hover {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
 }
 
 .toolbar-buttons {
@@ -3022,8 +3025,8 @@ body.theme-dark .thinking-log-nav-btn:hover {
 }
 
 .toolbar-icon-btn {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3042,8 +3045,8 @@ body.theme-dark .thinking-log-nav-btn:hover {
 }
 
 .send-btn {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3057,6 +3060,35 @@ body.theme-dark .thinking-log-nav-btn:hover {
 
 .send-btn:hover {
     background: var(--color-primary-hover);
+}
+
+/* Cancel button (shown during streaming) */
+.cancel-btn {
+    width: 32px;
+    height: 32px;
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    background: var(--gray-400); /* Medium gray for light theme */
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #fff;
+    transition: all 0.2s ease;
+}
+
+.cancel-btn:hover {
+    background: var(--gray-500);
+    transform: scale(1.05);
+}
+
+/* Show cancel button when sending */
+.input-toolbar.sending .send-btn {
+    display: none;
+}
+
+.input-toolbar.sending .cancel-btn {
+    display: flex;
 }
 
 /* === Agent sidebar styles === */
@@ -4587,12 +4619,9 @@ body.theme-dark .chat-tree .tree-item.active {
     color: #fff;
 }
 
-/* KM note tree */
+/* KM note tree - Aligned with agent chat list style */
 .km-note-tree {
-    flex: 0 1 auto;
-    max-height: 50%;
-    overflow-y: auto;
-    padding: 0 8px;
+    font-size: 13px;
 }
 
 .km-tree-node {
@@ -4603,9 +4632,10 @@ body.theme-dark .chat-tree .tree-item.active {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 12px;
-    border-radius: var(--radius-sm);
+    padding: 6px 8px;
     cursor: pointer;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
     transition: background 0.15s ease;
 }
 
@@ -4618,9 +4648,9 @@ body.theme-dark .chat-tree .tree-item.active {
     color: var(--color-primary);
 }
 
- .km-tree-item.active .tree-text {
-     color: inherit;
- }
+.km-tree-item.active .tree-text {
+    color: inherit;
+}
 
 .tree-expand {
     font-size: 10px;
@@ -5806,13 +5836,17 @@ body.theme-dark .agent-chat-messages .assistant-message .message-sender {
 
 /* Send button state */
 .send-btn.sending {
-    opacity: 0.6;
+    background: var(--color-primary-disabled);
+    opacity: 0.5;
     cursor: not-allowed;
+    transform: scale(0.95);
 }
 
 .send-btn:disabled {
-    opacity: 0.6;
+    background: var(--gray-400);
+    opacity: 0.5;
     cursor: not-allowed;
+    transform: scale(0.95);
 }
 
 /* Error message */
@@ -6199,6 +6233,80 @@ body.theme-dark .agent-chat-messages .message-body blockquote {
 
 body.theme-dark .agent-chat-messages .thinking-text {
     color: #94a3b8;
+}
+
+/* Message context menu styles */
+#messageContextMenu {
+    position: fixed;
+    display: none;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-md);
+    z-index: 10000;
+    min-width: 120px;
+    overflow: hidden;
+}
+
+#messageContextMenu .context-menu-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s ease;
+}
+
+#messageContextMenu .context-menu-item:hover {
+    background: var(--bg-hover);
+    color: var(--color-primary);
+}
+
+#messageContextMenu svg {
+    flex-shrink: 0;
+}
+
+/* Message copy button styles */
+.message-footer {
+    display: flex;
+    justify-content: flex-start; /* Align to left */
+    padding: 4px 0 0 32px; /* Left padding to align with message body (24px + 8px) */
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.message-item:hover .message-footer {
+    opacity: 1;
+}
+
+.message-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.message-copy-btn:hover {
+    background: var(--bg-hover);
+    color: var(--color-primary);
+}
+
+.message-copy-btn:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+}
+
+.message-copy-btn.copy-success {
+    color: var(--color-success);
 }
 
 body.theme-dark .agent-chat-messages {
@@ -6821,6 +6929,14 @@ body.theme-dark .form-select:focus {
     min-height: 0;
 }
 
+ .agent-settings-panel .settings-tab-content,
+ .agent-settings-panel .settings-tab-content * {
+     user-select: text;
+     -webkit-user-select: text;
+     -moz-user-select: text;
+     -ms-user-select: text;
+ }
+
 .settings-tab-content .tab-pane {
     display: none;
     flex: 1;
@@ -6951,6 +7067,23 @@ body.theme-dark .form-select:focus {
 
 .param-toggle input[type="checkbox"]:checked + .toggle-slider::before {
     transform: translateX(18px);
+}
+
+.thinking-effort-wrapper {
+    gap: 6px;
+}
+
+.thinking-effort-doc-link {
+    font-size: 12px;
+}
+
+.thinking-effort-doc-link a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.thinking-effort-doc-link a:hover {
+    text-decoration: underline;
 }
 
 /* Prompt tab styles */
@@ -8721,9 +8854,9 @@ body.theme-dark .control-send-btn:hover {
     border-bottom-color: var(--color-primary);
 }
 
-/* KM Note Container */
+/* KM Note Container - Aligned with agent chat list style */
 .km-note-container {
-    max-height: 300px;
+    max-height: 280px;
     overflow-y: auto;
 }
 

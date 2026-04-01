@@ -130,7 +130,33 @@ class ClaudeClient:
 
         return ("".join(text_parts), tool_uses, usage)
 
-    async def create(self, *, model: str, system: str, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]], max_tokens: int, temperature: float) -> Dict[str, Any]:
+    @staticmethod
+    def _normalize_tool_choice(tool_choice: Any) -> Optional[Dict[str, Any]]:
+        if tool_choice is None:
+            return None
+        if isinstance(tool_choice, dict):
+            return tool_choice
+        if isinstance(tool_choice, str):
+            v = tool_choice.strip().lower()
+            if not v:
+                return None
+            if v in ("auto", "any", "none"):
+                return {"type": v}
+        return None
+
+    async def create(
+        self,
+        *,
+        model: str,
+        system: str,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]],
+        tool_choice: Any = None,
+        max_tokens: int,
+        temperature: float,
+        thinking: Optional[Dict[str, Any]] = None,
+        output_config: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         def _do():
             kwargs: Dict[str, Any] = {
                 "model": model,
@@ -139,15 +165,34 @@ class ClaudeClient:
                 "max_tokens": int(max_tokens),
                 "temperature": float(temperature),
             }
+            if thinking:
+                kwargs["thinking"] = thinking
+            if output_config:
+                kwargs["output_config"] = output_config
             if tools:
                 kwargs["tools"] = tools
+                tc = self._normalize_tool_choice(tool_choice) if tool_choice is not None else {"type": "auto"}
+                if tc and not (isinstance(tc, dict) and tc.get("type") == "none"):
+                    kwargs["tool_choice"] = tc
             return self._client.messages.create(**kwargs)
 
         msg = await asyncio.to_thread(_do)
         text, tool_uses, usage = self._extract_text_tool_uses_usage(msg)
         return {"text": text, "tool_uses": tool_uses, "usage": usage, "raw": msg}
 
-    def stream(self, *, model: str, system: str, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]], max_tokens: int, temperature: float):
+    def stream(
+        self,
+        *,
+        model: str,
+        system: str,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]],
+        tool_choice: Any = None,
+        max_tokens: int,
+        temperature: float,
+        thinking: Optional[Dict[str, Any]] = None,
+        output_config: Optional[Dict[str, Any]] = None,
+    ):
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue()
         done = loop.create_future()
@@ -164,8 +209,15 @@ class ClaudeClient:
                     "max_tokens": int(max_tokens),
                     "temperature": float(temperature),
                 }
+                if thinking:
+                    kwargs["thinking"] = thinking
+                if output_config:
+                    kwargs["output_config"] = output_config
                 if tools:
                     kwargs["tools"] = tools
+                    tc = self._normalize_tool_choice(tool_choice) if tool_choice is not None else {"type": "auto"}
+                    if tc and not (isinstance(tc, dict) and tc.get("type") == "none"):
+                        kwargs["tool_choice"] = tc
 
                 with self._client.messages.stream(**kwargs) as stream:
                     for event in stream:

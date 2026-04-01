@@ -4,6 +4,10 @@
  */
 
 const agentApi = {
+    // Store abort controllers for active requests
+    _activeStreamControllers: new Map(),
+    _activeNonStreamControllers: new Map(),
+    
     resolve(urlOrPath) {
         try {
             if (typeof window !== 'undefined' && typeof window.resolveAgentServerUrl === 'function') {
@@ -150,7 +154,15 @@ const agentApi = {
      * Agent non-streaming chat (by ID)
      */
     async agentChat(agentId, message, conversationId = null, options = {}) {
+        let controllerKey = null;
         try {
+            const abortController = new AbortController();
+            const requestId = options && (options.requestId || options.request_id) ? String(options.requestId || options.request_id) : null;
+            controllerKey = requestId
+                ? `nonstream_${agentId}_${requestId}`
+                : `nonstream_${agentId}_${Date.now()}`;
+            this._activeNonStreamControllers.set(controllerKey, abortController);
+
             const response = await fetch(this.resolve(`/api/agent/${agentId}/chat`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -160,12 +172,20 @@ const agentApi = {
                     use_memory: options.use_memory !== false,
                     use_knowledge_base: options.use_knowledge_base !== false,
                     show_token_usage: !!options.show_token_usage
-                })
+                }),
+                signal: abortController.signal
             });
             return await response.json();
         } catch (error) {
             console.error('Agent chat failed:', error);
             throw error;
+        } finally {
+            try {
+                if (controllerKey) {
+                    this._activeNonStreamControllers.delete(controllerKey);
+                }
+            } catch (e) {
+            }
         }
     },
 
@@ -174,6 +194,11 @@ const agentApi = {
      */
     async agentChatStream(agentId, message, conversationId = null, callbacks = {}, options = {}) {
         try {
+            // Create abort controller for this request
+            const abortController = new AbortController();
+            const requestId = `stream_${agentId}_${Date.now()}`;
+            this._activeStreamControllers.set(requestId, abortController);
+            
             const response = await fetch(this.resolve(`/api/agent/${agentId}/chat/stream`), {
                 method: 'POST',
                 headers: {
@@ -186,7 +211,8 @@ const agentApi = {
                     use_memory: options.use_memory !== false,
                     use_knowledge_base: options.use_knowledge_base !== false,
                     show_token_usage: !!options.show_token_usage
-                })
+                }),
+                signal: abortController.signal
             });
 
             if (!response.ok) {
@@ -203,6 +229,9 @@ const agentApi = {
                 const { done, value } = await reader.read();
 
                 if (done) {
+                    // Clean up abort controller
+                    this._activeStreamControllers.delete(requestId);
+                    
                     if (callbacks.onEnd) {
                         callbacks.onEnd([], finalUsage);
                     }
@@ -259,6 +288,42 @@ const agentApi = {
             }
             throw error;
         }
+    },
+
+    /**
+     * Cancel active streaming request for an agent
+     */
+    cancelActiveStream(agentId) {
+        // Find and abort any active stream for this agent
+        let cancelled = false;
+        this._activeStreamControllers.forEach((controller, requestId) => {
+            if (requestId.includes(`stream_${agentId}_`)) {
+                controller.abort();
+                this._activeStreamControllers.delete(requestId);
+                cancelled = true;
+                console.log('[AgentApi] Cancelled active stream for agent:', agentId);
+            }
+        });
+        return cancelled;
+    },
+
+    cancelActiveNonStream(agentId, requestId = null) {
+        let cancelled = false;
+        const prefix = requestId
+            ? `nonstream_${agentId}_${String(requestId)}`
+            : `nonstream_${agentId}_`;
+        this._activeNonStreamControllers.forEach((controller, key) => {
+            if (String(key).startsWith(prefix)) {
+                try {
+                    controller.abort();
+                } catch (e) {
+                }
+                this._activeNonStreamControllers.delete(key);
+                cancelled = true;
+                console.log('[AgentApi] Cancelled active non-stream request for agent:', agentId);
+            }
+        });
+        return cancelled;
     },
 
     /**

@@ -894,6 +894,27 @@ function pauseTrack() {
         clearTimeout(timerHandle);
     }
 
+    try {
+        if (!last_p || typeof last_p.lat !== 'function' || typeof last_p.lng !== 'function') {
+            const persistedPos = (typeof init_route_current_position !== 'undefined' && init_route_current_position !== null)
+                ? init_route_current_position
+                : null;
+            const hasPersisted = persistedPos && Number.isFinite(Number(persistedPos.lng)) && Number.isFinite(Number(persistedPos.lat));
+            if (hasPersisted) {
+                last_p = new google.maps.LatLng(Number(persistedPos.lat), Number(persistedPos.lng));
+            } else if (polyline && typeof polyline.GetPointAtDistance === 'function') {
+                last_p = polyline.GetPointAtDistance(currentDistance);
+            } else if (map && typeof map.getCenter === 'function') {
+                last_p = map.getCenter();
+            }
+        }
+    } catch (e) {
+    }
+
+    if (!last_p || typeof last_p.lat !== 'function' || typeof last_p.lng !== 'function') {
+        return;
+    }
+
     // Compute a new position offset by ~50 meters
     // On Earth, 1 degree of latitude is ~111km, so 50m is ~0.00045 degrees
     const offsetDegrees = 0.00045; // ~50m

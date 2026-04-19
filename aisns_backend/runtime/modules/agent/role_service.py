@@ -4,8 +4,8 @@ import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from runtime.database.base import get_session
-from runtime.database.models.system import RoleConfig
+from db.database import get_db_session as get_session
+from db.models.agent import RoleConfig
 from .role_schemas import RoleConfigCreate, RoleConfigUpdate
 
 

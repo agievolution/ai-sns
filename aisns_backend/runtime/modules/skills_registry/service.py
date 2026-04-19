@@ -8,9 +8,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, UploadFile
 
-from runtime.config.database import get_db_session
-from runtime.database.models.agent import AgentDocSkill
-from runtime.database.models.system import SkillMng
+from db.database import get_db_session
+from db.models.agent import AgentDocSkill
+from db.models.tools import SkillMng
 from runtime.modules.skills_registry.registry import DocSkill, get_docskill_registry
 from runtime.modules.tools.tool_executor import get_tool_executor
 

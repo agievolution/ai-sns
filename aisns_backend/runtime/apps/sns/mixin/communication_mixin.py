@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from runtime.database.models.chat import AiSnsCfg
+from db.models.aisns import AISnsCfg
 from runtime.apps.sns.map_task_manager import MapTaskManager
 from runtime.apps.sns.js_task_manager import JsTaskManager
 from runtime.apps.sns.xmpp_client import XMPPClientManager
@@ -22,8 +22,8 @@ import re
 log = logging.getLogger(__name__)
 from db.DBFactory import (query_AgentCfg, add_AIChatMessages, get_prompt_by_title, query_function_mng,
                           add_function_mng, add_map_visit, get_key_value,
-                          update_map_trade, add_map_trade, query_single_map_trade, update_AiSnsCfg_by_user_id, update_AiSnsCfg_map, query_AiSnsCfg_map, add_mcp_mng, query_mcp_mng,
-                          delete_map_preset_msg, query_map_preset_msg_all, add_map_preset_msg, query_AiSnsCfg_map_setting)
+                          update_map_trade, add_map_trade, query_single_map_trade, update_AISnsCfg_by_user_id, update_AISnsCfg_map, query_AISnsCfg_map, add_mcp_mng, query_mcp_mng,
+                          delete_map_preset_msg, query_map_preset_msg_all, add_map_preset_msg, query_AISnsCfg_map_setting)
 
 from runtime.i18n import lt
 from enum import Enum

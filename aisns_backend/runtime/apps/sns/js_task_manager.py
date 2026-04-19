@@ -1,5 +1,5 @@
 from runtime.shared.utils import generate_random_id
-from db.DBFactory import add_map_activity,query_map_activity_previous,query_AiSnsCfg_map_setting,query_AIChatMessages_All_previous
+from db.DBFactory import add_map_activity,query_map_activity_previous,query_AISnsCfg_map_setting,query_AIChatMessages_All_previous
 import json
 
 class JsTaskManager:

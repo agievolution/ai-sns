@@ -12,8 +12,8 @@ from typing import Optional, Callable, Dict, Any, Tuple
 import httpx
 
 from runtime.modules.agent.agent_manager import agent_manager
-from runtime.database.base import get_session
-from runtime.database.models.agent import AgentCfg
+from db.database import get_db_session as get_session
+from db.models.agent import AgentCfg
 
 logger = logging.getLogger(__name__)
 

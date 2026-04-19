@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 from fastapi import HTTPException
-from runtime.database.models.chat import AIFriend, AIChatMessages, AiSnsCfg
-from runtime.database.models.system import Prompt
-from runtime.database.models.system import SystemCfg
+from db.models.aisns import AIFriend, AIChatMessages, AISnsCfg
+from db.models.agent import Prompt
+from db.models.system import SystemCfg
 from runtime.apps.sns.xmpp_client import XMPPClientManager
 from runtime.apps.sns.message_formatter import format_internal_xmpp_message_for_storage
 
@@ -81,8 +81,8 @@ class SNSService:
                     return default
 
             # Get first record from aisns_cfg
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:
@@ -126,8 +126,8 @@ class SNSService:
         """Get contact list from ai_friend table"""
         try:
             # Get owner account from first aisns_cfg record
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:
@@ -150,8 +150,8 @@ class SNSService:
         """Get chat history with a specific contact"""
         try:
             # Get owner account
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:
@@ -204,8 +204,8 @@ class SNSService:
             stored_content = format_internal_xmpp_message_for_storage(content)
 
             # Save to database
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if config:
@@ -280,8 +280,8 @@ class SNSService:
                 )
 
                 # Save to database
-                config = self.db.query(AiSnsCfg).filter(
-                    AiSnsCfg.is_delete == False
+                config = self.db.query(AISnsCfg).filter(
+                    AISnsCfg.is_delete == False
                 ).first()
 
                 if config:
@@ -375,9 +375,9 @@ class SNSService:
     def get_ai_chat_config(self, user_id: str = None):
         """Get AI chat configuration"""
         try:
-            query = self.db.query(AiSnsCfg).filter(AiSnsCfg.is_delete == False)
+            query = self.db.query(AISnsCfg).filter(AISnsCfg.is_delete == False)
             if user_id:
-                query = query.filter(AiSnsCfg.user_id == user_id)
+                query = query.filter(AISnsCfg.user_id == user_id)
 
             config = query.first()
             if not config:
@@ -391,14 +391,14 @@ class SNSService:
     def update_ai_chat_config(self, user_id: str = None, data: dict = None):
         """Update AI chat configuration"""
         try:
-            query = self.db.query(AiSnsCfg).filter(AiSnsCfg.is_delete == False)
+            query = self.db.query(AISnsCfg).filter(AISnsCfg.is_delete == False)
             if user_id:
-                query = query.filter(AiSnsCfg.user_id == user_id)
+                query = query.filter(AISnsCfg.user_id == user_id)
 
             config = query.first()
             if not config:
                 # Create new config if not exists
-                config = AiSnsCfg(user_id=user_id)
+                config = AISnsCfg(user_id=user_id)
                 self.db.add(config)
 
             # Update fields via write queue
@@ -406,7 +406,7 @@ class SNSService:
             _config_id = config.id
             _data = {k: v for k, v in data.items() if v is not None}
             def _update_cfg(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     for key, value in _data.items():
                         if hasattr(rec, key):
@@ -437,9 +437,9 @@ class SNSService:
             avatar_map_filename = SystemInitWizardService._generate_avatar_map(filename)
 
             # Update config
-            query = self.db.query(AiSnsCfg).filter(AiSnsCfg.is_delete == False)
+            query = self.db.query(AISnsCfg).filter(AISnsCfg.is_delete == False)
             if user_id:
-                query = query.filter(AiSnsCfg.user_id == user_id)
+                query = query.filter(AISnsCfg.user_id == user_id)
 
             config = query.first()
             if config:
@@ -447,7 +447,7 @@ class SNSService:
                 _config_id = config.id
                 _filename = filename
                 def _set_avatar(session):
-                    rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                    rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                     if rec:
                         rec.avatar = _filename
                 db_write(_set_avatar, description="service_sync_upload_avatar")
@@ -477,8 +477,8 @@ class SNSService:
     def get_user_info(self):
         """Get user information from aisns_cfg"""
         try:
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:
@@ -505,8 +505,8 @@ class SNSService:
     def update_user_info(self, data: dict):
         """Update user information in aisns_cfg"""
         try:
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:
@@ -535,7 +535,7 @@ class SNSService:
             if 'agent_id' in data and hasattr(config, 'agent_id'):
                 _updates['agent_id'] = data['agent_id']
             def _update_info(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     for k, v in _updates.items():
                         setattr(rec, k, v)
@@ -548,8 +548,8 @@ class SNSService:
     def get_map_config(self):
         """Get map configuration from aisns_cfg"""
         try:
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:
@@ -572,8 +572,8 @@ class SNSService:
         import json
 
         try:
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:
@@ -700,7 +700,7 @@ class SNSService:
                 _updates['positionz'] = config.positionz
 
             def _update_map(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     for k, v in _updates.items():
                         setattr(rec, k, v)

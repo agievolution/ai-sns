@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-from runtime.config.database import get_db
+from db.database import get_db
 from runtime.apps.sns.service_async import SNSService
 from runtime.apps.sns.schemas import (
     UserStatsResponse,

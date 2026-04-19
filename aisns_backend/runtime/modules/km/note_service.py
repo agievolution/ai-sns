@@ -9,8 +9,13 @@ from typing import List, Optional, Dict
 from sqlalchemy import and_, or_, text
 from sqlalchemy.orm import Session
 
-from runtime.database.base import SessionLocal, create_all_tables, engine
-from runtime.database.models.km import NoteMng
+from db.base import Base
+from db.DBFactory import Session as SessionLocal, engine
+from db.models.km import NoteMng
+
+
+def _create_all_tables():
+    Base.metadata.create_all(engine)
 
 
 class NoteService:
@@ -19,7 +24,7 @@ class NoteService:
     def __init__(self):
         """Initialize the note service."""
         # Ensure database tables are created
-        create_all_tables()
+        _create_all_tables()
 
         # Check table schema and add missing columns
         self._ensure_columns()

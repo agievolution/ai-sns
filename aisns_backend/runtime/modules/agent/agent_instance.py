@@ -1801,8 +1801,8 @@ IMPORTANT Tool Usage Guidelines:
             # Save to database (optimization: use a single session for batch ops)
             if conversation_id:
                 try:
-                    from runtime.database.base import get_session
-                    from runtime.database.models.chat import AIChatMessages
+                    from db.database import get_db_session as get_session
+                    from db.models.aisns import AIChatMessages
 
                     session = get_session()
                     try:

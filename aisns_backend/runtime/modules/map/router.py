@@ -17,7 +17,7 @@ from .schemas import MapConfig, MapMarker, RouteRequest, RouteControl, ChatMessa
 from .service import MapService
 from .websocket import manager, handle_websocket_message
 from .dependencies import get_map_service, get_connection_manager
-from runtime.config.database import get_db_sync
+from db.database import get_db_sync
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +338,7 @@ async def websocket_endpoint(
 @router.get("/trades")
 async def get_trades(db: Session = Depends(get_db_sync)):
     """Get all trades from map_trade table"""
-    from runtime.database.models.map import MapTrade
+    from db.models.aisns import MapTrade
 
     try:
         trades = db.query(MapTrade).filter(
@@ -371,7 +371,7 @@ async def get_trades(db: Session = Depends(get_db_sync)):
 @router.delete("/trades/{trade_id}")
 async def delete_trade(trade_id: str, db: Session = Depends(get_db_sync)):
     """Soft delete a trade by trade_id"""
-    from runtime.database.models.map import MapTrade
+    from db.models.aisns import MapTrade
 
     trade_id = (trade_id or "").strip()
     if not trade_id:
@@ -416,7 +416,7 @@ async def delete_trade(trade_id: str, db: Session = Depends(get_db_sync)):
 @router.get("/visits")
 async def get_visits(db: Session = Depends(get_db_sync)):
     """Get all visits from map_visit table."""
-    from runtime.database.models.map import MapVisit
+    from db.models.aisns import MapVisit
 
     try:
         visits = db.query(MapVisit).filter(
@@ -447,7 +447,7 @@ async def get_visits(db: Session = Depends(get_db_sync)):
 @router.delete("/visits/{visit_id}")
 async def delete_visit(visit_id: str, db: Session = Depends(get_db_sync)):
     """Soft delete a visit by visit_id"""
-    from runtime.database.models.map import MapVisit
+    from db.models.aisns import MapVisit
 
     visit_id = (visit_id or "").strip()
     if not visit_id:

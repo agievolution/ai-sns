@@ -1,61 +1,14 @@
-"""System repository with specialized CRUD operations."""
+"""Tool management repository with specialized CRUD operations."""
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy import desc, asc, or_
 from .base import BaseRepository
-from ..models.system import (
-    SystemCfg, SystemInit, KeyValue,
-    PluginMng, FunctionMng, McpMng, SkillMng, WebMng,
-    Prompt, LlmConfig, RoleConfig
-)
-from runtime.config.database import get_db_session as get_session
+from db.models.tools import PluginMng, FunctionMng, McpMng, SkillMng
+from db.database import get_db_session as get_session
+from db.write_queue import db_write
 
 
-class SystemCfgRepository(BaseRepository[SystemCfg]):
-    """System configuration repository."""
-
-    def __init__(self):
-        super().__init__(SystemCfg)
-
-
-class SystemInitRepository(BaseRepository[SystemInit]):
-    """System initialization repository."""
-
-    def __init__(self):
-        super().__init__(SystemInit)
-
-
-class KeyValueRepository(BaseRepository[KeyValue]):
-    """Key-value storage repository."""
-
-    def __init__(self):
-        super().__init__(KeyValue)
-
-    def get_value(self, key: str) -> Optional[str]:
-        """Get value by key."""
-        session = get_session()
-        try:
-            result = session.query(self.model).filter_by(key=key).first()
-            return result.value if result else None
-        finally:
-            session.close()
-
-    def search_keys(self, search_text: str) -> List[KeyValue]:
-        """Search keys by text."""
-        session = get_session()
-        try:
-            return session.query(self.model).filter(KeyValue.key.like(f'%{search_text}%')).all()
-        finally:
-            session.close()
-
-    def update_value(self, key: str, new_value: str):
-        """Update value by key."""
-        self.update_by_filter({'key': key}, value=new_value)
-
-    def delete_by_key(self, key: str):
-        """Delete by key."""
-        self.delete_by_filter(key=key)
-
+# ==================== Plugin Management ====================
 
 class PluginMngRepository(BaseRepository[PluginMng]):
     """Plugin management repository."""
@@ -96,7 +49,6 @@ class PluginMngRepository(BaseRepository[PluginMng]):
 
     def copy_plugin(self, plugin_id: str, new_plugin_id: str, **kwargs) -> Optional[PluginMng]:
         """Copy plugin record."""
-        from db.write_queue import db_write
         def _do(session):
             record_to_copy = session.query(PluginMng).filter_by(plugin_id=plugin_id).first()
             if not record_to_copy:
@@ -130,6 +82,8 @@ class PluginMngRepository(BaseRepository[PluginMng]):
         return db_write(_do, description="repo_copy_plugin")
 
 
+# ==================== Function Management ====================
+
 class FunctionMngRepository(BaseRepository[FunctionMng]):
     """Function management repository."""
 
@@ -138,7 +92,6 @@ class FunctionMngRepository(BaseRepository[FunctionMng]):
 
     def create_with_id(self, **kwargs) -> int:
         """Create function and return its ID."""
-        from db.write_queue import db_write
         _model = self.model
         def _do(session):
             func = _model(**kwargs)
@@ -152,6 +105,8 @@ class FunctionMngRepository(BaseRepository[FunctionMng]):
         self.update_by_filter({'function_id': function_id}, **kwargs)
 
 
+# ==================== MCP Management ====================
+
 class McpMngRepository(BaseRepository[McpMng]):
     """MCP management repository."""
 
@@ -160,7 +115,6 @@ class McpMngRepository(BaseRepository[McpMng]):
 
     def create_with_id(self, **kwargs) -> int:
         """Create MCP and return its ID."""
-        from db.write_queue import db_write
         _model = self.model
         def _do(session):
             mcp = _model(**kwargs)
@@ -174,6 +128,8 @@ class McpMngRepository(BaseRepository[McpMng]):
         self.update_by_filter({'mcp_id': mcp_id}, **kwargs)
 
 
+# ==================== Skill Management ====================
+
 class SkillMngRepository(BaseRepository[SkillMng]):
     """Skill management repository."""
 
@@ -182,7 +138,6 @@ class SkillMngRepository(BaseRepository[SkillMng]):
 
     def create_with_id(self, **kwargs) -> int:
         """Create skill and return its ID."""
-        from db.write_queue import db_write
         _model = self.model
         def _do(session):
             skill = _model(**kwargs)
@@ -194,93 +149,3 @@ class SkillMngRepository(BaseRepository[SkillMng]):
     def update_by_skill_id(self, skill_id: str, **kwargs):
         """Update skill by skill_id."""
         self.update_by_filter({'skill_id': skill_id}, **kwargs)
-
-
-class WebMngRepository(BaseRepository[WebMng]):
-    """Web management repository."""
-
-    def __init__(self):
-        super().__init__(WebMng)
-
-    def create_with_id(self, **kwargs) -> int:
-        """Create web entry and return its ID."""
-        from db.write_queue import db_write
-        _model = self.model
-        def _do(session):
-            web = _model(**kwargs)
-            session.add(web)
-            session.flush()
-            return web.id
-        return db_write(_do, description="repo_create_web_mng")
-
-    def get_all_ordered(self, **kwargs) -> List[WebMng]:
-        """Get all web entries ordered by position."""
-        session = get_session()
-        try:
-            return session.query(self.model).filter_by(**kwargs).order_by(asc(WebMng.position)).all()
-        finally:
-            session.close()
-
-    def update_by_web_id(self, web_id: str, **kwargs):
-        """Update web entry by web_id."""
-        self.update_by_filter({'web_id': web_id}, **kwargs)
-
-
-class PromptRepository(BaseRepository[Prompt]):
-    """Prompt repository."""
-
-    def __init__(self):
-        super().__init__(Prompt)
-
-    def get_by_title(self, title: str) -> Optional[str]:
-        """Get prompt content by title."""
-        session = get_session()
-        try:
-            prompt = session.query(self.model).filter_by(title=title).first()
-            return prompt.content if prompt else None
-        finally:
-            session.close()
-
-    def get_content_by_id(self, id: int) -> Optional[str]:
-        """Get prompt content by ID."""
-        session = get_session()
-        try:
-            prompt = session.query(self.model).filter_by(id=id).first()
-            return prompt.content if prompt else None
-        finally:
-            session.close()
-
-    def get_all_ordered(self, **kwargs) -> List[Prompt]:
-        """Get all prompts ordered by ID desc."""
-        session = get_session()
-        try:
-            filter_expr = [getattr(self.model, key) == value for key, value in kwargs.items()]
-            return session.query(self.model).filter(*filter_expr).order_by(desc(Prompt.id)).all()
-        finally:
-            session.close()
-
-    def get_by_model_name(self, model_name: str) -> List[Prompt]:
-        """Get prompts by model name (including empty/null)."""
-        session = get_session()
-        try:
-            return session.query(self.model).filter(
-                (Prompt.model_name == model_name) |
-                (Prompt.model_name.is_(None)) |
-                (Prompt.model_name == '')
-            ).all()
-        finally:
-            session.close()
-
-
-class LlmConfigRepository(BaseRepository[LlmConfig]):
-    """LLM config repository."""
-
-    def __init__(self):
-        super().__init__(LlmConfig)
-
-
-class RoleConfigRepository(BaseRepository[RoleConfig]):
-    """Role config repository."""
-
-    def __init__(self):
-        super().__init__(RoleConfig)

@@ -3,9 +3,46 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy import desc, asc, or_
 from .base import BaseRepository
-from ..models.km import KMCfg, KMData, NoteMng
-from runtime.config.database import get_db_session as get_session
+from db.models.km import KeyValue, KMCfg, KMData, NoteMng
+from db.database import get_db_session as get_session
+from db.write_queue import db_write
 
+
+# ==================== Key Value ====================
+
+class KeyValueRepository(BaseRepository[KeyValue]):
+    """Key-value storage repository."""
+
+    def __init__(self):
+        super().__init__(KeyValue)
+
+    def get_value(self, key: str) -> Optional[str]:
+        """Get value by key."""
+        session = get_session()
+        try:
+            result = session.query(self.model).filter_by(key=key).first()
+            return result.value if result else None
+        finally:
+            session.close()
+
+    def search_keys(self, search_text: str) -> List[KeyValue]:
+        """Search keys by text."""
+        session = get_session()
+        try:
+            return session.query(self.model).filter(KeyValue.key.like(f'%{search_text}%')).all()
+        finally:
+            session.close()
+
+    def update_value(self, key: str, new_value: str):
+        """Update value by key."""
+        self.update_by_filter({'key': key}, value=new_value)
+
+    def delete_by_key(self, key: str):
+        """Delete by key."""
+        self.delete_by_filter(key=key)
+
+
+# ==================== KM Config ====================
 
 class KMCfgRepository(BaseRepository[KMCfg]):
     """Knowledge base configuration repository."""
@@ -38,7 +75,6 @@ class KMDataRepository(BaseRepository[KMData]):
 
     def create_with_id(self, **kwargs) -> int:
         """Create KM data and return its ID."""
-        from db.write_queue import db_write
         _model = self.model
         def _do(session):
             data = _model(**kwargs)
@@ -56,7 +92,6 @@ class NoteMngRepository(BaseRepository[NoteMng]):
 
     def create_with_id(self, **kwargs) -> int:
         """Create note and return its ID."""
-        from db.write_queue import db_write
         _model = self.model
         def _do(session):
             note = _model(**kwargs)

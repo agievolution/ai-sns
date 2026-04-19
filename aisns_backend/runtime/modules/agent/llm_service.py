@@ -8,16 +8,16 @@ import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from runtime.database.base import get_session
-from runtime.database.models.system import LlmConfig
-from .llm_schemas import LlmConfigCreate, LlmConfigUpdate, LlmTestRequest
+from db.database import get_db_session as get_session
+from db.models.agent import LLMConfig
+from .llm_schemas import LLMConfigCreate, LLMConfigUpdate, LlmTestRequest
 from openai import AsyncOpenAI
 
 from runtime.shared.llm_endpoints import normalize_openai_base_url, normalize_provider
 from runtime.shared.claude_client import ClaudeClient
 
 
-class LlmConfigService:
+class LLMConfigService:
     """Service for managing LLM configurations."""
 
     def __init__(self, db: Optional[Session] = None):
@@ -25,24 +25,24 @@ class LlmConfigService:
 
     def get_all(self, active_only: bool = True) -> List[Dict[str, Any]]:
         """Get all LLM configurations."""
-        query = self.db.query(LlmConfig).filter(LlmConfig.is_delete == False)
+        query = self.db.query(LLMConfig).filter(LLMConfig.is_delete == False)
 
         if active_only:
-            query = query.filter(LlmConfig.is_active == True)
+            query = query.filter(LLMConfig.is_active == True)
 
-        configs = query.order_by(LlmConfig.position, LlmConfig.id).all()
+        configs = query.order_by(LLMConfig.position, LLMConfig.id).all()
         return [self._to_dict(config) for config in configs]
 
     def get_by_config_id(self, config_id: str) -> Optional[Dict[str, Any]]:
         """Get configuration by config_id."""
-        config = self.db.query(LlmConfig).filter(
-            LlmConfig.config_id == config_id,
-            LlmConfig.is_delete == False
+        config = self.db.query(LLMConfig).filter(
+            LLMConfig.config_id == config_id,
+            LLMConfig.is_delete == False
         ).first()
 
         return self._to_dict(config) if config else None
 
-    def create(self, data: LlmConfigCreate) -> str:
+    def create(self, data: LLMConfigCreate) -> str:
         """Create new LLM configuration."""
         # Generate unique config_id
         config_id = f"llm_{uuid.uuid4().hex[:12]}"
@@ -61,17 +61,17 @@ class LlmConfigService:
 
         from db.write_queue import db_write
         def _do(session):
-            c = LlmConfig(**config_data)
+            c = LLMConfig(**config_data)
             session.add(c)
         db_write(_do, description="llm_service_create")
 
         return config_id
 
-    def update(self, config_id: str, data: LlmConfigUpdate):
+    def update(self, config_id: str, data: LLMConfigUpdate):
         """Update LLM configuration."""
-        config = self.db.query(LlmConfig).filter(
-            LlmConfig.config_id == config_id,
-            LlmConfig.is_delete == False
+        config = self.db.query(LLMConfig).filter(
+            LLMConfig.config_id == config_id,
+            LLMConfig.is_delete == False
         ).first()
 
         if not config:
@@ -95,7 +95,7 @@ class LlmConfigService:
         _cid = config_id
         _update_data = update_data
         def _do(session):
-            rec = session.query(LlmConfig).filter(LlmConfig.config_id == _cid, LlmConfig.is_delete == False).first()
+            rec = session.query(LLMConfig).filter(LLMConfig.config_id == _cid, LLMConfig.is_delete == False).first()
             if rec:
                 for key, value in _update_data.items():
                     setattr(rec, key, value)
@@ -104,9 +104,9 @@ class LlmConfigService:
 
     def delete(self, config_id: str):
         """Soft delete LLM configuration."""
-        config = self.db.query(LlmConfig).filter(
-            LlmConfig.config_id == config_id,
-            LlmConfig.is_delete == False
+        config = self.db.query(LLMConfig).filter(
+            LLMConfig.config_id == config_id,
+            LLMConfig.is_delete == False
         ).first()
 
         if not config:
@@ -115,7 +115,7 @@ class LlmConfigService:
         from db.write_queue import db_write
         _cid = config_id
         def _do(session):
-            rec = session.query(LlmConfig).filter(LlmConfig.config_id == _cid, LlmConfig.is_delete == False).first()
+            rec = session.query(LLMConfig).filter(LLMConfig.config_id == _cid, LLMConfig.is_delete == False).first()
             if rec:
                 rec.is_delete = True
         db_write(_do, description="llm_service_delete")
@@ -205,7 +205,7 @@ class LlmConfigService:
             "base_url": base_url,
         }
 
-    def import_configs(self, configs: List[LlmConfigCreate]) -> Dict[str, Any]:
+    def import_configs(self, configs: List[LLMConfigCreate]) -> Dict[str, Any]:
         """Import multiple configurations."""
         created = []
         errors = []
@@ -236,13 +236,13 @@ class LlmConfigService:
 
     def _unset_other_defaults(self, exclude_id: Optional[int] = None):
         """Unset is_default for all other configs."""
-        query = self.db.query(LlmConfig).filter(
-            LlmConfig.is_default == True,
-            LlmConfig.is_delete == False
+        query = self.db.query(LLMConfig).filter(
+            LLMConfig.is_default == True,
+            LLMConfig.is_delete == False
         )
 
         if exclude_id:
-            query = query.filter(LlmConfig.id != exclude_id)
+            query = query.filter(LLMConfig.id != exclude_id)
 
         configs = query.all()
         _ids = [c.id for c in configs]
@@ -250,12 +250,12 @@ class LlmConfigService:
             from db.write_queue import db_write
             def _do(session):
                 for _id in _ids:
-                    rec = session.query(LlmConfig).filter(LlmConfig.id == _id).first()
+                    rec = session.query(LLMConfig).filter(LLMConfig.id == _id).first()
                     if rec:
                         rec.is_default = False
             db_write(_do, description="llm_service_unset_defaults")
 
-    def _to_dict(self, config: LlmConfig) -> Dict[str, Any]:
+    def _to_dict(self, config: LLMConfig) -> Dict[str, Any]:
         """Convert model to dict."""
         if not config:
             return None

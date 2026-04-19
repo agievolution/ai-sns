@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 import logging
 
-from runtime.config.database import get_db
+from db.database import get_db
 from runtime.config.settings import get_settings as get_app_settings
 
 logger = logging.getLogger(__name__)

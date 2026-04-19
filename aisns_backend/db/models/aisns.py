@@ -1,7 +1,7 @@
-"""Chat and messaging ORM models."""
+"""AI SNS, chat, friend, and map ORM models."""
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float
-from runtime.config.database import Base
+from db.base import Base
 
 
 class AIChatMessages(Base):
@@ -23,6 +23,8 @@ class AIChatMessages(Base):
     owner_account = Column(String(100), doc="Owner account")
     friend_name = Column(String(100), doc="Friend name")
     friend_account = Column(String(100), doc="Friend account")
+    agent_name = Column(Text, doc="Agent name")
+    model_name = Column(String(100), doc="Model name")
     create_time = Column(DateTime, default=datetime.now, doc="Create time")
     is_delete = Column(Boolean, default=False, doc="Soft delete")
     is_first = Column(Boolean, default=False, doc="Is first message")
@@ -35,7 +37,7 @@ class AIFriend(Base):
     __tablename__ = 'ai_friend'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account = Column(String(100), doc="Account")
+    account = Column(String(200), doc="Account")
     nick_name = Column(String(200), doc="Nickname")
     groups = Column(Text, doc="Groups")
     owner_sns_account = Column(String(100), doc="Owner SNS account")
@@ -59,8 +61,8 @@ class AIFriend(Base):
     create_time = Column(DateTime, default=datetime.now, doc="Create time")
 
 
-class AiSnsCfg(Base):
-    """AI chat configuration model."""
+class AISnsCfg(Base):
+    """AI SNS configuration model."""
     __tablename__ = 'aisns_cfg'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -87,7 +89,7 @@ class AiSnsCfg(Base):
     organization = Column(String(200), doc="Organization")
     title = Column(String(100), doc="Title")
     orgposition = Column(String(100), doc="Position")
-    memo = Column(String(200), doc="Memo")
+    memo = Column(Text, doc="Memo")
     islimittotalmessage = Column(Boolean, default=True, doc="Limit total messages")
     islimitmessagepp = Column(Boolean, default=True, doc="Limit messages per person")
     totalmessages = Column(Integer, doc="Total messages")
@@ -133,6 +135,7 @@ class AiSnsCfg(Base):
     route_end = Column(String(500), doc="Route end")
     route_status = Column(String(100), doc="Route status")
     route_current_position = Column(String(100), doc="Route current position")
+    route_points = Column(Text, doc="Route points")
     route = Column(Text, doc="Route")
     level = Column(Integer, doc="Level")
     credit = Column(Integer, doc="Credit")
@@ -157,3 +160,69 @@ class AiSnsCfg(Base):
     event_before_use_tool = Column(String(200), doc="Event before use tool")
     event_after_use_tool = Column(String(200), doc="Event after use tool")
     agent_id = Column(Integer, doc="Associated agent ID")
+
+
+class MapTrade(Base):
+    """Map trade model."""
+    __tablename__ = 'map_trade'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_id = Column(String(50), doc="Trade ID")
+    trade_type = Column(String(100), doc="Trade type")
+    title = Column(String(500), doc="Title")
+    detail = Column(Text, doc="Detail")
+    link = Column(Text, doc="Link")
+    trade_with_name = Column(String(200), doc="Trade with name")
+    trade_with_account = Column(String(200), doc="Trade with account")
+    trade_with_company = Column(Boolean, default=False, doc="Trade with company")
+    pay = Column(Float, default=100, doc="Pay")
+    pay_method = Column(Text, default="as_coin", doc="Pay method")
+    status = Column(Integer, default=0, doc="Status")
+    create_time = Column(DateTime, default=datetime.now, doc="Create time")
+    is_delete = Column(Boolean, default=False, doc="Soft delete")
+
+
+class MapVisit(Base):
+    """Map visit model."""
+    __tablename__ = 'map_visit'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    visit_id = Column(String(50), doc="Visit ID")
+    title = Column(String(500), doc="Title")
+    detail = Column(Text, doc="Detail")
+    place_type = Column(String(100), doc="Place type")
+    address = Column(Text, doc="Address")
+    lng = Column(Float, doc="Longitude")
+    lat = Column(Float, doc="Latitude")
+    url = Column(Text, doc="Place intro URL")
+    coord_key = Column(String(80), doc="Normalized coordinate key")
+    owner_name = Column(String(200), doc="Owner name")
+    owner_account = Column(String(100), doc="Owner account")
+    owner_type = Column(String(50), doc="Owner type")
+    is_free = Column(Boolean, default=True, doc="Is free")
+    trade_id = Column(String(100), doc="Trade ID")
+    create_time = Column(DateTime, default=datetime.now, doc="Create time")
+    is_delete = Column(Boolean, default=False, doc="Soft delete")
+
+
+class MapActivity(Base):
+    """Map activity model."""
+    __tablename__ = 'map_activity'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    activity_id = Column(String(50), doc="Activity ID")
+    content = Column(Text, doc="Content")
+    type = Column(String(100), doc="Type")
+    create_time = Column(DateTime, default=datetime.now, doc="Create time")
+    is_delete = Column(Boolean, default=False, doc="Soft delete")
+
+
+class MapPresetMsg(Base):
+    """Map preset message model."""
+    __tablename__ = 'map_preset_msg'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    content = Column(Text, doc="Content")
+    position = Column(Integer, default=0, doc="Position")
+    create_time = Column(DateTime, default=datetime.now, doc="Create time")
+    is_delete = Column(Boolean, default=False, doc="Soft delete")

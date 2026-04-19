@@ -108,7 +108,7 @@ class ToolRouter:
 
         try:
             # 1. Get plugin data from database
-            from runtime.database.repositories.system_repository import PluginMngRepository
+            from db.repositories import PluginMngRepository
 
             plugin_repo = PluginMngRepository()
             plugin_obj = plugin_repo.get_one(plugin_id=plugin_id)
@@ -205,7 +205,7 @@ class ToolRouter:
 
         try:
             # 1. Get function data from database
-            from runtime.database.repositories.system_repository import FunctionMngRepository
+            from db.repositories import FunctionMngRepository
 
             function_repo = FunctionMngRepository()
             function_obj = function_repo.get_one(function_id=function_id)
@@ -264,7 +264,7 @@ class ToolRouter:
 
         try:
             # 1. Get skill data from database
-            from runtime.database.repositories.system_repository import SkillMngRepository
+            from db.repositories import SkillMngRepository
 
             skill_repo = SkillMngRepository()
             skill_obj = skill_repo.get_one(skill_id=skill_id)

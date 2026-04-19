@@ -8,9 +8,9 @@ from typing import Dict, Optional
 from sqlalchemy.orm import Session
 
 from .agent_instance import AgentInstance
-from runtime.database.base import get_session
-from runtime.database.models.agent import AgentCfg
-from runtime.database.models.system import LlmConfig, RoleConfig
+from db.database import get_db_session as get_session
+from db.models.agent import AgentCfg
+from db.models.agent import LLMConfig, RoleConfig
 from db.DBFactory import query_KMCfg, query_function_mng, query_PluginMng_All_Tool
 
 logger = logging.getLogger(__name__)
@@ -55,10 +55,10 @@ class AgentManager:
             LLM config dict
         """
         try:
-            llm_config = db.query(LlmConfig).filter(
-                LlmConfig.config_id == config_id,
-                LlmConfig.is_delete == False,
-                LlmConfig.is_active == True
+            llm_config = db.query(LLMConfig).filter(
+                LLMConfig.config_id == config_id,
+                LLMConfig.is_delete == False,
+                LLMConfig.is_active == True
             ).first()
 
             if not llm_config:

@@ -10,8 +10,8 @@ import re
 from html import unescape
 from sqlalchemy import and_
 
-from runtime.database.base import SessionLocal
-from runtime.database.models.km import NoteMng
+from db.DBFactory import Session as SessionLocal
+from db.models.km import NoteMng
 from .vector_service import get_vector_service
 
 from .note_schemas import NoteCreate, NoteUpdate, NoteResponse
@@ -165,7 +165,7 @@ async def vectorize_note(note_id: int, request: dict):
                 from db.write_queue import db_write
                 _nid = note_id
                 def _do_set_wait(sess):
-                    from runtime.database.models.km import NoteMng as _NM
+                    from db.models.km import NoteMng as _NM
                     rec = sess.query(_NM).filter(_NM.id == _nid).first()
                     if rec:
                         rec.waitvectorization = True
@@ -191,7 +191,7 @@ async def vectorize_note(note_id: int, request: dict):
                 from db.write_queue import db_write
                 _nid2 = note_id
                 def _do_clear_wait(sess):
-                    from runtime.database.models.km import NoteMng as _NM
+                    from db.models.km import NoteMng as _NM
                     rec = sess.query(_NM).filter(_NM.id == _nid2).first()
                     if rec:
                         rec.waitvectorization = False

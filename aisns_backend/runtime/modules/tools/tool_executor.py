@@ -871,9 +871,9 @@ if 'main' in dir():
             }
 
         # Get MCP config from database
-        from runtime.database.repositories.system_repository import KeyValueRepository
-        from runtime.config.database import get_db_session
-        from runtime.database.models.system import McpMng
+        from db.repositories import KeyValueRepository
+        from db.database import get_db_session
+        from db.models.tools import McpMng
 
         db = get_db_session()
         try:

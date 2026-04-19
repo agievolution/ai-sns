@@ -23,8 +23,8 @@ from runtime.modules.map.file_replace import (
     BAIDU_MAP_ID_SENTINEL,
     replace_map_config_in_files,
 )
-from runtime.database.repositories import WebMngRepository, SystemInitRepository, AiSnsCfgRepository
-from runtime.database.models.system import WebMng
+from db.repositories import WebMngRepository, SystemInitRepository, AISnsCfgRepository
+from db.models.web import WebMng
 
 logger = logging.getLogger(__name__)
 
@@ -272,7 +272,7 @@ class SystemService:
 class SystemInitWizardService:
     def __init__(self):
         self.system_init_repo = SystemInitRepository()
-        self.aisns_cfg_repo = AiSnsCfgRepository()
+        self.aisns_cfg_repo = AISnsCfgRepository()
 
     @staticmethod
     def _get_first_record() -> Any:

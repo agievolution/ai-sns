@@ -4,8 +4,8 @@ import asyncio
 import slixmpp
 from typing import Optional, Dict
 from sqlalchemy.orm import Session
-from runtime.config.database import get_db_sync
-from runtime.database.models.chat import AiSnsCfg, AIFriend, AIChatMessages
+from db.database import get_db_sync
+from db.models.aisns import AISnsCfg, AIFriend, AIChatMessages
 from runtime.apps.sns.message_formatter import format_internal_xmpp_message_for_storage
 
 logger = logging.getLogger(__name__)
@@ -189,8 +189,8 @@ class XMPPClient(slixmpp.ClientXMPP):
 
         activity_map: Dict[str, Optional[object]] = {}
         try:
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
             owner = config.account if config else None
 
@@ -241,8 +241,8 @@ class XMPPClient(slixmpp.ClientXMPP):
 
                     def _set_none(session):
                         try:
-                            cfg = session.query(AiSnsCfg).filter(
-                                AiSnsCfg.is_delete == False
+                            cfg = session.query(AISnsCfg).filter(
+                                AISnsCfg.is_delete == False
                             ).first()
                             if not cfg:
                                 return
@@ -289,8 +289,8 @@ class XMPPClient(slixmpp.ClientXMPP):
             # Save to database first so the incoming message gets an earlier
             # create_time than any response the engine may generate.
             try:
-                config = self.db.query(AiSnsCfg).filter(
-                    AiSnsCfg.is_delete == False
+                config = self.db.query(AISnsCfg).filter(
+                    AISnsCfg.is_delete == False
                 ).first()
 
                 if config:
@@ -463,8 +463,8 @@ class XMPPClient(slixmpp.ClientXMPP):
                 groups = str(raw_groups) if raw_groups else ""
             subscription = self._read_roster_field(roster_item, 'subscription', 'none') or 'none'
 
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:
@@ -648,8 +648,8 @@ class XMPPClient(slixmpp.ClientXMPP):
                 self.db.expire_all()
             except Exception:
                 pass
-            config = self.db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = self.db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
             if not config:
                 return 'none'
@@ -796,8 +796,8 @@ class XMPPClientManager:
             db = get_db_sync()
 
             # Get first aisns_cfg record
-            config = db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config:

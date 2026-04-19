@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from runtime.database.models.chat import AiSnsCfg
+from db.models.aisns import AISnsCfg
 from runtime.apps.sns.map_task_manager import MapTaskManager
 from runtime.apps.sns.js_task_manager import JsTaskManager
 from runtime.apps.sns.xmpp_client import XMPPClientManager
@@ -22,8 +22,8 @@ import re
 log = logging.getLogger(__name__)
 from db.DBFactory import (query_AgentCfg, add_AIChatMessages, get_prompt_by_title, query_function_mng,
                           add_function_mng, add_map_visit, get_key_value,
-                          update_map_trade, add_map_trade, query_single_map_trade, update_AiSnsCfg_by_user_id, update_AiSnsCfg_map, query_AiSnsCfg_map, add_mcp_mng, query_mcp_mng,
-                          delete_map_preset_msg, query_map_preset_msg_all, add_map_preset_msg, query_AiSnsCfg_map_setting)
+                          update_map_trade, add_map_trade, query_single_map_trade, update_AISnsCfg_by_user_id, update_AISnsCfg_map, query_AISnsCfg_map, add_mcp_mng, query_mcp_mng,
+                          delete_map_preset_msg, query_map_preset_msg_all, add_map_preset_msg, query_AISnsCfg_map_setting)
 from  runtime.shared.utils import generate_random_id
 from runtime.i18n import lt
 from enum import Enum
@@ -548,68 +548,6 @@ class TradeMixin:
         self.command_status = "ask_agent_start_to_buy_from_a_people"
         asyncio.create_task(self.ask_agent_and_get_instruction(content_prompt, role_prompt))
 
-    async def ask_agent_start_to_sell_to_a_people(self, objective_to_achieve, human_objective_to_achieve=""):
-        objective_to_achieve = f"{human_objective_to_achieve}{objective_to_achieve}"
-
-        all_people = []
-        try:
-            all_people = list(self.get_people_list() or [])
-        except Exception:
-            all_people = []
-
-        filtered_people = None
-        try:
-            if hasattr(self, "_get_filtered_people_list_for_talk_type"):
-                filtered_people = self._get_filtered_people_list_for_talk_type("sell")
-        except Exception:
-            filtered_people = None
-
-        if filtered_people is not None:
-            try:
-                if hasattr(self, "_maybe_notify_recommended_excluded_by_talk_type_filter"):
-                    self._maybe_notify_recommended_excluded_by_talk_type_filter(
-                        talk_type="sell",
-                        objective_text=objective_to_achieve,
-                        all_people=all_people,
-                        filtered_people=list(filtered_people or []),
-                    )
-            except Exception:
-                pass
-
-        people_list = (list(filtered_people or []) if filtered_people is not None else []) or all_people
-        provided_profile_list = json.dumps(people_list, indent=4, ensure_ascii=False)
-        self._pending_talk_objective = objective_to_achieve
-
-        role_prompt = get_prompt_by_title("__start_to_sell_to_a_people__")
-
-        content_prompt = get_prompt_by_title("__start_to_sell_to_a_people_content__")
-        content_prompt = content_prompt.replace("__action_desc__", objective_to_achieve)
-        content_prompt = content_prompt.replace("__people__to__select__", provided_profile_list)
-
-        self.command_status = "ask_agent_start_to_sell_to_a_people"
-        await  self.ask_agent_and_get_instruction(content_prompt, role_prompt)
-
-    async def ask_agent_start_to_buy_from_a_people(self, objective_to_achieve, human_objective_to_achieve=""):
-        people_list = None
-        try:
-            if hasattr(self, "_get_filtered_people_list_for_talk_type"):
-                people_list = self._get_filtered_people_list_for_talk_type("buy")
-        except Exception:
-            people_list = None
-        if not people_list:
-            people_list = self.get_people_list()
-        provided_profile_list = json.dumps(people_list, indent=4, ensure_ascii=False)
-        objective_to_achieve = f"{human_objective_to_achieve}{objective_to_achieve}"
-        self._pending_talk_objective = objective_to_achieve
-
-        role_prompt = get_prompt_by_title("__start_to_buy_from_a_people__")
-
-        content_prompt = get_prompt_by_title("__start_to_buy_from_a_people_content__")
-        content_prompt = content_prompt.replace("__action_desc__", objective_to_achieve)
-        content_prompt = content_prompt.replace("__people__to__select__", provided_profile_list)
-
-        self.command_status = "ask_agent_start_to_buy_from_a_people"
-        await  self.ask_agent_and_get_instruction(content_prompt, role_prompt)
 
     def handle_ask_agent_start_to_sell_to_a_people_result(self, content):
         result = robust_json_loads(content, default=None)
@@ -1093,7 +1031,7 @@ class TradeMixin:
             self.current_trade_price = 0
 
         try:
-            record = query_AiSnsCfg_map()
+            record = query_AISnsCfg_map()
             profession = record.profession
             handle_after_trade = record.handle_after_trade
             handle_content = record.handle_content

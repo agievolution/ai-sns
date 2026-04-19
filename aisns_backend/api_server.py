@@ -37,7 +37,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 # Import configuration
 from runtime.config.settings import get_settings
-from runtime.config.database import init_db
+from db.database import init_db
 
 # Import the WebSocket manager - use the global manager
 from runtime.shared.websocket_manager import ConnectionManager, manager as ws_manager
@@ -359,10 +359,10 @@ def _get_remote_ai_sns_server_base() -> str:
 
 def _get_current_position_from_db():
     try:
-        from db.DBFactory import query_AiSnsCfg_map_setting
+        from db.DBFactory import query_AISnsCfg_map_setting
         import json
 
-        setting = query_AiSnsCfg_map_setting() or {}
+        setting = query_AISnsCfg_map_setting() or {}
         raw_pos = setting.get("current_position")
         if not raw_pos:
             return (None, None)
@@ -386,9 +386,9 @@ def _get_current_position_from_db():
 
 def _get_current_nation_id_from_db() -> str:
     try:
-        from db.DBFactory import query_AiSnsCfg_map_setting
+        from db.DBFactory import query_AISnsCfg_map_setting
 
-        setting = query_AiSnsCfg_map_setting() or {}
+        setting = query_AISnsCfg_map_setting() or {}
         nation_id = (setting.get("nationid") or setting.get("nation_id") or "").strip()
         return nation_id
     except Exception:

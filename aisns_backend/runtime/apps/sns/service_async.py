@@ -15,9 +15,9 @@ from sqlalchemy import select, or_, text
 from sqlalchemy.orm import Session
 from typing import List, Optional, Any, Dict
 from fastapi import HTTPException
-from runtime.database.models.chat import AIFriend, AIChatMessages, AiSnsCfg
-from runtime.database.models.system import Prompt
-from runtime.database.models.system import SystemCfg
+from db.models.aisns import AIFriend, AIChatMessages, AISnsCfg
+from db.models.agent import Prompt
+from db.models.system import SystemCfg
 from runtime.apps.sns.xmpp_client import XMPPClientManager
 from runtime.apps.sns.message_formatter import format_internal_xmpp_message_for_storage
 
@@ -28,7 +28,7 @@ from runtime.modules.map.file_replace import (
     BAIDU_MAP_ID_SENTINEL,
     replace_map_config_in_files,
 )
-from runtime.config.database import get_db_sync
+from db.database import get_db_sync
 from runtime.shared.websocket_manager import manager as websocket_manager
 
 logger = logging.getLogger(__name__)
@@ -232,11 +232,11 @@ class SNSService:
         # Fallback to loss-tolerant decode/encode to keep file readable as much as possible.
         return content.decode('utf-8', errors='replace').encode('utf-8-sig')
 
-    async def _get_latest_user_config(self) -> Optional[AiSnsCfg]:
+    async def _get_latest_user_config(self) -> Optional[AISnsCfg]:
         stmt = (
-            select(AiSnsCfg)
-            .where(AiSnsCfg.is_delete == False)
-            .order_by(AiSnsCfg.id.desc())
+            select(AISnsCfg)
+            .where(AISnsCfg.is_delete == False)
+            .order_by(AISnsCfg.id.desc())
             .limit(1)
         )
         result = await self.db.execute(stmt)
@@ -400,7 +400,7 @@ class SNSService:
     async def get_chat_history(self, friend_account: str, limit: int = 50) -> List[AIChatMessages]:
         """Get chat history asynchronously."""
         try:
-            stmt_config = select(AiSnsCfg).where(AiSnsCfg.is_delete == False)
+            stmt_config = select(AISnsCfg).where(AISnsCfg.is_delete == False)
             result_config = await self.db.execute(stmt_config)
             config = result_config.scalar_one_or_none()
 
@@ -450,7 +450,7 @@ class SNSService:
             await client.send_message_to_jid(to_account, content)
             stored_content = format_internal_xmpp_message_for_storage(content)
 
-            stmt = select(AiSnsCfg).where(AiSnsCfg.is_delete == False)
+            stmt = select(AISnsCfg).where(AISnsCfg.is_delete == False)
             result = await self.db.execute(stmt)
             config = result.scalar_one_or_none()
 
@@ -599,7 +599,7 @@ class SNSService:
                     file.filename
                 )
 
-                stmt = select(AiSnsCfg).where(AiSnsCfg.is_delete == False)
+                stmt = select(AISnsCfg).where(AISnsCfg.is_delete == False)
                 result = await self.db.execute(stmt)
                 config = result.scalar_one_or_none()
 
@@ -1443,13 +1443,13 @@ class SNSService:
         """Get AI chat configuration"""
         try:
             stmt = (
-                select(AiSnsCfg)
-                .where(AiSnsCfg.is_delete == False)
-                .order_by(AiSnsCfg.id.desc())
+                select(AISnsCfg)
+                .where(AISnsCfg.is_delete == False)
+                .order_by(AISnsCfg.id.desc())
                 .limit(1)
             )
             if user_id:
-                stmt = stmt.where(AiSnsCfg.user_id == user_id)
+                stmt = stmt.where(AISnsCfg.user_id == user_id)
 
             result = await self.db.execute(stmt)
             config = result.scalars().first()
@@ -1465,25 +1465,25 @@ class SNSService:
         """Update AI chat configuration"""
         try:
             stmt = (
-                select(AiSnsCfg)
-                .where(AiSnsCfg.is_delete == False)
-                .order_by(AiSnsCfg.id.desc())
+                select(AISnsCfg)
+                .where(AISnsCfg.is_delete == False)
+                .order_by(AISnsCfg.id.desc())
                 .limit(1)
             )
             if user_id:
-                stmt = stmt.where(AiSnsCfg.user_id == user_id)
+                stmt = stmt.where(AISnsCfg.user_id == user_id)
 
             result = await self.db.execute(stmt)
             config = result.scalars().first()
             if not config:
-                config = AiSnsCfg(user_id=user_id)
+                config = AISnsCfg(user_id=user_id)
                 self.db.add(config)
 
             from db.write_queue import db_write_async
             _config_id = config.id
             _data = {k: v for k, v in data.items() if v is not None}
             def _update_cfg(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     for key, value in _data.items():
                         if hasattr(rec, key):
@@ -1515,18 +1515,18 @@ class SNSService:
             avatar_map_filename = SystemInitWizardService._generate_avatar_map(filename)
 
             stmt = (
-                select(AiSnsCfg)
-                .where(AiSnsCfg.is_delete == False)
-                .order_by(AiSnsCfg.id.desc())
+                select(AISnsCfg)
+                .where(AISnsCfg.is_delete == False)
+                .order_by(AISnsCfg.id.desc())
                 .limit(1)
             )
             if user_id:
-                stmt = stmt.where(AiSnsCfg.user_id == user_id)
+                stmt = stmt.where(AISnsCfg.user_id == user_id)
 
             result = await self.db.execute(stmt)
             config = result.scalars().first()
             if not config:
-                config = AiSnsCfg(user_id=user_id)
+                config = AISnsCfg(user_id=user_id)
                 self.db.add(config)
 
             from db.write_queue import db_write_async
@@ -1551,7 +1551,7 @@ class SNSService:
                 _memo_str = None
 
             def _set_avatar(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     rec.avatar = _filename
                     if _memo_str is not None:
@@ -1585,15 +1585,15 @@ class SNSService:
             avatar_map_filename = SystemInitWizardService._generate_avatar_map(filename)
 
             stmt = (
-                select(AiSnsCfg)
-                .where(AiSnsCfg.is_delete == False)
-                .order_by(AiSnsCfg.id.desc())
+                select(AISnsCfg)
+                .where(AISnsCfg.is_delete == False)
+                .order_by(AISnsCfg.id.desc())
                 .limit(1)
             )
             result = await self.db.execute(stmt)
             config = result.scalars().first()
             if not config:
-                config = AiSnsCfg(user_id=None)
+                config = AISnsCfg(user_id=None)
                 self.db.add(config)
 
             from db.write_queue import db_write_async
@@ -1617,7 +1617,7 @@ class SNSService:
                 _memo_str = None
 
             def _set_avatar_dialog(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     rec.avatar = _filename
                     if _memo_str is not None:
@@ -1657,9 +1657,9 @@ class SNSService:
                 return {'success': False, 'message': 'avatar3d is required'}
 
             stmt = (
-                select(AiSnsCfg)
-                .where(AiSnsCfg.is_delete == False)
-                .order_by(AiSnsCfg.id.desc())
+                select(AISnsCfg)
+                .where(AISnsCfg.is_delete == False)
+                .order_by(AISnsCfg.id.desc())
                 .limit(1)
             )
             result = await self.db.execute(stmt)
@@ -1707,7 +1707,7 @@ class SNSService:
             _agent_id = agent_id
 
             def _update_avatar_dialog(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     rec.avatar3d = _avatar3d
                     if _nickname:
@@ -1737,8 +1737,8 @@ class SNSService:
             derived_model: Optional[str] = None
             if agent_id is not None:
                 try:
-                    from runtime.database.models.agent import AgentCfg
-                    from runtime.database.models.system import LlmConfig
+                    from db.models.agent import AgentCfg
+                    from db.models.agent import LLMConfig
 
                     agent_result = await self.db.execute(select(AgentCfg).where(AgentCfg.id == agent_id))
                     agent_cfg = agent_result.scalar_one_or_none()
@@ -1776,7 +1776,7 @@ class SNSService:
 
                             if model_config_id:
                                 llm_result = await self.db.execute(
-                                    select(LlmConfig).where(LlmConfig.config_id == model_config_id)
+                                    select(LLMConfig).where(LLMConfig.config_id == model_config_id)
                                 )
                                 llm_cfg = llm_result.scalar_one_or_none()
                                 if llm_cfg:
@@ -2268,7 +2268,7 @@ class SNSService:
             _config_id = config.id
             _new_password = new_password
             def _set_password(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     rec.nationpassword = _new_password
             await db_write_async(_set_password, description="service_async_change_nation_password")
@@ -2430,7 +2430,7 @@ class SNSService:
 
             _money_after = getattr(config, 'money', None)
             def _update_user(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     for k, v in _updates.items():
                         if hasattr(rec, k):
@@ -2451,7 +2451,7 @@ class SNSService:
     async def get_map_config(self):
         """Get map configuration from aisns_cfg"""
         try:
-            stmt = select(AiSnsCfg).where(AiSnsCfg.is_delete == False)
+            stmt = select(AISnsCfg).where(AISnsCfg.is_delete == False)
             result = await self.db.execute(stmt)
             config = result.scalar_one_or_none()
 
@@ -2475,7 +2475,7 @@ class SNSService:
         import json
 
         try:
-            stmt = select(AiSnsCfg).where(AiSnsCfg.is_delete == False)
+            stmt = select(AISnsCfg).where(AISnsCfg.is_delete == False)
             result = await self.db.execute(stmt)
             config = result.scalar_one_or_none()
 
@@ -2589,7 +2589,7 @@ class SNSService:
                     _map_updates[_f] = getattr(config, _f, None)
 
             def _update_map(session):
-                rec = session.query(AiSnsCfg).filter_by(id=_config_id).first()
+                rec = session.query(AISnsCfg).filter_by(id=_config_id).first()
                 if rec:
                     for k, v in _map_updates.items():
                         setattr(rec, k, v)
@@ -2630,12 +2630,12 @@ class SNSService:
         """
         try:
             import json
-            from runtime.database.models.agent import AgentCfg
-            from runtime.database.models.system import LlmConfig
+            from db.models.agent import AgentCfg
+            from db.models.agent import LLMConfig
 
             # 1. Get first record from aisns_cfg
             result = await self.db.execute(
-                select(AiSnsCfg).where(AiSnsCfg.is_delete == False).limit(1)
+                select(AISnsCfg).where(AISnsCfg.is_delete == False).limit(1)
             )
             aisns_cfg = result.scalar_one_or_none()
 
@@ -2709,7 +2709,7 @@ class SNSService:
 
                 # 4. Get llm_config by model_config_id
                 result = await self.db.execute(
-                    select(LlmConfig).where(LlmConfig.config_id == model_config_id)
+                    select(LLMConfig).where(LLMConfig.config_id == model_config_id)
                 )
                 llm_config = result.scalar_one_or_none()
 

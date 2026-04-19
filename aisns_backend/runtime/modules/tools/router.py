@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 
-from runtime.config.database import get_db_sync_depends
+from db.database import get_db_sync_depends
 from .schemas import (
     PluginCreate, PluginUpdate, PluginResponse,
     MCPCreate, MCPUpdate, MCPResponse,

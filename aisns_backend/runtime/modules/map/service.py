@@ -15,9 +15,9 @@ import random
 import requests
 
 from db.DBFactory import (
-    query_AiSnsCfg_map,
-    query_AiSnsCfg_map_setting,
-    update_AiSnsCfg_map,
+    query_AISnsCfg_map,
+    query_AISnsCfg_map_setting,
+    update_AISnsCfg_map,
     add_map_trade,
     query_map_trades,
     query_single_map_trade,
@@ -135,12 +135,12 @@ class MapService:
             return {"success": False, "message": "lng/lat out of range", "data": {}}
 
         try:
-            update_AiSnsCfg_map(current_position=json.dumps({"lng": lng_val, "lat": lat_val}, ensure_ascii=False))
+            update_AISnsCfg_map(current_position=json.dumps({"lng": lng_val, "lat": lat_val}, ensure_ascii=False))
         except Exception as e:
             logger.warning("Failed to persist current_position: %s", e)
 
         try:
-            cfg = query_AiSnsCfg_map()
+            cfg = query_AISnsCfg_map()
             if cfg:
                 cls._sync_location_to_remote_ai_sns(cfg=cfg, lng=lng_val, lat=lat_val)
         except Exception as e:
@@ -460,8 +460,8 @@ class MapService:
 
         random_pos = cls._random_point_within_radius_m(base_lng, base_lat, 10000.0)
         try:
-            from db.DBFactory import update_AiSnsCfg_map
-            update_AiSnsCfg_map(current_position=json.dumps(random_pos, ensure_ascii=False))
+            from db.DBFactory import update_AISnsCfg_map
+            update_AISnsCfg_map(current_position=json.dumps(random_pos, ensure_ascii=False))
         except Exception as e:
             logger.warning("Failed to persist auto-initialized current_position: %s", e)
 
@@ -470,7 +470,7 @@ class MapService:
     @staticmethod
     def get_map_settings() -> Dict[str, Any]:
         """Get map configuration"""
-        cfg = query_AiSnsCfg_map()
+        cfg = query_AISnsCfg_map()
         if cfg:
             normalized_current_position = MapService._ensure_current_position(cfg)
             route_distance_m = MapService._coerce_route_distance_m(cfg)
@@ -522,7 +522,7 @@ class MapService:
     @staticmethod
     def update_map_settings(config: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
         """Update map configuration"""
-        cfg = query_AiSnsCfg_map()
+        cfg = query_AISnsCfg_map()
         if not cfg:
             raise ValueError("Map configuration not found")
 
@@ -575,7 +575,7 @@ class MapService:
             updates["route_points"] = payload.get("route_points") or ""
 
         if updates:
-            update_AiSnsCfg_map(**updates)
+            update_AISnsCfg_map(**updates)
 
         try:
             if "current_position" in payload:
@@ -590,7 +590,7 @@ class MapService:
     @staticmethod
     def get_home_position() -> Dict[str, Any]:
         """Get home position"""
-        cfg = query_AiSnsCfg_map()
+        cfg = query_AISnsCfg_map()
         if cfg:
             return json.loads(getattr(cfg, 'home_position', '{}'))
         return {}
@@ -598,10 +598,10 @@ class MapService:
     @staticmethod
     def update_home_position(home_position: Dict[str, Any]) -> None:
         """Update home position"""
-        cfg = query_AiSnsCfg_map()
+        cfg = query_AISnsCfg_map()
         if not cfg:
             raise ValueError("Map configuration not found")
-        update_AiSnsCfg_map(home_position=json.dumps(home_position, ensure_ascii=False))
+        update_AISnsCfg_map(home_position=json.dumps(home_position, ensure_ascii=False))
 
     @staticmethod
     def plan_route(start: str, end: str, position_type: str = "address") -> Dict[str, Any]:

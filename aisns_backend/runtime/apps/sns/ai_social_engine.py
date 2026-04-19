@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from runtime.database.models.chat import AiSnsCfg
+from db.models.aisns import AISnsCfg
 from runtime.apps.sns.map_task_manager import MapTaskManager
 from runtime.apps.sns.js_task_manager import JsTaskManager
 from runtime.apps.sns.xmpp_client import XMPPClientManager
@@ -24,8 +24,8 @@ log = logging.getLogger(__name__)
 from db.DBFactory import (query_AgentCfg, add_AIChatMessages, get_prompt_by_title, query_function_mng,
                           add_function_mng, get_key_value,
                           update_map_trade, add_map_trade, query_single_map_trade,
-                          update_AiSnsCfg_by_user_id, update_AiSnsCfg_map, query_AiSnsCfg_map, add_mcp_mng, query_mcp_mng,
-                          delete_map_preset_msg, query_map_preset_msg_all, add_map_preset_msg, query_AiSnsCfg_map_setting)
+                          update_AISnsCfg_by_user_id, update_AISnsCfg_map, query_AISnsCfg_map, add_mcp_mng, query_mcp_mng,
+                          delete_map_preset_msg, query_map_preset_msg_all, add_map_preset_msg, query_AISnsCfg_map_setting)
 from db.DBFactory import query_SystemCfg, upsert_prompt_by_title_with_tags
 
 from runtime.i18n import lt
@@ -86,14 +86,14 @@ class AISocialEngine(
         self.xmpp_manager = XMPPClientManager.get_instance()
 
         # Load configuration from database
-        self.config = self.db.query(AiSnsCfg).filter(
-            AiSnsCfg.is_delete == False
+        self.config = self.db.query(AISnsCfg).filter(
+            AISnsCfg.is_delete == False
         ).first()
 
         # Initialize aisns_cfg from database - get first record from aisns_cfg table
         self.aisns_cfg = self.config
 
-        self.aisns_cfg_record = AiSnsCfgManager()
+        self.aisns_cfg_record = AISnsCfgManager()
         self.aisns_cfg_record.connect(self.handle_aisns_cfg_property_updated)
         # self.update_resource_display()  # Move to after load_all_user_data() is called
 
@@ -1397,7 +1397,7 @@ class AISocialEngine(
 
     def handle_aisns_cfg_property_updated(self, property_name):
         """
-        Handle AiSnsCfg property updates.
+        Handle AISnsCfg property updates.
         When specific properties change, update related UI elements.
 
         Args:
@@ -1486,15 +1486,15 @@ class AISocialEngine(
             self._resource_refresh_timer = None
 
 
-class AiSnsCfgManager:
+class AISnsCfgManager:
     """
-    Class for managing AiSnsCfg DB records.
+    Class for managing AISnsCfg DB records.
     Supports reading the latest values via attribute access and updating DB records via assignment.
     """
 
     def __init__(self, user_id=None):
         """
-        Initialize AiSnsCfgManager.
+        Initialize AISnsCfgManager.
 
         Args:
             user_id (str, optional): User ID. Defaults to None and uses the first record.
@@ -1540,9 +1540,9 @@ class AiSnsCfgManager:
     def _load_record(self):
         """Load the DB record."""
         if self._user_id:
-            self._record = query_AiSnsCfg_map_setting(user_id=self._user_id)
+            self._record = query_AISnsCfg_map_setting(user_id=self._user_id)
         else:
-            self._record = query_AiSnsCfg_map()
+            self._record = query_AISnsCfg_map()
 
     def _refresh_record(self):
         """Refresh the record to get the latest data."""
@@ -1624,9 +1624,9 @@ class AiSnsCfgManager:
         if '_record' in self.__dict__ and self._record is not None:
             # Update DB
             if self._user_id:
-                update_AiSnsCfg_by_user_id(self._user_id, **{name: value})
+                update_AISnsCfg_by_user_id(self._user_id, **{name: value})
             else:
-                update_AiSnsCfg_map(**{name: value})
+                update_AISnsCfg_map(**{name: value})
 
             # Update in-memory record
             setattr(self._record, name, value)

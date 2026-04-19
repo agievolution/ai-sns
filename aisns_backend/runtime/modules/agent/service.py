@@ -13,14 +13,14 @@ from db.DBFactory import (
     Session,
     AgentCfg
 )
-from runtime.database.repositories.agent_tools_repository import AgentToolsRepository
-from runtime.database.repositories.system_repository import (
+from db.repositories import (
+    AgentToolsRepository,
     PluginMngRepository,
     FunctionMngRepository,
     McpMngRepository,
-    SkillMngRepository
+    SkillMngRepository,
 )
-from runtime.config.database import get_db_session
+from db.database import get_db_session
 
 logger = logging.getLogger(__name__)
 

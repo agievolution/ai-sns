@@ -11,62 +11,12 @@ import time
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from sqlalchemy import Column, Integer, String, Text, Float, DateTime, desc, or_
+from sqlalchemy import desc, or_
 from sqlalchemy import text as _text
-from db.DBFactory import Base, Session, _commit_with_retry
+from db.models.agent import AgentMemory
+from db.DBFactory import Session, _commit_with_retry
 
 logger = logging.getLogger(__name__)
-
-
-def _ensure_agent_memory_table(session) -> None:
-    try:
-        session.execute(
-            _text(
-                """
-                CREATE TABLE IF NOT EXISTS agent_memory (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    agent_id VARCHAR(100),
-                    memory_type VARCHAR(50),
-                    key VARCHAR(500),
-                    content TEXT,
-                    metadata TEXT,
-                    importance INTEGER DEFAULT 50,
-                    access_count INTEGER DEFAULT 0,
-                    last_accessed DATETIME,
-                    created_at DATETIME,
-                    expires_at DATETIME,
-                    is_delete INTEGER DEFAULT 0
-                )
-                """
-            )
-        )
-    except Exception as e:
-        logger.warning("Failed to ensure agent_memory table: %s", e)
-
-
-# ---------------------------------------------------------------------------
-# ORM Model
-# ---------------------------------------------------------------------------
-
-class AgentMemory(Base):
-    """ORM model for the agent_memory table."""
-
-    __tablename__ = "agent_memory"
-    __table_args__ = {"extend_existing": True}
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    agent_id = Column(String(100))
-    memory_type = Column(String(50))
-    key = Column(String(500))
-    content = Column(Text)
-    # 'metadata' is reserved by SQLAlchemy declarative; map via Column("metadata")
-    meta_data = Column("metadata", Text)
-    importance = Column(Integer, default=50)
-    access_count = Column(Integer, default=0)
-    last_accessed = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=True)
-    is_delete = Column(Integer, default=0)
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +41,6 @@ def add_memory(
     """
     session = Session()
     try:
-        _ensure_agent_memory_table(session)
         # Temporarily disable FK checks for this connection
         session.execute(_text("PRAGMA foreign_keys=OFF"))
         record = AgentMemory(
@@ -135,7 +84,6 @@ def query_memories(
     """
     session = Session()
     try:
-        _ensure_agent_memory_table(session)
         q = session.query(AgentMemory).filter(
             AgentMemory.agent_id == agent_id,
             AgentMemory.is_delete == 0,
@@ -178,7 +126,6 @@ def query_memories_by_types(
     """Query memories filtered by multiple memory types."""
     session = Session()
     try:
-        _ensure_agent_memory_table(session)
         q = session.query(AgentMemory).filter(
             AgentMemory.agent_id == agent_id,
             AgentMemory.is_delete == 0,
@@ -203,7 +150,6 @@ def query_memories_by_person(
     """Query memories related to a specific person (by account in metadata or content)."""
     session = Session()
     try:
-        _ensure_agent_memory_table(session)
         pattern = f"%{person_account}%"
         q = session.query(AgentMemory).filter(
             AgentMemory.agent_id == agent_id,
@@ -231,7 +177,6 @@ def touch_memory(memory_id: int) -> None:
     """Increment access_count and update last_accessed timestamp."""
     session = Session()
     try:
-        _ensure_agent_memory_table(session)
         record = session.query(AgentMemory).filter_by(id=memory_id).first()
         if record:
             record.access_count = (record.access_count or 0) + 1
@@ -248,7 +193,6 @@ def count_memories(agent_id: str) -> int:
     """Return total non-deleted memory count for an agent."""
     session = Session()
     try:
-        _ensure_agent_memory_table(session)
         return session.query(AgentMemory).filter(
             AgentMemory.agent_id == agent_id,
             AgentMemory.is_delete == 0,
@@ -263,7 +207,6 @@ def soft_delete_oldest(agent_id: str, keep_count: int) -> int:
     """Soft-delete the least important / oldest memories beyond *keep_count*."""
     session = Session()
     try:
-        _ensure_agent_memory_table(session)
         total = session.query(AgentMemory).filter(
             AgentMemory.agent_id == agent_id,
             AgentMemory.is_delete == 0,

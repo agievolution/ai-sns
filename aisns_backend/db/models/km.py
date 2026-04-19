@@ -1,7 +1,17 @@
 """Knowledge management ORM models."""
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
-from runtime.config.database import Base
+from db.base import Base
+
+
+class KeyValue(Base):
+    """Key-value storage model."""
+    __tablename__ = 'key_value'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String, nullable=False, doc="Key")
+    value = Column(String, nullable=False, doc="Value")
+    km_id = Column(String(100), doc="Knowledge base ID")
 
 
 class KMCfg(Base):
@@ -66,4 +76,3 @@ class NoteMng(Base):
     create_time = Column(DateTime, default=datetime.now, doc="Create time")
     stick_time = Column(DateTime, nullable=True, doc="Stick time")
     label = Column(String(50), doc="Category label")
-

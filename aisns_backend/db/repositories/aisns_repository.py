@@ -1,12 +1,18 @@
-"""Chat repository with specialized CRUD operations."""
-from typing import List, Optional
+"""AI SNS and Map repository with specialized CRUD operations."""
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from sqlalchemy import desc, asc, or_, func
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, Session
 from .base import BaseRepository
-from ..models.chat import AIChatMessages, AIFriend, AiSnsCfg
-from runtime.config.database import get_db_session as get_session
+from db.models.aisns import (
+    AIChatMessages, AIFriend, AISnsCfg,
+    MapTrade, MapVisit, MapActivity, MapPresetMsg
+)
+from db.database import get_db_session as get_session
+from db.write_queue import db_write
 
+
+# ==================== AI Chat Messages ====================
 
 class AIChatMessagesRepository(BaseRepository[AIChatMessages]):
     """AI chat messages repository."""
@@ -173,7 +179,6 @@ class AIChatMessagesRepository(BaseRepository[AIChatMessages]):
             session.close()
 
     def soft_delete_conversation(self, conversation_id: str) -> int:
-        from db.write_queue import db_write
         _cid = conversation_id
         def _do(session):
             affected = session.query(AIChatMessages).filter(
@@ -184,7 +189,6 @@ class AIChatMessagesRepository(BaseRepository[AIChatMessages]):
         return db_write(_do, description="repo_soft_delete_conversation")
 
     def update_conversation_title(self, conversation_id: str, title: str) -> bool:
-        from db.write_queue import db_write
         _cid = conversation_id
         _title = title
         def _do(session):
@@ -197,7 +201,6 @@ class AIChatMessagesRepository(BaseRepository[AIChatMessages]):
         return db_write(_do, description="repo_update_conversation_title")
 
     def update_conversation_tag(self, conversation_id: str, tag: Optional[str]) -> bool:
-        from db.write_queue import db_write
         clean_tag = None
         if tag is not None:
             t = str(tag).strip()
@@ -214,7 +217,6 @@ class AIChatMessagesRepository(BaseRepository[AIChatMessages]):
         return db_write(_do, description="repo_update_conversation_tag")
 
     def toggle_conversation_pin(self, conversation_id: str) -> tuple[bool, Optional[datetime]]:
-        from db.write_queue import db_write
         _cid = conversation_id
         def _do(session):
             first = session.query(AIChatMessages).filter(
@@ -248,6 +250,8 @@ class AIChatMessagesRepository(BaseRepository[AIChatMessages]):
             session.close()
 
 
+# ==================== AI Friend ====================
+
 class AIFriendRepository(BaseRepository[AIFriend]):
     """AI friend repository."""
 
@@ -268,15 +272,16 @@ class AIFriendRepository(BaseRepository[AIFriend]):
         self.update_by_filter(filters, **kwargs)
 
 
-class AiSnsCfgRepository(BaseRepository[AiSnsCfg]):
-    """AI chat configuration repository."""
+# ==================== AI SNS Config ====================
+
+class AISnsCfgRepository(BaseRepository[AISnsCfg]):
+    """AI SNS configuration repository."""
 
     def __init__(self):
-        super().__init__(AiSnsCfg)
+        super().__init__(AISnsCfg)
 
     def create_with_id(self, **kwargs) -> int:
         """Create configuration and return its ID."""
-        from db.write_queue import db_write
         _model = self.model
         def _do(session):
             cfg = _model(**kwargs)
@@ -285,15 +290,15 @@ class AiSnsCfgRepository(BaseRepository[AiSnsCfg]):
             return cfg.id
         return db_write(_do, description="repo_create_aisns_cfg")
 
-    def get_all_ordered(self, **kwargs) -> List[AiSnsCfg]:
+    def get_all_ordered(self, **kwargs) -> List[AISnsCfg]:
         """Get all configurations ordered by position."""
         session = get_session()
         try:
-            return session.query(self.model).filter_by(**kwargs).order_by(asc(AiSnsCfg.position)).all()
+            return session.query(self.model).filter_by(**kwargs).order_by(asc(AISnsCfg.position)).all()
         finally:
             session.close()
 
-    def search_content(self, **kwargs) -> List[AiSnsCfg]:
+    def search_content(self, **kwargs) -> List[AISnsCfg]:
         """Search configurations by nickname or account."""
         session = get_session()
         try:
@@ -304,18 +309,18 @@ class AiSnsCfgRepository(BaseRepository[AiSnsCfg]):
 
             search_terms = []
             if nickname_keyword:
-                search_terms.append(AiSnsCfg.nickname.contains(nickname_keyword))
+                search_terms.append(AISnsCfg.nickname.contains(nickname_keyword))
             if account_keyword:
-                search_terms.append(AiSnsCfg.account.contains(account_keyword))
+                search_terms.append(AISnsCfg.account.contains(account_keyword))
 
             if search_terms:
                 query = query.filter(or_(*search_terms))
 
-            return query.order_by(desc(AiSnsCfg.create_time)).limit(50000).all()
+            return query.order_by(desc(AISnsCfg.create_time)).limit(50000).all()
         finally:
             session.close()
 
-    def get_map_config(self) -> Optional[AiSnsCfg]:
+    def get_map_config(self) -> Optional[AISnsCfg]:
         """Get first map configuration."""
         session = get_session()
         try:
@@ -323,7 +328,7 @@ class AiSnsCfgRepository(BaseRepository[AiSnsCfg]):
         finally:
             session.close()
 
-    def get_common_config(self) -> Optional[AiSnsCfg]:
+    def get_common_config(self) -> Optional[AISnsCfg]:
         """Get common configuration (second record)."""
         session = get_session()
         try:
@@ -369,7 +374,6 @@ class AiSnsCfgRepository(BaseRepository[AiSnsCfg]):
 
     def update_map_config(self, **kwargs):
         """Update first map configuration."""
-        from db.write_queue import db_write
         _model = self.model
         def _do(session):
             record = session.query(_model).first()
@@ -377,3 +381,142 @@ class AiSnsCfgRepository(BaseRepository[AiSnsCfg]):
                 for key, value in kwargs.items():
                     setattr(record, key, value)
         db_write(_do, description="repo_update_map_config")
+
+
+# ==================== Map Trade ====================
+
+class MapTradeRepository(BaseRepository[MapTrade]):
+    """Map trade repository."""
+
+    def __init__(self):
+        super().__init__(MapTrade)
+
+    def create_with_id(self, **kwargs) -> int:
+        """Create map trade and return its ID."""
+        _model = self.model
+        def _do(session):
+            trade = _model(**kwargs)
+            session.add(trade)
+            session.flush()
+            return trade.id
+        return db_write(_do, description="repo_create_map_trade")
+
+    def get_all_ordered(self, **kwargs) -> List[MapTrade]:
+        """Get all map trades ordered by create time."""
+        session = get_session()
+        try:
+            filter_expr = [getattr(self.model, key) == value for key, value in kwargs.items()]
+            return session.query(self.model).filter(*filter_expr).order_by(desc(MapTrade.create_time)).all()
+        finally:
+            session.close()
+
+    def get_single(self, **kwargs) -> Optional[MapTrade]:
+        """Get single map trade."""
+        session = get_session()
+        try:
+            filter_expr = [getattr(self.model, key) == value for key, value in kwargs.items()]
+            return session.query(self.model).filter(*filter_expr).order_by(desc(MapTrade.create_time)).first()
+        finally:
+            session.close()
+
+    def update_by_trade_id(self, trade_id: str, **kwargs):
+        """Update map trade by trade_id."""
+        self.update_by_filter({'trade_id': trade_id}, **kwargs)
+
+
+# ==================== Map Visit ====================
+
+class MapVisitRepository(BaseRepository[MapVisit]):
+    """Map visit repository."""
+
+    def __init__(self):
+        super().__init__(MapVisit)
+
+    def create_with_id(self, **kwargs) -> int:
+        """Create map visit and return its ID."""
+        _model = self.model
+        def _do(session):
+            visit = _model(**kwargs)
+            session.add(visit)
+            session.flush()
+            return visit.id
+        return db_write(_do, description="repo_create_map_visit")
+
+    def get_all_ordered(self, **kwargs) -> List[MapVisit]:
+        """Get all map visits ordered by create time."""
+        session = get_session()
+        try:
+            filter_expr = [getattr(self.model, key) == value for key, value in kwargs.items()]
+            return session.query(self.model).filter(*filter_expr).order_by(desc(MapVisit.create_time)).all()
+        finally:
+            session.close()
+
+    def get_single(self, **kwargs) -> Optional[MapVisit]:
+        """Get single map visit."""
+        session = get_session()
+        try:
+            filter_expr = [getattr(self.model, key) == value for key, value in kwargs.items()]
+            return session.query(self.model).filter(*filter_expr).order_by(desc(MapVisit.create_time)).first()
+        finally:
+            session.close()
+
+
+# ==================== Map Activity ====================
+
+class MapActivityRepository(BaseRepository[MapActivity]):
+    """Map activity repository."""
+
+    def __init__(self):
+        super().__init__(MapActivity)
+
+    def get_previous_activities(self, last_record_id: Optional[int] = None, count: int = 20,
+                                type_str: Optional[str] = None) -> List[MapActivity]:
+        """Get previous activities with pagination and optional type filter."""
+        session = get_session()
+        try:
+            query = session.query(self.model)
+
+            if last_record_id is not None:
+                query = query.filter(MapActivity.id < last_record_id)
+            if type_str:
+                query = query.filter(MapActivity.type == type_str)
+
+            return query.order_by(MapActivity.id.desc()).limit(count).all()
+        finally:
+            session.close()
+
+    def update_by_activity_id(self, activity_id: str, **kwargs):
+        """Update activity by activity_id."""
+        self.update_by_filter({'activity_id': activity_id}, **kwargs)
+
+    def delete_by_activity_id(self, activity_id: str):
+        """Delete activity by activity_id."""
+        self.delete_by_filter(activity_id=activity_id)
+
+
+# ==================== Map Preset Message ====================
+
+class MapPresetMsgRepository(BaseRepository[MapPresetMsg]):
+    """Map preset message repository."""
+
+    def __init__(self):
+        super().__init__(MapPresetMsg)
+
+    def get_previous_messages(self, last_record_id: Optional[int] = None, count: int = 20) -> List[MapPresetMsg]:
+        """Get previous preset messages with pagination."""
+        session = get_session()
+        try:
+            query = session.query(self.model)
+            if last_record_id is not None:
+                query = query.filter(MapPresetMsg.id < last_record_id)
+            return query.order_by(MapPresetMsg.id.desc()).limit(count).all()
+        finally:
+            session.close()
+
+    def update_by_msg_id(self, msg_id: int, **kwargs):
+        """Update preset message by ID."""
+        self.update(msg_id, **kwargs)
+
+    def delete_by_content(self, content: str):
+        """Delete preset message by content."""
+        self.delete_by_filter(content=content)

@@ -7,8 +7,8 @@ import os
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
-from runtime.config.database import engine
-from runtime.database.base import Base
+from db.database import engine
+from db.base import Base
 
 def init_database():
     """Create all tables"""
@@ -17,7 +17,7 @@ def init_database():
 
     try:
         # Import all models to register them
-        from runtime.database.models import agent, chat, km, map, system
+        from db.models import agent, aisns, km, tools, web, system
 
         # Create all tables
         Base.metadata.create_all(bind=engine)

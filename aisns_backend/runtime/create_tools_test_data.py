@@ -8,8 +8,8 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from runtime.config.database import SessionLocal
-from runtime.database.models.system import PluginMng, McpMng, FunctionMng, SkillMng
+from db.database import SessionLocal
+from db.models.tools import PluginMng, McpMng, FunctionMng, SkillMng
 import json
 from datetime import datetime
 import uuid

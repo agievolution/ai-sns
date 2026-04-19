@@ -46,7 +46,7 @@ def test_settings():
 def test_database_config():
     """Test database configuration"""
     print("Testing database configuration...")
-    from runtime.config.database import (
+    from db.database import (
         SQLALCHEMY_DATABASE_URL,
         SessionLocal,
         get_db_session

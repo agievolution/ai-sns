@@ -50,13 +50,13 @@ class XMPPA2AManager:
         Returns the URL string or None.
         """
         try:
-            from runtime.config.database import get_db_sync
-            from runtime.database.models.chat import AiSnsCfg
-            from runtime.database.models.agent import AgentCfg
+            from db.database import get_db_sync
+            from db.models.aisns import AISnsCfg
+            from db.models.agent import AgentCfg
 
             db = get_db_sync()
-            config = db.query(AiSnsCfg).filter(
-                AiSnsCfg.is_delete == False
+            config = db.query(AISnsCfg).filter(
+                AISnsCfg.is_delete == False
             ).first()
 
             if not config or not getattr(config, 'agent_id', None):

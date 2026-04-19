@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from fastapi import UploadFile
 
-from ...database.models.system import PluginMng, FunctionMng, McpMng, SkillMng
+from db.models.tools import PluginMng, FunctionMng, McpMng, SkillMng
 from .schemas import (
     PluginCreate, PluginUpdate, PluginResponse,
     MCPCreate, MCPUpdate, MCPResponse,

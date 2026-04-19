@@ -348,8 +348,8 @@ async def stream_chat(
     # If model_config_id is provided, fetch config from agent module
     if request.model_config_id:
         try:
-            from runtime.modules.agent.llm_service import LlmConfigService
-            llm_service = LlmConfigService()
+            from runtime.modules.agent.llm_service import LLMConfigService
+            llm_service = LLMConfigService()
             model_config = llm_service.get_by_config_id(request.model_config_id)
 
             if not model_config:

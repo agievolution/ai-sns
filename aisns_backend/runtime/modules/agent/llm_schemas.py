@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
-class LlmConfigBase(BaseModel):
+class LLMConfigBase(BaseModel):
     """LLM configuration base model."""
     name: str = Field(..., description="Display name")
     provider: str = Field(..., description="Provider: openai|claude|gemini|custom")
@@ -24,12 +24,12 @@ class LlmConfigBase(BaseModel):
     is_default: bool = False
 
 
-class LlmConfigCreate(LlmConfigBase):
+class LLMConfigCreate(LLMConfigBase):
     """Create LLM configuration."""
     pass
 
 
-class LlmConfigUpdate(BaseModel):
+class LLMConfigUpdate(BaseModel):
     """Update LLM configuration."""
     name: Optional[str] = None
     provider: Optional[str] = None
@@ -48,7 +48,7 @@ class LlmConfigUpdate(BaseModel):
     is_default: Optional[bool] = None
 
 
-class LlmConfigResponse(LlmConfigBase):
+class LLMConfigResponse(LLMConfigBase):
     """LLM configuration response."""
     id: int
     config_id: str

@@ -1,7 +1,8 @@
 """Base repository with common CRUD operations."""
 from typing import TypeVar, Generic, Type, List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from runtime.config.database import Base, get_db_session
+from db.base import Base
+from db.database import get_db_session
 
 ModelType = TypeVar("ModelType", bound=Base)
 

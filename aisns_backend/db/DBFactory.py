@@ -3,7 +3,6 @@ import os
 import sqlite3
 
 from sqlalchemy import create_engine, Column, Integer, String, event
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from pathlib import Path
@@ -13,7 +12,13 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float
 from sqlalchemy import desc, asc
 from sqlalchemy import or_, and_
 
-Base = declarative_base()
+from db.base import Base
+from db.models.aisns import AIChatMessages, AIFriend, AISnsCfg, MapTrade, MapVisit, MapActivity, MapPresetMsg
+from db.models.agent import AgentCfg, AgentDocSkill, Prompt, LLMConfig, RoleConfig
+from db.models.km import KeyValue, KMCfg, KMData, NoteMng
+from db.models.tools import PluginMng, FunctionMng, McpMng, SkillMng
+from db.models.web import WebMng
+from db.models.system import SystemCfg, SystemInit
 DBPath = os.path.join(Path(__file__).resolve().parent, "db.sqlite")
 print("DBPath", DBPath)
 SQL_DATABASE_URL = fr"sqlite:///{DBPath}"
@@ -64,28 +69,6 @@ def _commit_with_retry(session, max_retries=3, base_delay=0.5):
     session.commit()
 
 
-class AIChatMessages(Base):
-    __tablename__ = 'ai_chat_messages'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    conversation_id = Column(String(50))
-    agent_id = Column(Integer, default=None)
-    flag = Column(Integer)
-    title = Column(Text, default=None)
-    content = Column(Text)
-    attachment_list = Column(Text)
-    document_content = Column(Text)
-    image_json = Column(Text)
-    km_list = Column(Text)
-    km_content = Column(Text)
-    owner_name = Column(String(100))
-    owner_account = Column(String(100))
-    friend_name = Column(String(100))
-    friend_account = Column(String(100))
-    create_time = Column(DateTime, default=datetime.now)
-    is_delete = Column(Boolean, default=False)
-    is_first = Column(Boolean, default=False)
-    stick_time = Column(DateTime, nullable=True)
-    label = Column(String(50))
 
 
 def add_AIChatMessages(conversation_id, flag, title, content, owner_name, owner_account, friend_name, friend_account,
@@ -260,31 +243,6 @@ def query_AIChat_Content(id, **kwargs):
     return tasks
 
 
-class AIFriend(Base):
-    __tablename__ = 'ai_friend'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account = Column(String(100))
-    nick_name = Column(String(200))
-    groups = Column(Text)
-    owner_sns_account = Column(String(100))
-    memo = Column(Text)
-    sign = Column(String(200))
-    subscription = Column(String(100))
-    name = Column(String(200))
-    borndate = Column(String(100))
-    gender = Column(Integer)
-    area = Column(String(100))
-    city = Column(String(100))
-    address = Column(String(200))
-    mail = Column(String(100))
-    phone = Column(String(100))
-    organization = Column(String(200))
-    title = Column(String(100))
-    position = Column(String(100))
-    new_message_flag = Column(Boolean, default=False)
-    last_message_time = Column(DateTime)
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_AIFriend(account, nick_name, groups, owner_sns_account, memo, sign, subscription, name, borndate, gender, area, city, address, mail, phone, organization, title, position):
@@ -341,54 +299,6 @@ def delete_AIFriend(id):
     db_write(_do, description="delete_AIFriend")
 
 
-class AgentCfg(Base):
-    __tablename__ = 'agent_cfg'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100))
-    name = Column(String(200))
-    memo = Column(String(200))
-    borndate = Column(DateTime, nullable=True, default=None)
-    borncontry = Column(String(100))
-    language = Column(String(100))
-    gender = Column(Integer)
-    joinfederation = Column(Boolean, default=False)
-    syncfederation = Column(Boolean, default=False)
-    federationid = Column(String(150))
-    defaultmodel = Column(String(200))
-    defaultrole = Column(String(200))
-    lastmodel = Column(String(200))
-    lastrole = Column(String(200))
-    specialization = Column(Text)
-    plugins = Column(Text)
-    kms = Column(Text)
-    last_plugins = Column(Text)
-    last_kms = Column(Text)
-    prompt = Column(Text)
-    snsaccount = Column(String(100))
-    snsnickname = Column(String(100))
-    islimittotalmessage = Column(Boolean, default=True)
-    islimitmessagepp = Column(Boolean, default=True)
-    totalmessages = Column(Integer)
-    ppmessages = Column(Integer)
-    readfile = Column(Boolean, default=True)
-    writefile = Column(Boolean, default=True)
-    deletefile = Column(Boolean, default=True)
-    execfile = Column(Boolean, default=True)
-    uselastmodel = Column(Boolean, default=False)
-    uselastrole = Column(Boolean, default=False)
-    uselastplugins = Column(Boolean, default=False)
-    uselastkms = Column(Boolean, default=False)
-    callpluginbyinstruct = Column(Boolean, default=True)
-    modelfrequent = Column(Boolean, default=False)
-    rolefrequent = Column(Boolean, default=False)
-    multimodelfrequent = Column(Boolean, default=False)
-    multimodellastmodel = Column(String(500))
-    multimodellastrole = Column(String(100))
-    autorunrounds = Column(Integer)
-    position = Column(Integer, default=9999)
-    is_show = Column(Boolean, default=True)
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_AgentCfg(user_id, name, memo, borndate, borncontry, language, gender, joinfederation, syncfederation, federationid, defaultmodel, defaultrole, lastmodel, lastrole, specialization, plugins, kms, last_plugins, last_kms, prompt, snsaccount, snsnickname, islimittotalmessage, islimitmessagepp, totalmessages, ppmessages, readfile, writefile, deletefile, execfile, uselastmodel, uselastrole, uselastplugins, uselastkms, callpluginbyinstruct, modelfrequent, rolefrequent, multimodelfrequent, autorunrounds):
@@ -458,108 +368,11 @@ def get_agent_specialization_description(name):
     return agentcfg.specialization if agentcfg else None
 
 
-class AiSnsCfg(Base):
-    __tablename__ = 'aisns_cfg'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    user_id = Column(String(100))
-    account = Column(String(100))
-    password = Column(String(256))
-    nickname = Column(String(100))
-    sign = Column(String(200))
-    status = Column(String(100))
-    membership = Column(Integer)
-    humantakeover = Column(Integer, default=0)
-    name = Column(String(200))
-    borndate = Column(DateTime, default=datetime.now)
-    gender = Column(Integer)
-    area = Column(String(100))
-    state = Column(String(100))
-    city = Column(String(100))
-    community = Column(String(100))
-    street_block = Column(String(100))
-    address = Column(String(200))
-    mail = Column(String(100))
-    imaccount = Column(String(100))
-    phone = Column(String(100))
-    organization = Column(String(200))
-    title = Column(String(100))
-    orgposition = Column(String(100))
-    memo = Column(String(200))
-    islimittotalmessage = Column(Boolean, default=True)
-    islimitmessagepp = Column(Boolean, default=True)
-    totalmessages = Column(Integer)
-    ppmessages = Column(Integer)
-    serveraddress = Column(String(100))
-    port = Column(Integer)
-    ssl = Column(Boolean)
-    resource = Column(String(100))
-    proxyused = Column(Boolean)
-    proxyaddress = Column(String(100))
-    proxyport = Column(Integer)
-    proxyssl = Column(Boolean)
-    savepasswordlocal = Column(Boolean, default=True)
-    autoconnect = Column(Boolean, default=True)
-    sendreceipt = Column(Boolean, default=True)
-    sendreadflag = Column(Boolean, default=True)
-    sendchatstatus = Column(Boolean, default=True)
-    sendgroupchatstatus = Column(Boolean, default=True)
-    agreeallfriendrequest = Column(Boolean, default=True)
-    position = Column(Integer, default=9999)
-    is_show = Column(Boolean, default=True)
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
-
-    nationid = Column(String(100))
-    nationpassword = Column(String(100))
-    sns_url = Column(Text)
-    avatar = Column(Text)
-    avatar3d = Column(Text)
-    house3d = Column(Text)
-    map_type = Column(String(100))
-    map_api_key = Column(Text)
-    map_id = Column(Text)
-    current_position = Column(String(100))
-    current_place = Column(String(500))
-    last_position = Column(String(100))
-    home_position = Column(String(100))
-    positionx = Column(Float)
-    positiony = Column(Float)
-    positionz = Column(Float)
-    route_start = Column(String(500))
-    route_end = Column(String(500))
-    route_status = Column(String(100))
-    route_current_position = Column(String(100))
-    route_points = Column(Text)
-    route = Column(Text)
-    level = Column(Integer)
-    credit = Column(Integer)
-    money = Column(Float)
-    token_unit = Column(String(100))
-    life_point = Column(Integer)
-    energy_point = Column(Integer)
-    move_point = Column(Integer)
-    exp_point = Column(Integer)
-    iq_point = Column(Integer)
-    profession = Column(String(200))
-    handle_after_trade = Column(String(200))
-    handle_content = Column(Text)
-    goods_or_service_description = Column(Text)
-    goods_or_service_price = Column(String(100))
-    event_before_decistion = Column(String(200))
-    event_after_decistion = Column(String(200))
-    event_receive_msg = Column(String(200))
-    event_before_send_msg = Column(String(200))
-    event_before_move = Column(String(200))
-    event_after_move = Column(String(200))
-    event_before_use_tool = Column(String(200))
-    event_after_use_tool = Column(String(200))
-    agent_id = Column(Integer)
 
 
-def add_AiSnsCfg(user_id, account, password, nickname, sign, status, humantakeover, name, borndate, gender, area, state, city, community, street_block, address, mail, imaccount, phone, organization, title, orgposition, memo, islimittotalmessage, islimitmessagepp, totalmessages, ppmessages, serveraddress, port, ssl, resource, proxyused, proxyaddress, proxyport, proxyssl, savepasswordlocal, autoconnect, sendreceipt, sendreadflag, sendchatstatus, sendgroupchatstatus, agreeallfriendrequest, nationid, nationpassword, sns_url, avatar, avatar3d, house3d, map_type, map_api_key, map_id, current_position, home_position, positionx, positiony, positionz, route_start, route_end, route_status, route_current_position, route_points, route, level=1, credit=100, money=100, token_unit="k", life_point=4, energy_point=3, move_point=3, exp_point=4, iq_point=5):
+def add_AISnsCfg(user_id, account, password, nickname, sign, status, humantakeover, name, borndate, gender, area, state, city, community, street_block, address, mail, imaccount, phone, organization, title, orgposition, memo, islimittotalmessage, islimitmessagepp, totalmessages, ppmessages, serveraddress, port, ssl, resource, proxyused, proxyaddress, proxyport, proxyssl, savepasswordlocal, autoconnect, sendreceipt, sendreadflag, sendchatstatus, sendgroupchatstatus, agreeallfriendrequest, nationid, nationpassword, sns_url, avatar, avatar3d, house3d, map_type, map_api_key, map_id, current_position, home_position, positionx, positiony, positionz, route_start, route_end, route_status, route_current_position, route_points, route, level=1, credit=100, money=100, token_unit="k", life_point=4, energy_point=3, move_point=3, exp_point=4, iq_point=5):
     def _do(session):
-        aisnsCfg = AiSnsCfg(
+        aisnsCfg = AISnsCfg(
             user_id=user_id, account=account, password=password, nickname=nickname,
             sign=sign, status=status, humantakeover=humantakeover, name=name,
             borndate=borndate, gender=gender, area=area, state=state, city=city, community=community, street_block=street_block, address=address,
@@ -584,65 +397,65 @@ def add_AiSnsCfg(user_id, account, password, nickname, sign, status, humantakeov
         session.add(aisnsCfg)
         session.flush()
         return aisnsCfg.id
-    return db_write(_do, description="add_AiSnsCfg")
+    return db_write(_do, description="add_AISnsCfg")
 
 
-def query_AiSnsCfg_All(**kwargs):
+def query_AISnsCfg_All(**kwargs):
     session = Session()
-    records = session.query(AiSnsCfg).filter_by(**kwargs).order_by(asc(AiSnsCfg.position)).all()
+    records = session.query(AISnsCfg).filter_by(**kwargs).order_by(asc(AISnsCfg.position)).all()
 
     session.close()
     return records
 
 
-def query_AiSnsCfg_Search_Content(**kwargs):
+def query_AISnsCfg_Search_Content(**kwargs):
     session = Session()
 
     nickname_keyword = kwargs.get('nickname', None)
     account_keyword = kwargs.get('account', None)
 
-    query = session.query(AiSnsCfg)
+    query = session.query(AISnsCfg)
 
     search_terms = []
     if nickname_keyword:
-        search_terms.append(AiSnsCfg.nickname.contains(nickname_keyword))
+        search_terms.append(AISnsCfg.nickname.contains(nickname_keyword))
     if account_keyword:
-        search_terms.append(AiSnsCfg.account.contains(account_keyword))
+        search_terms.append(AISnsCfg.account.contains(account_keyword))
 
     if search_terms:
         query = query.filter(or_(*search_terms))
 
-    tasks = query.order_by(desc(AiSnsCfg.create_time)).limit(50000).all()
+    tasks = query.order_by(desc(AISnsCfg.create_time)).limit(50000).all()
 
     session.close()
     return tasks
 
 
-def query_AiSnsCfg(**kwargs):
+def query_AISnsCfg(**kwargs):
     session = Session()
-    record = session.query(AiSnsCfg).filter_by(**kwargs).first()
+    record = session.query(AISnsCfg).filter_by(**kwargs).first()
     session.close()
     return record
 
 
-def query_AiSnsCfg_map():
+def query_AISnsCfg_map():
     session = Session()
-    record = session.query(AiSnsCfg).first()
+    record = session.query(AISnsCfg).first()
     session.close()
     return record
 
 
-def query_AiSnsCfg_common():
+def query_AISnsCfg_common():
     session = Session()
-    record = session.query(AiSnsCfg).offset(1).limit(1).first()
+    record = session.query(AISnsCfg).offset(1).limit(1).first()
     session.close()
     return record
 
 
-def query_AiSnsCfg_map_setting(**kwargs):
+def query_AISnsCfg_map_setting(**kwargs):
     session = Session()
 
-    record = session.query(AiSnsCfg).filter_by(**kwargs).first()
+    record = session.query(AISnsCfg).filter_by(**kwargs).first()
     session.close()
 
     if record:
@@ -678,65 +491,41 @@ def query_AiSnsCfg_map_setting(**kwargs):
         return None
 
 
-def update_AiSnsCfg_map(**kwargs):
+def update_AISnsCfg_map(**kwargs):
     def _do(session):
-        record = session.query(AiSnsCfg).first()
+        record = session.query(AISnsCfg).first()
         if record:
             for key, value in kwargs.items():
                 setattr(record, key, value)
-    db_write(_do, description="update_AiSnsCfg_map")
+    db_write(_do, description="update_AISnsCfg_map")
 
 
-def update_AiSnsCfg(id, **kwargs):
+def update_AISnsCfg(id, **kwargs):
     def _do(session):
-        record = session.query(AiSnsCfg).filter_by(id=id).first()
+        record = session.query(AISnsCfg).filter_by(id=id).first()
         if record:
             for key, value in kwargs.items():
                 setattr(record, key, value)
-    db_write(_do, description="update_AiSnsCfg")
+    db_write(_do, description="update_AISnsCfg")
 
 
-def update_AiSnsCfg_by_user_id(user_id, **kwargs):
+def update_AISnsCfg_by_user_id(user_id, **kwargs):
     def _do(session):
-        record = session.query(AiSnsCfg).filter_by(user_id=user_id).first()
+        record = session.query(AISnsCfg).filter_by(user_id=user_id).first()
         if record:
             for key, value in kwargs.items():
                 setattr(record, key, value)
-    db_write(_do, description="update_AiSnsCfg_by_user_id")
+    db_write(_do, description="update_AISnsCfg_by_user_id")
 
 
-def delete_AiSnsCfg(user_id):
+def delete_AISnsCfg(user_id):
     def _do(session):
-        record = session.query(AiSnsCfg).filter_by(user_id=user_id).first()
+        record = session.query(AISnsCfg).filter_by(user_id=user_id).first()
         if record:
             session.delete(record)
-    db_write(_do, description="delete_AiSnsCfg")
+    db_write(_do, description="delete_AISnsCfg")
 
 
-class KMCfg(Base):
-    __tablename__ = 'km_cfg'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    km_id = Column(String(100))
-    name = Column(String(200))
-    memo = Column(String(200))
-    label = Column(String(100))
-
-    kmpath = Column(String(250))
-    vectorization = Column(Boolean, default=True)
-    stopvectorization = Column(Boolean, default=False)
-    kmtype = Column(String(100))
-    vectortype = Column(String(150))
-    embeddingmodel = Column(String(150))
-
-    textblocklength = Column(Integer)
-    overlaplength = Column(Integer)
-    titleaugment = Column(Boolean, default=True)
-
-    position = Column(Integer, default=9999)
-    is_show = Column(Boolean, default=True)
-    config_param = Column(Text)
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_KMCfg(km_id, name, memo, label, kmpath, vectorization, stopvectorization, kmtype, vectortype, embeddingmodel, textblocklength, overlaplength, titleaugment, config_param):
@@ -787,19 +576,6 @@ def delete_KMCfg(km_id):
     db_write(_do, description="delete_KMCfg")
 
 
-class KMData(Base):
-    __tablename__ = 'km_data'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    km_id = Column(String(100))
-
-    filename = Column(String(200))
-    filenum = Column(Integer, default=1)
-
-    textblocklength = Column(Integer, default=1)
-    overlaplength = Column(Integer, default=1)
-    waitvectorization = Column(Boolean, default=False)
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_KMData(km_id, filename, filenum, textblocklength, overlaplength, waitvectorization):
@@ -843,39 +619,6 @@ def delete_KMData(id):
     db_write(_do, description="delete_KMData")
 
 
-class PluginMng(Base):
-    __tablename__ = 'pluginmng'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    plugin_id = Column(String(100))
-    company = Column(String(200))
-    company_abbr = Column(String(100))
-    name = Column(String(100))
-    version = Column(String(100))
-    alias_name = Column(String(100))
-    filename = Column(String(200))
-    run_mode = Column(String(100))
-    run_scope = Column(String(100))
-    instruction = Column(String(100))
-
-    runtime_main = Column(String(200))
-    runtime_test = Column(String(200))
-    description = Column(Text)
-
-    plugin_directory = Column(String(100))
-    plugin_type = Column(String(100))
-    plugin_executed = Column(String(100))
-    plugin_event = Column(String(100))
-    plugin_title = Column(Text)
-    detail = Column(Text)
-    confirm_needed = Column(Boolean, default=True)
-    can_be_sold = Column(Boolean, default=False)
-    used_in_sns = Column(Boolean, default=False)
-
-    creator = Column(String(100))
-
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_PluginMng(plugin_id, company, company_abbr, name, version, alias_name, filename, runtime_main, runtime_test, description, plugin_directory, plugin_type, plugin_executed, plugin_event, plugin_title, detail, creator, run_mode="", run_scope="", instruction="", used_in_sns=0):
@@ -989,27 +732,6 @@ def delete_PluginMng(**kwargs):
     db_write(_do, description="delete_PluginMng")
 
 
-class FunctionMng(Base):
-    __tablename__ = 'function_mng'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    function_id = Column(String(100))
-    name = Column(String(100))
-    instruction = Column(String(100))
-    file_path = Column(String(200))
-    requirement = Column(Text)
-    parameter = Column(Text)
-    description = Column(String(100))
-    detail = Column(Text)
-    function_type = Column(String(100))
-    function_event = Column(String(100))
-    confirm_needed = Column(Boolean, default=True)
-    can_be_sold = Column(Boolean, default=False)
-    used_in_sns = Column(Boolean, default=False)
-    creator = Column(String(100))
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_function_mng(function_id, name, instruction, file_path, requirement, parameter,
@@ -1066,27 +788,6 @@ def delete_function_mng(**kwargs):
     db_write(_do, description="delete_function_mng")
 
 
-class McpMng(Base):
-    __tablename__ = 'mcp_mng'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    mcp_id = Column(String(100))
-    name = Column(String(100))
-    instruction = Column(String(100))
-    file_path = Column(String(200))
-    requirement = Column(Text)
-    parameter = Column(Text)
-    description = Column(String(100))
-    detail = Column(Text)
-    mcp_type = Column(String(100))
-    mcp_event = Column(String(100))
-    confirm_needed = Column(Boolean, default=True)
-    can_be_sold = Column(Boolean, default=False)
-    used_in_sns = Column(Boolean, default=False)
-    creator = Column(String(100))
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_mcp_mng(mcp_id, name, instruction, file_path, requirement, parameter,
@@ -1143,27 +844,6 @@ def delete_mcp_mng(**kwargs):
     db_write(_do, description="delete_mcp_mng")
 
 
-class SkillMng(Base):
-    __tablename__ = 'skill_mng'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    skill_id = Column(String(100))
-    name = Column(String(100))
-    instruction = Column(String(100))
-    file_path = Column(String(200))
-    requirement = Column(Text)
-    parameter = Column(Text)
-    description = Column(String(100))
-    detail = Column(Text)
-    skill_type = Column(String(100))
-    skill_event = Column(String(100))
-    confirm_needed = Column(Boolean, default=True)
-    can_be_sold = Column(Boolean, default=False)
-    used_in_sns = Column(Boolean, default=False)
-    creator = Column(String(100))
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_skill_mng(skill_id, name, instruction, file_path, requirement, parameter,
@@ -1220,22 +900,6 @@ def delete_skill_mng(**kwargs):
     db_write(_do, description="delete_skill_mng")
 
 
-class WebMng(Base):
-    __tablename__ = 'web_mng'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    web_id = Column(String(100))
-    name = Column(String(100))
-    title = Column(String(100))
-    type = Column(String(100))
-    description = Column(Text)
-    filename = Column(String(200))
-    url = Column(String(500))
-    position = Column(Integer, default=999)
-    creator = Column(String(100))
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def add_web_mng(web_id, name, title, type, description,
@@ -1282,25 +946,6 @@ def delete_web_mng(**kwargs):
     db_write(_do, description="delete_web_mng")
 
 
-class NoteMng(Base):
-    __tablename__ = 'note_mng'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    note_id = Column(String(100))
-    title = Column(String(100))
-    file_name = Column(String(200))
-    content = Column(Text)
-    km_id = Column(String(100))
-    tag_1 = Column(String(100))
-    tag_2 = Column(String(100))
-    tag_3 = Column(String(100))
-    waitvectorization = Column(Boolean, default=False)
-    creator = Column(String(100))
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
-    stick_time = Column(DateTime, nullable=True)
-    label = Column(String(50))
 
 
 def add_note_mng(note_id, title, file_name, content, km_id, tag_1, tag_2,
@@ -1435,37 +1080,6 @@ def query_Note_mng_Search_Content(count, label: bool = False, **kwargs):
     return records
 
 
-class SystemCfg(Base):
-    __tablename__ = 'system_cfg'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    autorun = Column(Boolean, default=False)
-    showtaskbar = Column(Boolean, default=False)
-    updateinfo = Column(Boolean, default=False)
-    minirunontray = Column(Boolean, default=False)
-    closebuttontype = Column(String(100))
-    style = Column(String(500))
-
-    showinfo = Column(Boolean, default=True)
-    showinfoicon = Column(Boolean, default=True)
-    infosound = Column(Boolean, default=True)
-    agent_server = Column(Text)
-    ai_sns_server = Column(Text)
-    conversation_timeout_seconds = Column(Integer, default=60)
-    contact_cooldown_seconds = Column(Integer, default=300)
-    contact_recent_limit = Column(Integer, default=3)
-    process_info_compact_every_n = Column(Integer, default=50)
-    process_info_plan_summary_every_n = Column(Integer, default=5)
-    memory_enabled = Column(Boolean, default=True)
-    memory_embedding_enabled = Column(Boolean, default=False)
-    log_retention_days = Column(Integer, default=3)
-    tool_check_every_n = Column(Integer, default=0)
-    tool_check_before_review_enabled = Column(Boolean, default=False)
-    agent_card_before_review_enabled = Column(Boolean, default=False)
-    language = Column(String(10), default='en')
-    a2a_server_enabled = Column(Boolean, default=False)
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.now)
 
 
 def _ensure_system_cfg_columns():
@@ -1553,15 +1167,6 @@ def delete_SystemCfg(id):
     db_write(_do, description="delete_SystemCfg")
 
 
-class Prompt(Base):
-    __tablename__ = 'prompts'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    title = Column(String)
-    content = Column(String)
-    question = Column(String)
-    tags = Column(String)
-    model_name = Column(String(100))
-    position = Column(Integer)
 
 
 def get_prompt_by_title(title):
@@ -1651,12 +1256,6 @@ def upsert_prompt_by_title(title: str, content: str) -> bool:
         return False
 
 
-class KeyValue(Base):
-    __tablename__ = 'key_value'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    key = Column(String, nullable=False)
-    value = Column(String, nullable=False)
 
 
 def add_key_value(key: str, value: str):
@@ -1700,23 +1299,6 @@ def delete_key_value(key: str):
     db_write(_do, description="delete_key_value")
 
 
-class MapTrade(Base):
-    __tablename__ = 'map_trade'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    trade_id = Column(String(50))
-    trade_type = Column(String(100))
-    title = Column(String(500))
-    detail = Column(Text)
-    link = Column(Text)
-    trade_with_name = Column(String(200))
-    trade_with_account = Column(String(200))
-    trade_with_company = Column(Boolean, default=False)
-    pay = Column(Float, default=100)
-    pay_method = Column(Text, default="as_coin")
-    status = Column(Integer, default=0)
-    create_time = Column(DateTime, default=datetime.now)
-    is_delete = Column(Boolean, default=False)
 
 
 def add_map_trade(**kwargs):
@@ -1773,26 +1355,6 @@ def delete_map_trade(trade_id):
     db_write(_do, description="delete_map_trade")
 
 
-class MapVisit(Base):
-    __tablename__ = 'map_visit'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    visit_id = Column(String(50))
-    title = Column(String(500))
-    detail = Column(Text)
-    place_type = Column(String(100))
-    address = Column(Text)
-    lng = Column(Float)
-    lat = Column(Float)
-    url = Column(Text)
-    coord_key = Column(String(80))
-    owner_name = Column(String(200))
-    owner_account = Column(String(100))
-    owner_type = Column(String(50))
-    is_free = Column(Boolean, default=True)
-    trade_id = Column(String(100))
-    create_time = Column(DateTime, default=datetime.now)
-    is_delete = Column(Boolean, default=False)
 
 
 def add_map_visit(**kwargs):
@@ -1847,28 +1409,6 @@ def delete_map_visit(visit_id):
     db_write(_do, description="delete_map_visit")
 
 
-class SystemInit(Base):
-    __tablename__ = 'system_init'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(100))
-    avatar = Column(Text)
-    password = Column(String(128))
-    confirm_password = Column(String(128))
-    profile = Column(String(500))
-    llm = Column(String(100))
-    llm_server = Column(String(500))
-    api_key = Column(String(200))
-    avatar3d = Column(Text)
-    account = Column(String(128))
-    account_password = Column(String(128))
-    sns_url = Column(Text)
-    map = Column(String)
-    map_api_key = Column(String(128))
-    map_id = Column(String(128))
-    status = Column(Integer)
-    is_delete = Column(Boolean, default=False)
-    create_time = Column(DateTime, default=datetime.utcnow)
 
 
 def add_SystemInit(name, avatar, password, confirm_password, profile, llm, llm_server, api_key, avatar3d,
@@ -1927,14 +1467,6 @@ def delete_SystemInit(id):
     db_write(_do, description="delete_SystemInit")
 
 
-class MapActivity(Base):
-    __tablename__ = 'map_activity'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    activity_id = Column(String(50))
-    content = Column(Text)
-    type = Column(String(100))
-    create_time = Column(DateTime, default=datetime.now)
-    is_delete = Column(Boolean, default=False)
 
 
 def add_map_activity(activity_id, content, type):
@@ -2000,13 +1532,6 @@ def delete_map_activity(activity_id):
     db_write(_do, description="delete_map_activity")
 
 
-class MapPresetMsg(Base):
-    __tablename__ = 'map_preset_msg'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    content = Column(Text)
-    position = Column(Integer, default=0)
-    create_time = Column(DateTime, default=datetime.now)
-    is_delete = Column(Boolean, default=False)
 
 
 def add_map_preset_msg(content):

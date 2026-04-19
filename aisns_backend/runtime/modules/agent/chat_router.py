@@ -17,9 +17,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .agent_manager import agent_manager
-from runtime.database.base import get_session
-from runtime.database.models.agent import AgentCfg
-from runtime.database.models.chat import AIChatMessages
+from db.database import get_db_session as get_session
+from db.models.agent import AgentCfg
+from db.models.aisns import AIChatMessages
 
 logger = logging.getLogger(__name__)
 

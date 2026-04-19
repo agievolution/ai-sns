@@ -11,13 +11,13 @@ from pathlib import Path
 import yaml
 
 from db.DBFactory import (
-    query_AiSnsCfg_All,
-    add_AiSnsCfg,
+    query_AISnsCfg_All,
+    add_AISnsCfg,
     query_AIChatMessages_All as query_AIChatMessages,
     add_AIChatMessages as add_AIChatMessage
 )
 
-from runtime.database.repositories.chat_repository import AIChatMessagesRepository
+from db.repositories import AIChatMessagesRepository
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class ChatService:
         """
         # 1. Try to load from database
         try:
-            configs = query_AiSnsCfg_All(is_delete=0)
+            configs = query_AISnsCfg_All(is_delete=0)
             if configs and len(configs) > 0:
                 cfg = configs[0]
                 api_key = getattr(cfg, 'api_key', '')
@@ -105,7 +105,7 @@ class ChatService:
     @staticmethod
     def get_all_ai_chat_configs() -> List[Dict[str, Any]]:
         """Get all AI chat configurations"""
-        configs = query_AiSnsCfg_All(is_delete=0)
+        configs = query_AISnsCfg_All(is_delete=0)
         result = []
         for cfg in configs:
             result.append({
@@ -120,7 +120,7 @@ class ChatService:
     @staticmethod
     def create_ai_chat_config(**kwargs) -> int:
         """Create AI chat configuration"""
-        config_id = add_AiSnsCfg(**kwargs)
+        config_id = add_AISnsCfg(**kwargs)
         return config_id
 
     @staticmethod

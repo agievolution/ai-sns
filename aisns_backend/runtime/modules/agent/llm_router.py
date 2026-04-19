@@ -3,9 +3,9 @@
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from .llm_schemas import (
-    LlmConfigCreate, LlmConfigUpdate, LlmConfigResponse, LlmTestRequest
+    LLMConfigCreate, LLMConfigUpdate, LLMConfigResponse, LlmTestRequest
 )
-from .llm_service import LlmConfigService
+from .llm_service import LLMConfigService
 
 router = APIRouter(prefix="/llm-configs", tags=["LLM Configuration"])
 
@@ -16,7 +16,7 @@ async def get_llm_configs(
 ):
     """Get all LLM configurations."""
     try:
-        service = LlmConfigService()
+        service = LLMConfigService()
         # If active_only is not specified, default to returning all active configs
         configs = service.get_all(active_only=active_only if active_only is not None else True)
         return {"success": True, "data": configs}
@@ -28,7 +28,7 @@ async def get_llm_configs(
 async def get_llm_config(config_id: str):
     """Get LLM configuration by ID."""
     try:
-        service = LlmConfigService()
+        service = LLMConfigService()
         config = service.get_by_config_id(config_id)
         if not config:
             raise HTTPException(status_code=404, detail="Config not found")
@@ -40,10 +40,10 @@ async def get_llm_config(config_id: str):
 
 
 @router.post("", response_model=dict)
-async def create_llm_config(config: LlmConfigCreate):
+async def create_llm_config(config: LLMConfigCreate):
     """Create new LLM configuration."""
     try:
-        service = LlmConfigService()
+        service = LLMConfigService()
         config_id = service.create(config)
         return {"success": True, "data": {"config_id": config_id}}
     except ValueError as e:
@@ -53,10 +53,10 @@ async def create_llm_config(config: LlmConfigCreate):
 
 
 @router.put("/{config_id}", response_model=dict)
-async def update_llm_config(config_id: str, config: LlmConfigUpdate):
+async def update_llm_config(config_id: str, config: LLMConfigUpdate):
     """Update LLM configuration."""
     try:
-        service = LlmConfigService()
+        service = LLMConfigService()
         service.update(config_id, config)
         return {"success": True}
     except ValueError as e:
@@ -69,7 +69,7 @@ async def update_llm_config(config_id: str, config: LlmConfigUpdate):
 async def delete_llm_config(config_id: str):
     """Delete LLM configuration (soft delete)."""
     try:
-        service = LlmConfigService()
+        service = LLMConfigService()
         service.delete(config_id)
         return {"success": True}
     except ValueError as e:
@@ -82,7 +82,7 @@ async def delete_llm_config(config_id: str):
 async def test_llm_connection(test_data: LlmTestRequest):
     """Test LLM connection."""
     try:
-        service = LlmConfigService()
+        service = LLMConfigService()
         result = await service.test_connection(test_data)
         return {"success": True, "data": result}
     except Exception as e:
@@ -90,10 +90,10 @@ async def test_llm_connection(test_data: LlmTestRequest):
 
 
 @router.post("/import", response_model=dict)
-async def import_llm_configs(configs: List[LlmConfigCreate]):
+async def import_llm_configs(configs: List[LLMConfigCreate]):
     """Import multiple LLM configurations."""
     try:
-        service = LlmConfigService()
+        service = LLMConfigService()
         result = service.import_configs(configs)
         return {"success": True, "data": result}
     except Exception as e:
@@ -104,7 +104,7 @@ async def import_llm_configs(configs: List[LlmConfigCreate]):
 async def export_llm_configs():
     """Export all LLM configurations."""
     try:
-        service = LlmConfigService()
+        service = LLMConfigService()
         configs = service.export_all()
         return {"success": True, "data": configs}
     except Exception as e:

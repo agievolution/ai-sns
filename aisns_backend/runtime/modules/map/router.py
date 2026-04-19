@@ -1,0 +1,490 @@
+# -*- coding: utf-8 -*-
+"""
+Map module - API router
+"""
+import logging
+from typing import Dict, Any
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from sqlalchemy.orm import Session
+
+# Import global WebSocket manager
+from runtime.shared.websocket_manager import ConnectionManager as GlobalConnectionManager
+from runtime.shared.websocket_manager import manager as global_ws_manager
+
+from runtime.shared.websocket_manager import ConnectionManager
+from .schemas import MapConfig, MapMarker, RouteRequest, RouteControl, ChatMessageMap
+from .service import MapService
+from .websocket import manager, handle_websocket_message
+from .dependencies import get_map_service, get_connection_manager
+from runtime.config.database import get_db_sync
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+# ==================== Map Settings ====================
+
+@router.get("/settings", response_model=dict)
+async def get_map_settings(service: MapService = Depends(get_map_service)):
+    """
+    Get map configuration
+
+    Returns:
+        Map configuration
+    """
+    try:
+        data = service.get_map_settings()
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error(f"Error getting map settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/settings", response_model=dict)
+async def update_map_settings(
+    config: MapConfig,
+    service: MapService = Depends(get_map_service)
+):
+    """
+    Update map configuration
+
+    Args:
+        config: Map configuration
+
+    Returns:
+        Success status
+    """
+    try:
+        res = service.update_map_settings(config.dict(exclude_unset=True))
+        if isinstance(res, dict) and res.get("success") is False:
+            raise HTTPException(status_code=400, detail=str(res.get("message") or "Invalid map settings"))
+        return res if isinstance(res, dict) else {"success": True}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating map settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/settings/home", response_model=dict)
+async def get_home_position(service: MapService = Depends(get_map_service)):
+    """
+    Get home position
+
+    Returns:
+        Home position configuration
+    """
+    try:
+        data = service.get_home_position()
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error(f"Error getting home position: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/settings/home", response_model=dict)
+async def update_home_position(
+    home_position: Dict[str, Any],
+    service: MapService = Depends(get_map_service)
+):
+    """
+    Update home position
+
+    Args:
+        home_position: Home position configuration
+
+    Returns:
+        Success status
+    """
+    try:
+        service.update_home_position(home_position)
+        return {"success": True}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating home position: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Route Planning ====================
+
+@router.post("/route", response_model=dict)
+async def plan_route(
+    request: RouteRequest,
+    service: MapService = Depends(get_map_service)
+):
+    """
+    Plan route
+
+    Args:
+        request: Route planning request
+
+    Returns:
+        Route planning result
+    """
+    try:
+        result = service.plan_route(
+            request.start,
+            request.end,
+            request.position_type
+        )
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.error(f"Error planning route: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/route/{route_id}/control", response_model=dict)
+async def control_route(
+    route_id: str,
+    request: RouteControl,
+    service: MapService = Depends(get_map_service)
+):
+    """
+    Control route simulation
+
+    Args:
+        route_id: Route ID
+        request: Route control request
+
+    Returns:
+        Control result
+    """
+    try:
+        result = service.control_route(route_id, request.action)
+        return {"success": True, "data": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error controlling route: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Map Markers ====================
+
+@router.get("/markers", response_model=dict)
+async def get_map_markers(service: MapService = Depends(get_map_service)):
+    """
+    Get map markers
+
+    Returns:
+        List of map markers
+    """
+    try:
+        markers = service.get_map_markers()
+        return {"success": True, "data": markers}
+    except Exception as e:
+        logger.error(f"Error getting map markers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/markers", response_model=dict)
+async def add_map_marker(
+    marker: MapMarker,
+    service: MapService = Depends(get_map_service)
+):
+    """
+    Add map marker
+
+    Args:
+        marker: Map marker
+
+    Returns:
+        Created marker ID
+    """
+    try:
+        marker_id = service.add_map_marker(marker.dict(exclude_unset=True))
+        return {"success": True, "data": {"id": marker_id}}
+    except Exception as e:
+        logger.error(f"Error adding map marker: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/markers/{marker_id}", response_model=dict)
+async def update_map_marker(
+    marker_id: str,
+    marker: MapMarker,
+    service: MapService = Depends(get_map_service)
+):
+    """
+    Update map marker
+
+    Args:
+        marker_id: Marker ID
+        marker: Updated marker data
+
+    Returns:
+        Success status
+    """
+    try:
+        service.update_map_marker(marker_id, marker.dict(exclude_unset=True))
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error updating map marker: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/markers/{marker_id}", response_model=dict)
+async def delete_map_marker(
+    marker_id: str,
+    service: MapService = Depends(get_map_service)
+):
+    """
+    Delete map marker
+
+    Args:
+        marker_id: Marker ID
+
+    Returns:
+        Success status
+    """
+    try:
+        service.delete_map_marker(marker_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error deleting map marker: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Map Chat ====================
+
+@router.post("/chat", response_model=dict)
+async def send_map_chat_message(
+    message: ChatMessageMap,
+    conn_manager: ConnectionManager = Depends(get_connection_manager)
+):
+    """
+    Send map chat message
+
+    Args:
+        message: Chat message
+
+    Returns:
+        Success status
+    """
+    try:
+        # Log the received message
+        print(f"Received chat message: from={message.from_user}, to={message.to_user}, content={message.content}")
+        
+        # Log the number of active connections
+        active_count = global_ws_manager.get_client_count()
+        print(f"Active WebSocket connections: {active_count}")
+        
+        # TODO: Save chat message to database
+        # Broadcast message via WebSocket using the GLOBAL manager to reach all connected clients
+        print("About to broadcast message via global WebSocket manager")
+        await global_ws_manager.broadcast({
+            "type": "map_chat_message",
+            "from_user": message.from_user,
+            "to_user": message.to_user,
+            "content": message.content,
+            "location": message.location,
+            "timestamp": datetime.now().isoformat()
+        })
+        print("Message broadcast successful")
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error sending map chat message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chat/history", response_model=dict)
+async def get_map_chat_history(service: MapService = Depends(get_map_service)):
+    """
+    Get map chat history
+
+    Returns:
+        List of chat messages
+    """
+    try:
+        messages = service.get_map_chat_history()
+        return {"success": True, "data": messages}
+    except Exception as e:
+        logger.error(f"Error getting map chat history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== WebSocket ====================
+
+@router.websocket("/ws/{client_id}")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    client_id: str,
+    conn_manager: ConnectionManager = Depends(get_connection_manager)
+):
+    """
+    WebSocket connection endpoint for real-time message push
+
+    Args:
+        websocket: WebSocket connection
+        client_id: Client ID
+    """
+    await conn_manager.connect(websocket, client_id)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            await handle_websocket_message(data, client_id)
+
+    except WebSocketDisconnect:
+        conn_manager.disconnect(client_id)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+
+
+# ==================== Trades ====================
+
+@router.get("/trades")
+async def get_trades(db: Session = Depends(get_db_sync)):
+    """Get all trades from map_trade table"""
+    from runtime.database.models.map import MapTrade
+
+    try:
+        trades = db.query(MapTrade).filter(
+            MapTrade.is_delete == False
+        ).order_by(MapTrade.create_time.desc()).all()
+
+        return [
+            {
+                "id": trade.id,
+                "trade_id": trade.trade_id,
+                "trade_type": trade.trade_type,
+                "title": trade.title,
+                "detail": trade.detail,
+                "link": trade.link,
+                "trade_with_name": trade.trade_with_name,
+                "trade_with_account": trade.trade_with_account,
+                "trade_with_company": trade.trade_with_company,
+                "pay": trade.pay,
+                "pay_method": trade.pay_method,
+                "status": trade.status,
+                "create_time": trade.create_time.isoformat() if trade.create_time else None
+            }
+            for trade in trades
+        ]
+    except Exception as e:
+        logger.error(f"Error getting trades: {e}")
+        return []
+
+
+@router.delete("/trades/{trade_id}")
+async def delete_trade(trade_id: str, db: Session = Depends(get_db_sync)):
+    """Soft delete a trade by trade_id"""
+    from runtime.database.models.map import MapTrade
+
+    trade_id = (trade_id or "").strip()
+    if not trade_id:
+        raise HTTPException(status_code=400, detail="trade_id is required")
+
+    try:
+        trade = db.query(MapTrade).filter(MapTrade.trade_id == trade_id).first()
+        if not trade:
+            raise HTTPException(status_code=404, detail="Trade not found")
+
+        from db.write_queue import db_write
+        _tid = trade_id
+        def _do(session):
+            rec = session.query(MapTrade).filter(MapTrade.trade_id == _tid).first()
+            if rec:
+                rec.is_delete = True
+        db_write(_do, description="map_router_delete_trade")
+
+        try:
+            await global_ws_manager.broadcast({
+                "type": "trade_deleted",
+                "data": {"trade_id": trade_id}
+            })
+        except Exception as e:
+            logger.warning(f"Failed to broadcast trade_deleted: {e}")
+
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.error(f"Error deleting trade {trade_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Visits ====================
+
+
+@router.get("/visits")
+async def get_visits(db: Session = Depends(get_db_sync)):
+    """Get all visits from map_visit table."""
+    from runtime.database.models.map import MapVisit
+
+    try:
+        visits = db.query(MapVisit).filter(
+            MapVisit.is_delete == False
+        ).order_by(MapVisit.create_time.desc()).all()
+
+        return [
+            {
+                "id": visit.id,
+                "visit_id": visit.visit_id,
+                "title": visit.title,
+                "detail": visit.detail,
+                "place_type": visit.place_type,
+                "address": visit.address,
+                "lng": visit.lng,
+                "lat": visit.lat,
+                "url": getattr(visit, "url", None),
+                "coord_key": getattr(visit, "coord_key", None),
+                "create_time": visit.create_time.isoformat() if visit.create_time else None,
+            }
+            for visit in visits
+        ]
+    except Exception as e:
+        logger.error(f"Error getting visits: {e}")
+        return []
+
+
+@router.delete("/visits/{visit_id}")
+async def delete_visit(visit_id: str, db: Session = Depends(get_db_sync)):
+    """Soft delete a visit by visit_id"""
+    from runtime.database.models.map import MapVisit
+
+    visit_id = (visit_id or "").strip()
+    if not visit_id:
+        raise HTTPException(status_code=400, detail="visit_id is required")
+
+    try:
+        visit = db.query(MapVisit).filter(MapVisit.visit_id == visit_id).first()
+        if not visit:
+            raise HTTPException(status_code=404, detail="Visit not found")
+
+        from db.write_queue import db_write
+        _vid = visit_id
+        _coord_key = getattr(visit, "coord_key", None)
+
+        def _do(session):
+            rec = session.query(MapVisit).filter(MapVisit.visit_id == _vid).first()
+            if rec:
+                rec.is_delete = True
+
+        db_write(_do, description="map_router_delete_visit")
+
+        try:
+            await global_ws_manager.broadcast({
+                "type": "visit_deleted",
+                "data": {"visit_id": visit_id, "coord_key": _coord_key}
+            })
+        except Exception as e:
+            logger.warning(f"Failed to broadcast visit_deleted: {e}")
+
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.error(f"Error deleting visit {visit_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

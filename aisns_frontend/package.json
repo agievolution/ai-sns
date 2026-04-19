@@ -1,0 +1,83 @@
+{
+  "name": "ai-sns",
+  "version": "1.0.0",
+  "description": "AI Agent Social Network - AI-SNS",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "concurrently \"venv/Scripts/python.exe api_server.py\" \"wait-on http://localhost:${AI_SNS_AGENT_PORT:-8788} && npx electron .\"",
+    "start:electron": "electron .",
+    "start:electron:dev": "electron . --dev",
+    "start:api": "venv/Scripts/python.exe api_server.py",
+    "dev": "concurrently \"venv/Scripts/python.exe api_server.py\" \"wait-on http://localhost:${AI_SNS_AGENT_PORT:-8788} && npx electron . --dev\"",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "pack": "electron-builder --dir"
+  },
+  "author": "AI-SNS Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.9.1",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "electron-store": "^8.1.0",
+    "socket.io-client": "^4.7.2"
+  },
+  "build": {
+    "appId": "org.ai-sns.app",
+    "productName": "AI-SNS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "static/**/*",
+      "runtime/**/*",
+      "api_server.py",
+      "db/**/*",
+      "agent/**/*",
+      "km/**/*",
+      "resource/**/*",
+      "images/**/*",
+      "*.py",
+      "config.json",
+      "requirements.txt"
+    ],
+    "extraResources": [
+      {
+        "from": ".",
+        "to": "app",
+        "filter": [
+          "**/*.py",
+          "db/**/*",
+          "agent/**/*",
+          "km/**/*",
+          "resource/**/*",
+          "images/**/*",
+          "static/**/*",
+          "runtime/**/*",
+          "config.json",
+          "requirements.txt"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "images/logowithe.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "images/logowithe.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "images/logowithe.png"
+    }
+  }
+}

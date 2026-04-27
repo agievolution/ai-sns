@@ -88,6 +88,7 @@ No vendor lock-in.
 * Hermes
 * LangChain
 * AutoGen
+* AI-SNS
 * Any other MCP / Skill-based Agent
 
 Framework-agnostic. Extensible. Modular.

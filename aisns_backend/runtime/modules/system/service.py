@@ -374,7 +374,7 @@ class SystemInitWizardService:
 
     def list_avatar3d(self, request_base_url: str) -> List[Dict[str, str]]:
         base = request_base_url.rstrip('/')
-        folder = Path("scripts") / "avatar3d"
+        folder = Path("static") / "avatar3d"
         if not folder.exists():
             return []
 

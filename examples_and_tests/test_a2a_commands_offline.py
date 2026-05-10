@@ -426,6 +426,69 @@ def test_metadata_includes_source_and_form_fields() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  Additional tests for multi-resource fallback and tool_executor fix
+# ═══════════════════════════════════════════════════════════════════════════
+@test
+def test_get_all_resources_returns_sorted_by_priority() -> None:
+    """_get_all_resources must return full JIDs sorted by priority descending."""
+    from runtime.apps.sns.xmpp_a2a import XMPPA2AManager
+
+    # Build a minimal mock client with roster data
+    class MockResources:
+        def __init__(self, data):
+            self._data = data
+        def items(self):
+            return self._data.items()
+
+    class MockEntry:
+        def __init__(self, resources):
+            self.resources = resources
+
+    class MockRoster:
+        def __init__(self, entries):
+            self._entries = entries
+        def has_jid(self, jid):
+            return jid in self._entries
+        def __getitem__(self, jid):
+            return self._entries[jid]
+
+    class MockClient:
+        def __init__(self):
+            # Simulate two resources: one priority 5, one priority 0
+            self.client_roster = MockRoster({
+                "bob@example.com": MockEntry({
+                    "Monal-iOS.abc": {"priority": 5},
+                    "1234567890": {"priority": 0},
+                })
+            })
+
+    mgr = XMPPA2AManager.__new__(XMPPA2AManager)
+    mgr.client = MockClient()
+
+    result = mgr._get_all_resources("bob@example.com")
+    assert_eq(len(result), 2, "must return 2 resources")
+    # Monal has higher priority → comes first
+    assert_eq(result[0], "bob@example.com/Monal-iOS.abc", "highest priority first")
+    assert_eq(result[1], "bob@example.com/1234567890", "lower priority second")
+
+    # Test with already-full JID
+    result2 = mgr._get_all_resources("bob@example.com/explicit")
+    assert_eq(result2, ["bob@example.com/explicit"], "full JID returned as-is")
+
+    # Test with unknown JID
+    result3 = mgr._get_all_resources("unknown@example.com")
+    assert_eq(result3, [], "unknown JID returns empty")
+
+
+@test
+def test_tool_executor_has_path_import() -> None:
+    """tool_executor.py must have 'from pathlib import Path' so get_python_executable works."""
+    from runtime.modules.tools.tool_executor import Path as ToolPath
+    from pathlib import Path as RealPath
+    assert_true(ToolPath is RealPath, "tool_executor.Path must be pathlib.Path")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  Main runner
 # ═══════════════════════════════════════════════════════════════════════════
 def main() -> int:

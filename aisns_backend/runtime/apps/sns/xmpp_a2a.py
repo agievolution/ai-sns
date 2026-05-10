@@ -565,35 +565,59 @@ class XMPPA2AManager:
         except Exception:
             IqError = IqTimeout = None  # type: ignore
 
-        resolved_jid = self._resolve_full_jid(peer_jid)
-        logger.info(
-            "[XMPP-A2A] call_adhoc: peer=%s resolved=%s node=%s inspect_only=%s",
-            peer_jid, resolved_jid, command_node, inspect_only,
-        )
+        # Build candidate list: all known resources, then bare JID as final fallback
+        candidates = self._get_all_resources(peer_jid)
+        if not candidates:
+            candidates = [peer_jid]
+        elif peer_jid not in candidates and '/' not in peer_jid:
+            candidates.append(peer_jid)  # bare JID as last resort
 
-        try:
-            result = await asyncio.wait_for(
-                self._call_adhoc_impl(resolved_jid, command_node, form_data, inspect_only),
-                timeout=300,
+        last_error: Optional[dict] = None
+
+        for idx, resolved_jid in enumerate(candidates):
+            logger.info(
+                "[XMPP-A2A] call_adhoc: peer=%s resolved=%s node=%s inspect_only=%s (attempt %d/%d)",
+                peer_jid, resolved_jid, command_node, inspect_only, idx + 1, len(candidates),
             )
-            return result
-        except asyncio.TimeoutError:
-            logger.warning("[XMPP-A2A] call_adhoc: TIMEOUT (300s) peer=%s node=%s", resolved_jid, command_node)
-            return {"ok": False, "error": "timeout", "detail": "XMPP ad-hoc command timed out (300s)"}
-        except Exception as e:
-            if IqTimeout is not None and isinstance(e, IqTimeout):
-                logger.warning("[XMPP-A2A] call_adhoc: IQ timeout peer=%s node=%s", resolved_jid, command_node)
-                return {"ok": False, "error": "peer_unreachable", "detail": "IQ timeout (peer offline or unresponsive)"}
-            if IqError is not None and isinstance(e, IqError):
-                cond = "unknown"
-                try:
-                    cond = e.iq['error']['condition'] or "unknown"
-                except Exception:
-                    pass
-                logger.warning("[XMPP-A2A] call_adhoc: IqError peer=%s node=%s cond=%s", resolved_jid, command_node, cond)
-                return {"ok": False, "error": cond, "detail": str(e)}
-            logger.error("[XMPP-A2A] call_adhoc: FAILED peer=%s node=%s: %s", resolved_jid, command_node, e)
-            return {"ok": False, "error": "unexpected", "detail": str(e)}
+            try:
+                result = await asyncio.wait_for(
+                    self._call_adhoc_impl(resolved_jid, command_node, form_data, inspect_only),
+                    timeout=300,
+                )
+                return result
+            except asyncio.TimeoutError:
+                logger.warning("[XMPP-A2A] call_adhoc: TIMEOUT (300s) peer=%s node=%s", resolved_jid, command_node)
+                last_error = {"ok": False, "error": "timeout", "detail": "XMPP ad-hoc command timed out (300s)"}
+                break  # timeout is fatal, do not retry
+            except Exception as e:
+                if IqTimeout is not None and isinstance(e, IqTimeout):
+                    logger.warning("[XMPP-A2A] call_adhoc: IQ timeout peer=%s node=%s", resolved_jid, command_node)
+                    last_error = {"ok": False, "error": "peer_unreachable", "detail": "IQ timeout (peer offline or unresponsive)"}
+                    break  # IQ timeout is fatal
+                if IqError is not None and isinstance(e, IqError):
+                    cond = "unknown"
+                    try:
+                        cond = e.iq['error']['condition'] or "unknown"
+                    except Exception:
+                        pass
+                    logger.warning(
+                        "[XMPP-A2A] call_adhoc: IqError peer=%s node=%s cond=%s",
+                        resolved_jid, command_node, cond,
+                    )
+                    last_error = {"ok": False, "error": cond, "detail": str(e)}
+                    # Retry on service-unavailable (resource might not support commands)
+                    if cond == "service-unavailable" and idx < len(candidates) - 1:
+                        logger.info(
+                            "[XMPP-A2A] call_adhoc: resource %s does not support commands, trying next resource",
+                            resolved_jid,
+                        )
+                        continue
+                    break
+                logger.error("[XMPP-A2A] call_adhoc: FAILED peer=%s node=%s: %s", resolved_jid, command_node, e)
+                last_error = {"ok": False, "error": "unexpected", "detail": str(e)}
+                break
+
+        return last_error or {"ok": False, "error": "no_resources", "detail": "No reachable resources found"}
 
     async def _call_adhoc_impl(
         self,
@@ -797,27 +821,36 @@ class XMPPA2AManager:
                         "source": "agent_card",
                     })
 
-        # Source 2: disco#items fallback
-        try:
-            resolved_jid = self._resolve_full_jid(peer_jid)
-            disco = self.client['xep_0030']
-            items_iq = await asyncio.wait_for(
-                disco.get_items(jid=resolved_jid, node="http://jabber.org/protocol/commands"),
-                timeout=15,
-            )
-            for item in items_iq['disco_items']['items']:
-                node = item[1]  # (jid, node, name)
-                name = item[2] or ""
-                if node and node not in seen_nodes:
-                    seen_nodes.add(node)
-                    commands.append({
-                        "node": node,
-                        "name": name,
-                        "description": "",
-                        "source": "disco",
-                    })
-        except Exception as e:
-            logger.debug("[XMPP-A2A] discover_commands: disco#items failed for %s: %s", peer_jid, e)
+        # Source 2: disco#items fallback — try all known resources
+        candidates = self._get_all_resources(peer_jid) or [peer_jid]
+        disco_success = False
+        for candidate_jid in candidates:
+            try:
+                disco = self.client['xep_0030']
+                items_iq = await asyncio.wait_for(
+                    disco.get_items(jid=candidate_jid, node="http://jabber.org/protocol/commands"),
+                    timeout=15,
+                )
+                for item in items_iq['disco_items']['items']:
+                    node = item[1]  # (jid, node, name)
+                    name = item[2] or ""
+                    if node and node not in seen_nodes:
+                        seen_nodes.add(node)
+                        commands.append({
+                            "node": node,
+                            "name": name,
+                            "description": "",
+                            "source": "disco",
+                        })
+                disco_success = True
+                break  # success on this resource, no need to try others
+            except Exception as e:
+                logger.debug(
+                    "[XMPP-A2A] discover_commands: disco#items failed for %s: %s (trying next resource)",
+                    candidate_jid, e,
+                )
+        if not disco_success:
+            logger.debug("[XMPP-A2A] discover_commands: disco#items failed on all resources for %s", peer_jid)
 
         logger.info(
             "[XMPP-A2A] discover_commands: peer=%s found=%d (agent_card=%d disco=%d)",
@@ -834,32 +867,41 @@ class XMPPA2AManager:
         Otherwise, look up the first available full JID from presence info.
         Falls back to the bare JID when no resource is known.
         """
-        if not target_jid or '/' in target_jid:
-            return target_jid
+        candidates = self._get_all_resources(target_jid)
+        return candidates[0] if candidates else target_jid
+
+    def _get_all_resources(self, target_jid: str) -> List[str]:
+        """Return all known full JIDs for a bare JID, sorted by priority (desc).
+
+        Returns an empty list if no resources are known (caller should fall
+        back to the bare JID).
+        """
+        if not target_jid:
+            return []
+        if '/' in target_jid:
+            return [target_jid]
         try:
             roster = getattr(self.client, 'client_roster', None)
             if roster is None:
-                return target_jid
+                return []
             # Avoid RosterNode.__getitem__ side effect which silently adds
             # strangers to the local roster via add(save=True).
             if hasattr(roster, 'has_jid') and not roster.has_jid(target_jid):
-                return target_jid
+                return []
             entry = roster[target_jid]
             resources = getattr(entry, 'resources', None)
-            if resources:
-                # Pick the resource with the highest priority
-                try:
-                    best = max(
-                        resources.items(),
-                        key=lambda kv: kv[1].get('priority', 0) if isinstance(kv[1], dict) else 0,
-                    )[0]
-                except Exception:
-                    best = next(iter(resources.keys()))
-                if best:
-                    return f"{target_jid}/{best}"
+            if not resources:
+                return []
+            # Sort resources by priority descending
+            sorted_res = sorted(
+                resources.items(),
+                key=lambda kv: kv[1].get('priority', 0) if isinstance(kv[1], dict) else 0,
+                reverse=True,
+            )
+            return [f"{target_jid}/{r}" for r, _ in sorted_res]
         except Exception as e:
-            logger.debug("_resolve_full_jid: failed for %s: %s", target_jid, e)
-        return target_jid
+            logger.debug("_get_all_resources: failed for %s: %s", target_jid, e)
+        return []
 
     # ── Initialization ─────────────────────────────────────────────────────
 

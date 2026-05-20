@@ -211,7 +211,22 @@ const InitializationWizard = {
             'Gemini': 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
             'OpenAI Compatible': ''
         };
-        return Object.prototype.hasOwnProperty.call(urlMap, llm) ? urlMap[llm] : '';
+        const label = this.normalizeLlmLabel(llm);
+        return Object.prototype.hasOwnProperty.call(urlMap, label) ? urlMap[label] : '';
+    },
+
+    normalizeLlmLabel(llm) {
+        const raw = String(llm || '').trim();
+        if (!raw) {
+            return 'OpenAI';
+        }
+        const map = {
+            openai: 'OpenAI',
+            claude: 'Claude',
+            gemini: 'Gemini',
+            custom: 'OpenAI Compatible'
+        };
+        return map[raw.toLowerCase()] || raw;
     },
 
     async loadInitialData() {
@@ -223,6 +238,8 @@ const InitializationWizard = {
         } catch (e) {
             console.warn('Failed to load init draft:', e);
         }
+
+        this.state.llm = this.normalizeLlmLabel(this.state.llm);
 
         // Ensure LLM Server has a sensible default that matches the
         // currently-selected LLM provider. The backend draft may store

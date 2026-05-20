@@ -291,28 +291,6 @@ const AgentPage = {
                                     <button class="prompt-save-btn" data-agent-id="${agent.id}">Save</button>
                                 </div>
                             </div>
-                            <div class="settings-section">
-                                <div class="settings-section-title">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
-                                        <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-                                    </svg>
-                                    <span>Preset prompts</span>
-                                </div>
-                                <div class="preset-list">
-                                    <div class="preset-item" data-preset="developer" data-agent-id="${agent.id}">
-                                        <span class="preset-name">Senior Developer</span>
-                                        <button class="preset-use-btn" data-agent-id="${agent.id}">Use</button>
-                                    </div>
-                                    <div class="preset-item" data-preset="writer" data-agent-id="${agent.id}">
-                                        <span class="preset-name">Creative Writing</span>
-                                        <button class="preset-use-btn" data-agent-id="${agent.id}">Use</button>
-                                    </div>
-                                    <div class="preset-item" data-preset="analyst" data-agent-id="${agent.id}">
-                                        <span class="preset-name">Data Analysis</span>
-                                        <button class="preset-use-btn" data-agent-id="${agent.id}">Use</button>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- File tab content -->

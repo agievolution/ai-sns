@@ -735,7 +735,7 @@ const InitializationWizard = {
             snsRegisterLink.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                openUrlInDefaultBrowser('https://www.baidu.com');
+                openUrlInDefaultBrowser('https://guide.ai-sns.org/xmpp.html');
             });
         }
 
@@ -757,7 +757,7 @@ const InitializationWizard = {
             mapRegisterLink.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                openUrlInDefaultBrowser('https://map.baidu.com');
+                openUrlInDefaultBrowser('https://guide.ai-sns.org/map.html');
             });
         }
 

@@ -535,7 +535,7 @@ export class SNSAdvancedDialog {
             } catch (e) {
             }
 
-            const url = 'http://www.ai-sns.org';
+            const url = 'http://guide.ai-sns.org/avatar.html';
             try {
                 if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
                     window.electronAPI.openUrl(url);

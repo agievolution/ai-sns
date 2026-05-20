@@ -20,8 +20,8 @@ const homeHandlers = {
                     case 'initialization':
                         this.showConfigurationModal();
                         break;
-                    case 'help':
-                        this.showHelpModal();
+                    case 'devtools':
+                        this.toggleDevTools();
                         break;
                 }
             });
@@ -68,6 +68,24 @@ const homeHandlers = {
 
     showInitializationModal() {
         InitializationWizard.show();
+    },
+
+    toggleDevTools() {
+        try {
+            if (window.electronAPI && typeof window.electronAPI.toggleDevTools === 'function') {
+                window.electronAPI.toggleDevTools();
+                return;
+            }
+        } catch (e) {
+        }
+
+        // Fallback for non-Electron contexts (e.g. plain browser preview):
+        // most browsers do not allow programmatic DevTools toggling.
+        if (typeof Notification !== 'undefined' && Notification.warning) {
+            Notification.warning('DevTools is only available in the desktop app.');
+        } else {
+            console.warn('DevTools toggle requested but electronAPI is not available.');
+        }
     },
 
     async showConfigurationModal() {
@@ -241,11 +259,11 @@ const homeHandlers = {
             content: `
                 <div class="settings-modal">
                     <div class="setting-group">
-                        <label>Agent Server <a href="#" id="homeCfgAgentHelp" style="font-size:12px;">help</a></label>
+                        <label>Agent Server <a href="#" id="homeCfgAgentHelp" style="font-size:12px;">Learn more</a></label>
                         <input type="text" class="setting-input" id="homeCfgAgentServer" value="" placeholder="http://..." />
                     </div>
                     <div class="setting-group">
-                        <label>AI-SNS Server <a href="#" id="homeCfgAiSnsHelp" style="font-size:12px;">help</a></label>
+                        <label>AI-SNS Server <a href="#" id="homeCfgAiSnsHelp" style="font-size:12px;">Learn more</a></label>
                         <input type="text" class="setting-input" id="homeCfgAiSnsServer" value="" placeholder="http://..." />
                     </div>
                     <div class="setting-group">
@@ -321,7 +339,7 @@ const homeHandlers = {
                     agentHelp.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        const url = (window.appConfig && window.appConfig.ai_sns_server) ? window.appConfig.ai_sns_server : '';
+                        const url = 'https://guide.ai-sns.org/docs.html#agentserver';
                         openUrlInDefaultBrowser(url);
                     });
                 }
@@ -330,7 +348,7 @@ const homeHandlers = {
                     snsHelp.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        const url = (window.appConfig && window.appConfig.ai_sns_server) ? window.appConfig.ai_sns_server : '';
+                        const url = 'https://guide.ai-sns.org/docs.html#aisnsserver';
                         openUrlInDefaultBrowser(url);
                     });
                 }
@@ -537,39 +555,6 @@ const homeHandlers = {
                     return false;
                 }
             }
-        });
-    },
-
-    showHelpModal() {
-        if (typeof Modal === 'undefined') {
-            console.error('Modal component not loaded');
-            return;
-        }
-
-        Modal.show({
-            title: 'Help',
-            content: `
-                <div class="help-modal">
-                    <h4>Keyboard shortcuts</h4>
-                    <ul class="help-list">
-                        <li><kbd>Ctrl/Cmd + B</kbd> Collapse/expand sidebar</li>
-                        <li><kbd>Ctrl/Cmd + K</kbd> Search</li>
-                        <li><kbd>Ctrl/Cmd + ,</kbd> Settings</li>
-                        <li><kbd>Ctrl/Cmd + 1-6</kbd> Quick navigation</li>
-                    </ul>
-                    <h4>Modules</h4>
-                    <ul class="help-list">
-                        <li><strong>SNS</strong> - Social exploration on the map</li>
-                        <li><strong>Agent</strong> - AI agent chat</li>
-                        <li><strong>KM</strong> - Knowledge base management</li>
-                        <li><strong>Tools</strong> - Tools & plugins</li>
-                        <li><strong>Web</strong> - LLM online services</li>
-                        <li><strong>Home</strong> - Home settings</li>
-                    </ul>
-                </div>
-            `,
-            showCancel: false,
-            confirmText: 'Close'
         });
     },
 

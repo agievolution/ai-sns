@@ -329,7 +329,10 @@ async def vector_search(
         results = service.vector_search(kb_id, query, top_k)
         return {"success": True, "data": results}
     except EmbeddingConfigError as e:
-        logger.warning(f"Embedding service unavailable on search: {e}")
+        logger.warning(
+            f"Embedding service unavailable on search: "
+            f"{getattr(e, 'original_message', '') or e}"
+        )
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error performing search: {e}")

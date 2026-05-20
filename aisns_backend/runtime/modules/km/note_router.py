@@ -206,7 +206,10 @@ async def vectorize_note(note_id: int, request: dict):
     except HTTPException:
         raise
     except EmbeddingConfigError as e:
-        logger.warning(f"Embedding service unavailable while vectorizing note: {e}")
+        logger.warning(
+            f"Embedding service unavailable while vectorizing note: "
+            f"{getattr(e, 'original_message', '') or e}"
+        )
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error vectorizing note: {e}")
@@ -231,7 +234,10 @@ async def vector_search_notes(request: dict):
     except HTTPException:
         raise
     except EmbeddingConfigError as e:
-        logger.warning(f"Embedding service unavailable on note vector search: {e}")
+        logger.warning(
+            f"Embedding service unavailable on note vector search: "
+            f"{getattr(e, 'original_message', '') or e}"
+        )
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error performing note vector search: {e}")

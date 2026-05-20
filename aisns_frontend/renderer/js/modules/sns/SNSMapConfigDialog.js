@@ -80,6 +80,9 @@ export class SNSMapConfigDialog {
                                         <span>Baidu Map</span>
                                     </label>
                                 </div>
+                                <div style="margin-top: 12px; text-align: right;">
+                                    <a href="#" id="snsMapConfigHelpLink" style="font-size: 12px; color: var(--text-link); text-decoration: underline;">Help</a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -178,6 +181,27 @@ export class SNSMapConfigDialog {
         document.getElementById('saveMapConfigBtn').addEventListener('click', () => {
             this.saveConfiguration();
         });
+
+        // Help link (bottom-right): open map docs in system default browser
+        const helpLink = document.getElementById('snsMapConfigHelpLink');
+        if (helpLink) {
+            helpLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const url = 'https://guide.ai-sns.org/map.html';
+                try {
+                    if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
+                        window.electronAPI.openUrl(url);
+                        return;
+                    }
+                } catch (err) {
+                }
+                try {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                } catch (err) {
+                }
+            });
+        }
     }
 
     async saveConfiguration() {

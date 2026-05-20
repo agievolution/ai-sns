@@ -236,7 +236,10 @@ class KMService:
                 # Vectorization failed because the embedding service is not
                 # configured correctly. Rollback the inserted row and the
                 # on-disk file so the user can retry after fixing LLM Setting.
-                logger.warning(f"Embedding service unavailable while adding {filename}: {e}")
+                logger.warning(
+                    f"Embedding service unavailable while adding {filename}: "
+                    f"{getattr(e, 'original_message', '') or e}"
+                )
                 _fid = file_id
                 def _do_rollback(session):
                     session.execute(sa_text("DELETE FROM km_data WHERE id = :fid"), {"fid": _fid})

@@ -178,6 +178,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
 
 
+    // Toggle developer tools (cross-platform: Windows / macOS / Linux)
+
+    toggleDevTools: () => ipcRenderer.send('toggle-dev-tools'),
+
+
+
     writeClipboardText: (text) => ipcRenderer.invoke('write-clipboard-text', text),
 
 

@@ -25,12 +25,18 @@ EMBEDDING_CONFIG_HINT = (
 
 
 class EmbeddingConfigError(RuntimeError):
-    """Raised when the embedding service cannot be reached or rejects the request."""
+    """Raised when the embedding service cannot be reached or rejects the request.
+
+    The user-facing message is intentionally the short friendly hint only,
+    so it fits in a dialog and never leaks the raw provider error (which
+    may contain the API key). Use ``original`` / ``original_message`` for
+    server-side logging.
+    """
 
     def __init__(self, original: Exception):
         self.original = original
-        detail = str(original).strip() or original.__class__.__name__
-        super().__init__(f"{EMBEDDING_CONFIG_HINT} (details: {detail})")
+        self.original_message = str(original).strip() or original.__class__.__name__
+        super().__init__(EMBEDDING_CONFIG_HINT)
 
 
 class VectorService:

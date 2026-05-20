@@ -1178,6 +1178,36 @@ ipcMain.on('open-url', (event, url) => {
 
 
 
+// Toggle DevTools IPC (cross-platform)
+
+ipcMain.on('toggle-dev-tools', () => {
+
+    try {
+
+        toggleDevToolsForFocused();
+
+    } catch (e) {
+
+        try {
+
+            const win = BrowserWindow.getFocusedWindow() || mainWindow;
+
+            if (win && win.webContents) {
+
+                win.webContents.toggleDevTools();
+
+            }
+
+        } catch (e2) {
+
+        }
+
+    }
+
+});
+
+
+
 // Window control IPC
 
 ipcMain.on('window-minimize', () => {

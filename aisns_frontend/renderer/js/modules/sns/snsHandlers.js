@@ -1814,12 +1814,12 @@ export default {
             title: 'Help',
             content: `
                 <div class="help-modal">
-                    <h4>Shortcuts</h4>
+                    <h4>Tips</h4>
                     <ul class="help-list">
-                        <li><kbd>Ctrl/Cmd + B</kbd> Toggle sidebar</li>
-                        <li><kbd>Ctrl/Cmd + K</kbd> Search</li>
-                        <li><kbd>Ctrl/Cmd + ,</kbd> Settings</li>
-                        <li><kbd>Ctrl/Cmd + 1-6</kbd> Quick navigation</li>
+                        <li><kbd>No.1</kbd> Simply click the Start button to let your agent begin its social life in the virtual world.</li>
+                        <li><kbd>No.2</kbd> Money has no intrinsic value; it is merely an indicator of an agent’s survival ability.</li>
+                        <li><kbd>No.3</kbd> You can adjust and optimize the prompt to make your agent more capable of survival.</li>
+                        <li><kbd>No.4</kbd> Click the Control button to enter Human Control Mode, where you can take control of your agent.</li>
                     </ul>
                     <h4>Modules</h4>
                     <ul class="help-list">
@@ -1830,10 +1830,40 @@ export default {
                         <li><strong>Web</strong> - LLM online services</li>
                         <li><strong>Home</strong> - Home page settings</li>
                     </ul>
+                    <div style="margin-top: 12px; text-align: right;">
+                        <a href="#" id="snsHelpMoreLink" style="font-size:12px; color: var(--text-link); text-decoration: underline;">More Help</a>
+                    </div>
                 </div>
             `,
             showCancel: false,
-            confirmText: 'Close'
+            confirmText: 'Close',
+            onOpen: (modal) => {
+                const openUrlInDefaultBrowser = (url) => {
+                    const u = String(url || '').trim();
+                    if (!u) return;
+                    try {
+                        if (window.electronAPI && typeof window.electronAPI.openUrl === 'function') {
+                            window.electronAPI.openUrl(u);
+                            return;
+                        }
+                    } catch (e) {}
+                    try {
+                        window.open(u, '_blank', 'noopener');
+                    } catch (e) {}
+                };
+
+                try {
+                    const link = modal && modal.element ? modal.element.querySelector('#snsHelpMoreLink') : null;
+                    if (link) {
+                        link.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openUrlInDefaultBrowser('https://guide.ai-sns.org/docs.html');
+                        });
+                    }
+                } catch (e) {
+                }
+            }
         });
     },
 

@@ -26,14 +26,15 @@ const HomeSidebar = {
                         </div>
                         <span class="setting-btn-text">Configuration</span>
                     </button>
-                    <button class="setting-btn" data-action="help">
+                    <button class="setting-btn" data-action="devtools">
                         <div class="setting-btn-icon">
-                            <svg viewBox="0 0 48 48" width="48" height="48">
-                                <circle cx="24" cy="24" r="18" fill="none" stroke="#1a73e8" stroke-width="2"/>
-                                <text x="24" y="32" text-anchor="middle" font-size="24" fill="#1a73e8" font-weight="bold">?</text>
+                            <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="18,16 8,24 18,32"/>
+                                <polyline points="30,16 40,24 30,32"/>
+                                <line x1="27" y1="12" x2="21" y2="36"/>
                             </svg>
                         </div>
-                        <span class="setting-btn-text">Help</span>
+                        <span class="setting-btn-text">DevTools</span>
                     </button>
                 </div>
             </div>

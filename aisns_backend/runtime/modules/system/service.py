@@ -683,6 +683,13 @@ class SystemInitWizardService:
                 self._done_future = done_future
                 self._connected_target: Optional[str] = None
                 self._fail_task: Optional[asyncio.Task] = None
+                # Priority of the currently pending failure resolution.
+                # Higher = stronger signal. Used so that a later, more
+                # authoritative failure (e.g. failed_auth, which proves TCP/TLS
+                # succeeded) can override an earlier transient one (e.g. a
+                # dual-stack IPv6 "No route to host" emitted before IPv4
+                # fallback succeeds on macOS).
+                self._fail_priority: int = 0
 
                 # Align with SNS module: prefer simple SASL (PLAIN) over TLS
                 # to avoid servers rejecting SCRAM variants.
@@ -702,7 +709,7 @@ class SystemInitWizardService:
                 if not self._done_future.done():
                     self._done_future.set_result(payload)
 
-            def _schedule_fail(self, message: str, delay: float = 3.0) -> None:
+            def _schedule_fail(self, message: str, delay: float = 3.0, priority: int = 1) -> None:
                 """Schedule a delayed failure resolution.
 
                 slixmpp may transiently emit failure-like events (failed_auth /
@@ -712,9 +719,20 @@ class SystemInitWizardService:
                 succeeds). We therefore never resolve a failure synchronously;
                 session_start cancels the pending fail task if auth eventually
                 succeeds.
+
+                Failure events have different authoritativeness: a `failed_auth`
+                proves that TCP/TLS connectivity worked, so it should override
+                an earlier `connection_failed`/`socket_error` (which on macOS
+                dual-stack hosts is often a transient IPv6 "No route to host"
+                emitted before the IPv4 fallback succeeds). The `priority`
+                argument encodes this ordering; only a strictly higher priority
+                may replace a pending failure.
                 """
                 if self._fail_task and not self._fail_task.done():
-                    return
+                    if priority <= self._fail_priority:
+                        return
+                    self._fail_task.cancel()
+                self._fail_priority = priority
                 async def _delayed_fail():
                     try:
                         await asyncio.sleep(delay)
@@ -753,8 +771,13 @@ class SystemInitWizardService:
                     "[InitWizard][XMPP Test] failed_auth | requested_jid=%s",
                     getattr(self, "requested_jid", None),
                 )
+                # Highest priority: auth failure proves TCP/TLS worked and the
+                # server actively rejected credentials. It must override any
+                # earlier transient connection/socket failure (e.g. IPv6
+                # "No route to host" before IPv4 fallback).
                 self._schedule_fail(
-                    "XMPP authentication failed (invalid account or password)"
+                    "XMPP authentication failed (invalid account or password)",
+                    priority=10,
                 )
 
             async def _on_connection_failed(self, event):
@@ -764,7 +787,7 @@ class SystemInitWizardService:
                     msg = f"{msg}({self._connected_target})"
                 if detail:
                     msg = f"{msg}: {detail}"
-                self._schedule_fail(msg)
+                self._schedule_fail(msg, priority=5)
 
             async def _on_socket_error(self, event):
                 detail = (str(event) or "").strip()
@@ -773,7 +796,7 @@ class SystemInitWizardService:
                     msg = f"{msg}({self._connected_target})"
                 if detail:
                     msg = f"{msg}: {detail}"
-                self._schedule_fail(msg)
+                self._schedule_fail(msg, priority=5)
 
             async def _on_disconnected(self, _event):
                 # slixmpp may emit transient disconnect events between SASL
@@ -783,7 +806,9 @@ class SystemInitWizardService:
                 msg = "XMPP disconnected"
                 if self._connected_target:
                     msg = f"{msg}({self._connected_target})"
-                self._schedule_fail(msg)
+                # Lowest priority: a bare disconnect carries the least info and
+                # must not overwrite a more specific failure reason.
+                self._schedule_fail(msg, priority=1)
 
             async def _on_stream_features(self, _event):
                 try:

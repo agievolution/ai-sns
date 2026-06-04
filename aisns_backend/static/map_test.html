@@ -85,7 +85,7 @@
 
 <div class="container">
     <h2>Baidu Map API Test Tool</h2>
-    
+
     <div class="input-group">
         <label for="ak">Browser AK (Access Key):</label>
         <input type="text" id="ak" placeholder="Enter your Baidu Map AK here">
@@ -130,7 +130,7 @@
         const mapContainer = document.getElementById('map-container');
 
         if (!ak) {
-            alert('Please enter Baidu Map AK');
+            console.log('Please enter Baidu Map AK');
             return;
         }
 
@@ -141,9 +141,9 @@
         // Remove old script
         const oldScript = document.getElementById('baidu-script');
         if (oldScript) oldScript.remove();
-        
+
         // Baidu Map global variable cleanup (due to Baidu API design, thorough cleanup is difficult; refresh page if switching AK multiple times)
-        
+
         // Create callback function
         window.onBMapCallback = function() {
             try {
@@ -170,7 +170,7 @@
         script.id = 'baidu-script';
         script.type = 'text/javascript';
         script.src = `https://api.map.baidu.com/api?v=1.0&type=webgl&ak=${ak}&callback=onBMapCallback`;
-        
+
         script.onerror = function() {
             showStatus('Script loading failed, please check network or AK.', 'error');
         };

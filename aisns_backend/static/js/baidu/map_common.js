@@ -1432,7 +1432,7 @@ function set_move_status() {
         document.body.classList.toggle('crosshair-cursor');
         // Set map container cursor to crosshair
         document.getElementById('map').classList.add('crosshair-cursor');
-        alert(map.getDefaultCursor());
+        console.log(map.getDefaultCursor());
         map.getDefaultCursor();
         map.setDefaultCursor("crosshair");
         showAlert("Please click on the map to select the destination to move to.");
@@ -2266,7 +2266,7 @@ async function toggleNavigate() {
                 if (typeof showAlert === 'function') {
                     showAlert('Landmark animation can only be run before the engine starts. Please reload the map and try again before starting the engine.', true);
                 } else {
-                    alert('Landmark animation can only be run before the engine starts. Please reload the map and try again before starting the engine.');
+                    console.log('Landmark animation can only be run before the engine starts. Please reload the map and try again before starting the engine.');
                 }
             } catch (e) {
             }

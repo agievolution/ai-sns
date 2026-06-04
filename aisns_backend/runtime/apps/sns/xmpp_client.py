@@ -288,6 +288,21 @@ class XMPPClient(slixmpp.ClientXMPP):
             failed,
         )
 
+    def _summarize_incoming_for_map(self, body: str) -> str:
+        """Build a short, content-free log line for an incoming XMPP message.
+
+        Mirrors the lightweight logging used when sending XMPP messages: it
+        only reports the message category and never exposes message content.
+        """
+        s = "" if body is None else str(body)
+        if s.startswith("[AISNS_INT_003_INQUIRY]"):
+            return "📩 You’ve received an inquiry."
+        if "AISNS_INT_001_PAY_SEND_START" in s:
+            return "📩 You’ve received a payment."
+        if "AISNS_INT_002_GOOD_SEND_START" in s:
+            return "📩 A service was provided to you."
+        return "📩 You have received a message."
+
     async def on_message(self, msg):
         """Handle incoming messages"""
         if msg['type'] in ('chat', 'normal'):
@@ -403,6 +418,16 @@ class XMPPClient(slixmpp.ClientXMPP):
                     engine = await _svc.ensure_social_engine_instance()
 
                 if engine is not None:
+                    # Show a short, content-free log on the map indicating an
+                    # XMPP message was received, mirroring outgoing-send logs.
+                    try:
+                        if hasattr(engine, "show_information"):
+                            engine.show_information(
+                                f"<b>{self._summarize_incoming_for_map(body)}</b>"
+                            )
+                    except Exception as e:
+                        logger.warning("Failed to show incoming XMPP log on map: %s", e)
+
                     event = {
                         'body': body,
                         'from': from_jid

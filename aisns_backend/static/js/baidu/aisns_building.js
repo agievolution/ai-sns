@@ -381,7 +381,7 @@ function setupVideoScreenInteraction() {
         const hit = intersections.find(intersection => intersection.object && intersection.object.userData && intersection.object.userData.isInteractiveVideoScreen);
 
         if (hit) {
-            alert(1);
+            console.log(1);
         }
     };
 

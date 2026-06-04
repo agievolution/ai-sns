@@ -24,7 +24,7 @@
     "selected_communication": "Agent selected {name} for communication.",
     "selected_sell": "Agent select {name} to promote to.",
     "selected_buy": "Agent select {name} to buy from.",
-    "using_tools_reply": "Message Received. Using tools before reply.",
+    "using_tools_reply": "Using tools before reply.",
     "create_success": "Agent created successfully",
     "update_success": "Agent updated successfully",
     "save_failed": "Failed to save"

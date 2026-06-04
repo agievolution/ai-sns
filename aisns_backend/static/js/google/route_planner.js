@@ -753,17 +753,17 @@ function startAnimation() {
 function viewRoute() {
 // alert("1viewroute");
     eol = polyline.Distance();
-    alert(0);
-    alert(eol);
+    console.log(0);
+    console.log(eol);
     if(polyline){
     if (init_route_current_position && Object.keys(init_route_current_position).length > 0) {
-        alert(init_route_current_position);
+        console.log(init_route_current_position);
         const str = JSON.stringify(init_route_current_position);
-        alert(str);
-        alert(11);
+        console.log(str);
+        console.log(11);
         map.setCenter(init_route_current_position);
     } else {
-        alert(22);
+        console.log(22);
         map.setCenter(polyline.getPath().getAt(0));
     }}else{showAlert("Failed to load route. Check your network, refresh the page, or specify the route again.",true)}
 }
@@ -1034,8 +1034,8 @@ function computeTotalDistance(result) {
 
     total = total / 1000;
 
-alert("Total distance");
-alert(total);
+console.log("Total distance");
+console.log(total);
 
 }
 

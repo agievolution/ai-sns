@@ -1925,31 +1925,187 @@ export default {
 
         const input = document.createElement('input');
         input.type = 'file';
-        input.onchange = async (e) => {
+        input.onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('to_account', this.selectedContact.account);
-
-            try {
-                const apiClient = getApiClient();
-                if (!apiClient) return;
-
-                // Use fetch directly for FormData
-                const response = await fetch(`${apiClient.baseUrl}/api/sns/send-file`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    await this.loadChatHistory(this.selectedContact.account);
-                }
-            } catch (error) {
-                console.error('Failed to send file:', error);
-            }
+            // Optimistic UI: immediately show a pending bubble, then upload.
+            const tempId = `pending-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            const account = this.selectedContact.account;
+            this._renderPendingFileBubble(tempId, file, account);
+            this._uploadFile(file, tempId, account);
         };
         input.click();
+    },
+
+    /**
+     * Format a byte count into a human-readable size string.
+     */
+    _formatFileSize(bytes) {
+        const n = Number(bytes);
+        if (!Number.isFinite(n) || n < 0) return '';
+        if (n < 1024) return `${n} B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+        return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    },
+
+    /**
+     * Insert an optimistic "sending" bubble for the selected file.
+     */
+    _renderPendingFileBubble(tempId, file, account) {
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) return;
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message sent pending';
+        messageDiv.dataset.tempId = tempId;
+        messageDiv.dataset.account = account;
+        messageDiv.innerHTML = `
+            <div class="message-content">
+                <div class="chat-file-bubble">
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span class="chat-file-icon">📎</span>
+                    <span class="chat-file-meta">
+                        <span class="chat-file-name">${this.escapeHtml(file.name)}</span>
+                        <span class="chat-file-size">${this.escapeHtml(this._formatFileSize(file.size))} · Sending…</span>
+                    </span>
+                </div>
+            </div>
+            <div class="message-time">${new Date().toLocaleString()}</div>
+        `;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    },
+
+    /**
+     * Upload the file and update the pending bubble based on the result.
+     */
+    async _uploadFile(file, tempId, account) {
+        if (!account) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('to_account', account);
+
+        try {
+            const apiClient = getApiClient();
+            if (!apiClient) {
+                this._markFileBubbleError(tempId, file);
+                return;
+            }
+
+            // Use fetch directly for FormData
+            const response = await fetch(`${apiClient.baseUrl}/api/sns/send-file`, {
+                method: 'POST',
+                body: formData
+            });
+
+            let result = null;
+            try {
+                result = await response.json();
+            } catch (e) {
+                result = null;
+            }
+
+            if (response.ok && result && result.success) {
+                this._markFileBubbleSuccess(tempId, file, result);
+                if (this.selectedContact && this.selectedContact.account === account) {
+                    // Reconcile with backend only if this chat is still open.
+                    await this.loadChatHistory(account);
+                }
+            } else {
+                this._markFileBubbleError(tempId, file);
+                this._notifyFileError(result && result.message);
+            }
+        } catch (error) {
+            console.error('Failed to send file:', error);
+            this._markFileBubbleError(tempId, file);
+            this._notifyFileError();
+        }
+    },
+
+    /**
+     * Show a non-blocking error toast when available.
+     */
+    _notifyFileError(message) {
+        try {
+            if (window.Toast && typeof window.Toast.error === 'function') {
+                window.Toast.error(message || 'Failed to send file');
+            }
+        } catch (e) {
+        }
+    },
+
+    /**
+     * Replace the pending bubble with the final file message (link).
+     */
+    _markFileBubbleSuccess(tempId, file, result) {
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) return;
+        const bubble = chatMessages.querySelector(`.chat-message[data-temp-id="${tempId}"]`);
+        if (!bubble) return;
+
+        const url = (result && result.file_url) || '';
+        const finalContent = url ? `📎 File: ${file.name}\n${url}` : `📎 File: ${file.name}`;
+
+        bubble.classList.remove('pending', 'error');
+        const contentEl = bubble.querySelector('.message-content');
+        if (contentEl) {
+            contentEl.innerHTML = this.renderStoredMessageContent(finalContent);
+        }
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    },
+
+    /**
+     * Mark the pending bubble as failed and offer retry/cancel.
+     */
+    _markFileBubbleError(tempId, file) {
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) return;
+        const bubble = chatMessages.querySelector(`.chat-message[data-temp-id="${tempId}"]`);
+        if (!bubble) return;
+
+        bubble.classList.remove('pending');
+        bubble.classList.add('error');
+        const contentEl = bubble.querySelector('.message-content');
+        if (contentEl) {
+            contentEl.innerHTML = `
+                <div class="chat-file-bubble">
+                    <span class="chat-file-icon">⚠️</span>
+                    <span class="chat-file-meta">
+                        <span class="chat-file-name">${this.escapeHtml(file.name)}</span>
+                        <span class="chat-file-size">Failed to send</span>
+                    </span>
+                </div>
+                <div class="chat-file-actions">
+                    <button type="button" class="chat-file-retry">Retry</button>
+                    <button type="button" class="chat-file-cancel">Cancel</button>
+                </div>
+            `;
+            const retryBtn = contentEl.querySelector('.chat-file-retry');
+            const cancelBtn = contentEl.querySelector('.chat-file-cancel');
+            if (retryBtn) {
+                retryBtn.addEventListener('click', () => {
+                    bubble.classList.remove('error');
+                    bubble.classList.add('pending');
+                    contentEl.innerHTML = `
+                        <div class="chat-file-bubble">
+                            <span class="spinner" aria-hidden="true"></span>
+                            <span class="chat-file-icon">📎</span>
+                            <span class="chat-file-meta">
+                                <span class="chat-file-name">${this.escapeHtml(file.name)}</span>
+                                <span class="chat-file-size">${this.escapeHtml(this._formatFileSize(file.size))} · Sending…</span>
+                            </span>
+                        </div>
+                    `;
+                    this._uploadFile(file, tempId, bubble.dataset.account);
+                });
+            }
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    bubble.remove();
+                });
+            }
+        }
     }
 };

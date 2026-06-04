@@ -875,10 +875,10 @@ var handle_command = function (command, param_1, param_2) {
         check_place(param_1, lng, lat)
     } else if (command == "python_setting_changed") {
         if (param_1 == "nick_name") {
-            alert(param_2);
+            console.log(param_2);
             person_data_me.nick_name = param_2;
         } else if (param_1 == "profile") {
-            alert(param_2);
+            console.log(param_2);
             person_data_me.profile = param_2;
         }
     }

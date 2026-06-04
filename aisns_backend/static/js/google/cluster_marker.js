@@ -68,7 +68,7 @@
 
             // Add click handler for each marker
             marker.addListener('click', () => {
-                alert(`Coordinates: (${data.location[0]}, ${data.location[1]})\nName: ${data.nick_name}`);
+                console.log(`Coordinates: (${data.location[0]}, ${data.location[1]})\nName: ${data.nick_name}`);
                 const nid = __snsNormalizeNationId(data && (data.nation_id ?? data.nationid));
                 if (nid) {
                     hiddenMarkers[nid] = marker;

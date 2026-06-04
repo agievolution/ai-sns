@@ -2210,8 +2210,8 @@ I am participating in a virtual social game based on Google Maps. Players role-p
 
                 self.show_status_on_map("using-tool")
                 self.js_task_manager.show_information(lt(
-                    "<b>✨Message Received.Using tools before reply.</b>",
-                    "<b>✨Message Received.Using tools before reply.</b>",
+                    "<b>✨Using tools before reply.</b>",
+                    "<b>✨Using tools before reply.</b>",
                 ))
 
                 logger.info("[XMPP-A2A][DIAG] tool_check_review: calling chat_with_agent (use_tools=%s)...", not is_remote)

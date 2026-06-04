@@ -360,7 +360,7 @@ function load_all_facility(layerId) {
 
             if (intersects.length > 0) {
                 console.log('Click detected a model', intersects[0]);
-                alert(`Model detected on click: ${intersects[0].object.name || 'Unnamed model'}`);
+                console.log(`Model detected on click: ${intersects[0].object.name || 'Unnamed model'}`);
             }
         });
     } else {
@@ -375,8 +375,8 @@ function load_all_facility(layerId) {
 /* 6. Unified event binding */
 function bindOverlayEvents() {
     const eventHandlers = {
-        dblclick: e => alert(`${e.target} double-clicked`),
-        rightclick: e => alert(`${e.target} right-clicked`)
+        dblclick: e => console.log(`${e.target} double-clicked`),
+        rightclick: e => console.log(`${e.target} right-clicked`)
     };
 
     layerManager.overlays.forEach(overlay => {

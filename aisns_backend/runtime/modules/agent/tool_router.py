@@ -169,6 +169,14 @@ class ToolRouter:
         logger.info(f"[ToolRouter] Executing MCP tool: {mcp_id}/{tool_name}")
 
         try:
+            if tool_name == "execute" and isinstance(arguments, dict):
+                requested_tool = arguments.get("tool_name")
+                requested_args = arguments.get("arguments")
+                if isinstance(requested_tool, str) and requested_tool.strip():
+                    tool_name = requested_tool.strip()
+                    arguments = requested_args if isinstance(requested_args, dict) else {}
+                    logger.info(f"[ToolRouter] Resolved generic MCP execute wrapper to: {mcp_id}/{tool_name}")
+
             # Call ToolExecutor.execute_mcp_tool()
             result = await self.tool_executor.execute_mcp_tool(mcp_id, tool_name, arguments)
 

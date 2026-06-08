@@ -162,6 +162,18 @@ class ToolsEditDialog {
     }
 
     renderFormFields(category, tool) {
+        // For MCP the 'instruction' field is repurposed as Test Arguments (JSON):
+        // it is unused by agent tool conversion, so it carries the arguments used
+        // to call the first tool during a connection test.
+        const isMcp = category === 'mcp';
+        const instructionLabel = isMcp ? 'Test Arguments (JSON)' : 'Instructions';
+        const instructionPlaceholder = isMcp
+            ? 'Test Arguments JSON, e.g. {"url": "https://www.ai-sns.org"} or {"tool_name": "fetch", "arguments": {"url": "..."}}'
+            : 'Describe how the AI should use this tool';
+        const instructionHint = isMcp
+            ? '<small class="form-text">JSON used during Test. A plain object is passed as arguments to the first tool; use {"tool_name": "...", "arguments": {...}} to target a specific tool.</small>'
+            : '';
+
         const baseFields = `
             <div class="tool-edit-section">
                 <h4>Basic</h4>
@@ -174,8 +186,9 @@ class ToolsEditDialog {
                     <textarea id="toolDescription" name="description" class="form-control" rows="2" placeholder="Enter tool description"></textarea>
                 </div>
                 <div class="form-group">
-                    <label for="toolInstruction">Instructions</label>
-                    <textarea id="toolInstruction" name="instruction" class="form-control" rows="3" placeholder="Describe how the AI should use this tool"></textarea>
+                    <label for="toolInstruction">${instructionLabel}</label>
+                    <textarea id="toolInstruction" name="instruction" class="form-control" rows="3" placeholder='${instructionPlaceholder}'></textarea>
+                    ${instructionHint}
                 </div>
             </div>
         `;

@@ -20,8 +20,24 @@
     <link rel="stylesheet" href="css/web.css">
     <link rel="stylesheet" href="css/sns.css">
     <link rel="stylesheet" href="css/sns-config-dialogs.css">
+    <link rel="stylesheet" href="css/loading.css">
 </head>
 <body spellcheck="false">
+    <!-- Global startup loading overlay (shown until backend is ready and the first page module finished loading) -->
+    <div id="globalLoading" role="status" aria-live="polite" aria-label="Loading">
+        <div class="loading-card">
+            <div class="loading-logo">AI</div>
+            <div class="loading-spinner" aria-hidden="true"></div>
+            <h1 class="loading-title">AI-SNS</h1>
+            <p class="loading-status" id="loadingStatus">Starting up...</p>
+            <div class="loading-attempts" id="loadingAttempts"></div>
+            <div class="loading-actions" id="loadingActions">
+                <button type="button" class="loading-btn primary" id="loadingRetryBtn">Retry</button>
+                <button type="button" class="loading-btn" id="loadingExitBtn">Exit</button>
+            </div>
+        </div>
+    </div>
+
     <div id="app">
         <!-- Custom title bar -->
         <header class="titlebar" id="titlebar">
@@ -199,7 +215,10 @@
     <script src="js/modules/agent/AgentKnowledgeBaseDialog.js"></script>
     <script src="js/modules/agent/agentKnowledgeBaseConfig.js"></script>
 
-    <!-- App entry (must be loaded last) -->
+    <!-- App entry (defines window.App but does not auto-init; bootstrap drives initialization) -->
     <script src="js/app.js"></script>
+
+    <!-- Startup bootstrap: waits for backend readiness, then runs App.init() and hides the overlay -->
+    <script src="js/core/bootstrap.js"></script>
 </body>
 </html>

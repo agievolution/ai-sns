@@ -72,7 +72,7 @@
 
 <div class="container">
     <h2>Google Maps API Test Tool</h2>
-    
+
     <div class="input-group">
         <label for="apiKey">API Key:</label>
         <input type="text" id="apiKey" placeholder="Paste your Google Maps API Key here">
@@ -144,7 +144,7 @@
         script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&v=beta&callback=initMap`;
         script.async = true;
         script.defer = true;
-        
+
         script.onerror = function() {
             status.style.display = 'block';
             status.className = 'error';
@@ -154,7 +154,7 @@
         window.initMap = function() {
             try {
                 const mapOptions = {
-                    center: { lat: 39.9042, lng: 116.4074 }, // Default: Beijing
+                    center: { lat: 37.33200027587634, lng: -121.88947550295555 },
                     zoom: 12
                 };
 
@@ -169,13 +169,13 @@
                 if (mapId && google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
                     new google.maps.marker.AdvancedMarkerElement({
                         map: map,
-                        position: { lat: 39.9042, lng: 116.4074 },
+                        position: { lat: 37.33200027587634, lng: -121.88947550295555 },
                         title: "Test Marker (Advanced)"
                     });
                 } else {
                     // Regular marker
                     new google.maps.Marker({
-                        position: { lat: 39.9042, lng: 116.4074 },
+                        position: { lat: 37.33200027587634, lng: -121.88947550295555 },
                         map: map,
                         title: "Test Marker (Regular)"
                     });
@@ -184,7 +184,7 @@
                 status.style.display = 'block';
                 status.className = 'success';
                 status.innerHTML = `Success! Map initialized. ${mapId ? 'Map ID applied.' : 'No Map ID provided, using default style.'}`;
-                
+
             } catch (e) {
                 status.style.display = 'block';
                 status.className = 'error';

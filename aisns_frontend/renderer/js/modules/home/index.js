@@ -28,8 +28,8 @@ export default {
     /**
      * Initialize module
      */
-    init() {
-        homeHandlers.init();
+    async init() {
+        await homeHandlers.init();
     },
 
     /**

@@ -32,11 +32,15 @@ const App = {
         // Listen for Electron events
         this.bindElectronEvents();
 
-        // Decide initial landing page by system_init.status: not initialized -> Home, initialized -> SNS
+        // Decide initial landing page by system_init.status: not initialized -> Home, initialized -> SNS.
+        // Awaiting navigateTo ensures the initial page module's data load
+        // completes before the bootstrap hides the global loading overlay.
         const initialPage = await this.getInitialPage();
-        this.navigateTo(initialPage);
+        await this.navigateTo(initialPage);
 
-        // Initialize API client asynchronously (non-blocking)
+        // Initialize API client asynchronously (non-blocking).
+        // Health check is already done by the bootstrap; this only handles
+        // WebSocket connection and engine-status side effects.
         this.initApiAsync();
 
         // Fix the issue where inputs cannot be edited in Windows frameless windows
@@ -426,10 +430,12 @@ const App = {
 
     navigateTo(page) {
         if (window.router) {
-            window.router.navigateTo(page);
-        } else {
-            console.error('[App] Router not available, cannot navigate to:', page);
+            // Return the underlying promise so callers (e.g. App.init / bootstrap)
+            // can await the initial page module's data load.
+            return window.router.navigateTo(page);
         }
+        console.error('[App] Router not available, cannot navigate to:', page);
+        return Promise.resolve();
     },
 
     showSearchModal() {
@@ -611,10 +617,10 @@ const App = {
     }
 };
 
-// App initialization
-document.addEventListener('DOMContentLoaded', () => {
-    App.init().catch(console.error);
-});
+// App initialization is driven by the startup bootstrap
+// (renderer/js/core/bootstrap.js). The bootstrap waits for the backend
+// to be ready, then calls `window.App.init()` and hides the global
+// loading overlay once the initial landing page has finished loading.
 
 // Export for global access
 window.App = App;

@@ -1,0 +1,157 @@
+/**
+ * Global startup loading overlay.
+ * Displayed before the app boots and while the backend is not yet ready.
+ * Hidden via the `.is-hidden` class after a smooth fade-out.
+ */
+
+#globalLoading {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(1200px 800px at 20% 10%, rgba(124, 58, 237, 0.18), transparent 60%),
+        radial-gradient(1000px 700px at 85% 90%, rgba(79, 70, 229, 0.18), transparent 60%),
+        linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    color: #f8fafc;
+    transition: opacity 360ms ease, visibility 360ms ease;
+    opacity: 1;
+    visibility: visible;
+    -webkit-app-region: drag;
+    user-select: none;
+}
+
+#globalLoading.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#globalLoading .loading-card {
+    -webkit-app-region: no-drag;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+    padding: 40px 48px;
+    min-width: 340px;
+    max-width: 420px;
+    border-radius: 20px;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    text-align: center;
+}
+
+#globalLoading .loading-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 12px 30px rgba(99, 102, 241, 0.35);
+    animation: gl-pulse 2.2s ease-in-out infinite;
+}
+
+#globalLoading .loading-spinner {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.12);
+    border-top-color: #a78bfa;
+    border-right-color: #818cf8;
+    animation: gl-spin 0.9s linear infinite;
+}
+
+#globalLoading .loading-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+#globalLoading .loading-status {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(241, 245, 249, 0.75);
+    min-height: 18px;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+#globalLoading .loading-attempts {
+    font-size: 11px;
+    color: rgba(241, 245, 249, 0.45);
+    letter-spacing: 0.3px;
+    min-height: 14px;
+}
+
+#globalLoading .loading-actions {
+    display: none;
+    gap: 12px;
+    margin-top: 6px;
+}
+
+#globalLoading .loading-actions.is-visible {
+    display: flex;
+}
+
+#globalLoading .loading-btn {
+    -webkit-app-region: no-drag;
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+    padding: 8px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease, transform 120ms ease;
+    font-family: inherit;
+}
+
+#globalLoading .loading-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+#globalLoading .loading-btn:active {
+    transform: translateY(1px);
+}
+
+#globalLoading .loading-btn.primary {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    border-color: transparent;
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+}
+
+#globalLoading .loading-btn.primary:hover {
+    filter: brightness(1.08);
+}
+
+@keyframes gl-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes gl-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 12px 30px rgba(99, 102, 241, 0.35); }
+    50%      { transform: scale(1.05); box-shadow: 0 18px 40px rgba(124, 58, 237, 0.45); }
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+    #globalLoading .loading-spinner { animation-duration: 2.4s; }
+    #globalLoading .loading-logo { animation: none; }
+}

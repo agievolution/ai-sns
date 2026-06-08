@@ -395,7 +395,8 @@ const api = new APIClient();
 // Expose to window for other modules
 window.api = api;
 
-// Initialize API client
-document.addEventListener('DOMContentLoaded', async () => {
-    await api.init();
-});
+// Note: API client initialization is driven by the startup bootstrap
+// (renderer/js/core/bootstrap.js), which calls `api.init()` AFTER the
+// backend health endpoint is reachable. Auto-initializing here on
+// DOMContentLoaded would race with bootstrap and may attempt
+// /api/system/config before the backend is ready.

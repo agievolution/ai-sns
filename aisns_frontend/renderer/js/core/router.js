@@ -32,7 +32,8 @@ class Router {
      */
     async navigateTo(page) {
 
-        if (this.currentPage === page) {
+        const existingCurrentPageElement = document.getElementById(`page-${page}`);
+        if (this.currentPage === page && existingCurrentPageElement && existingCurrentPageElement.dataset.initialized === 'true') {
             console.log(`Already on page '${page}'`);
             return;
         }
@@ -79,8 +80,11 @@ class Router {
         // Render sidebar (await async completion)
         await this.renderSidebar(page);
 
-        // Render or show main content
-        this.renderOrShowMainContent(page);
+        // Render or show main content (await so the initial landing page's
+        // data load completes before navigation resolves; the startup
+        // bootstrap relies on this to hide the global loading overlay only
+        // after the first module is fully initialized).
+        await this.renderOrShowMainContent(page);
 
         // Emit navigation event
         if (window.eventBus) {
@@ -152,7 +156,7 @@ class Router {
      * Render or show main content
      * @param {string} page - Page name
      */
-    renderOrShowMainContent(page) {
+    async renderOrShowMainContent(page) {
 
         const mainContent = document.getElementById('mainContent');
         if (!mainContent) return;
@@ -174,9 +178,12 @@ class Router {
                 pageElement.innerHTML = pageContent;
                 mainContent.appendChild(pageElement);
 
-                // Initialize module
+                // Initialize module. Await so that initial-page data load
+                // completes before navigateTo resolves; this lets the
+                // startup bootstrap hide the loading overlay only after
+                // the first page is fully ready.
                 if (module.init) {
-                    module.init();
+                    await module.init();
                 }
                 pageElement.dataset.initialized = 'true';
             } catch (error) {

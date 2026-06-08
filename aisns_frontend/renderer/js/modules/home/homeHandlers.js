@@ -5,10 +5,10 @@
 import InitializationWizard from './InitializationWizard.js';
 
 const homeHandlers = {
-    init() {
+    async init() {
         this.bindEvents();
 
-        InitializationWizard.show({ auto: true });
+        await InitializationWizard.show({ auto: true });
     },
 
     bindEvents() {

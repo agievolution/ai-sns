@@ -1112,237 +1112,6 @@ const multiAgentHandlers = {
         console.log('[MultiAgentHandlers] === bindAllAgentEvents START ===');
         console.log('[MultiAgentHandlers] Binding UI events for all agents...');
 
-        if (!this._agentTabReloadMenuInitialized) {
-            this._agentTabReloadMenuInitialized = true;
-
-            const existingMenu = document.getElementById('agentTabReloadContextMenu');
-            const menu = existingMenu || (() => {
-                const el = document.createElement('div');
-                el.id = 'agentTabReloadContextMenu';
-                el.className = 'status-context-menu compact';
-                el.innerHTML = `
-                    <button type="button" class="context-menu-item" data-action="reload">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
-                            <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
-                        </svg>
-                        <span>Refresh</span>
-                    </button>
-                    <button type="button" class="context-menu-item" data-action="open-browser">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                            <polyline points="15 3 21 3 21 9"/>
-                            <line x1="10" y1="14" x2="21" y2="3"/>
-                        </svg>
-                        <span>Open in Browser</span>
-                    </button>
-                    <button type="button" class="context-menu-item" data-action="copy-url">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
-                        <span>Copy URL</span>
-                    </button>
-                `;
-                document.body.appendChild(el);
-                return el;
-            })();
-
-            let currentAgentId = null;
-            let currentTabKey = null;
-            let removeObserver = null;
-
-            const hideMenu = () => {
-                menu.style.display = 'none';
-                menu.dataset.agentId = '';
-                menu.dataset.tab = '';
-                currentAgentId = null;
-                currentTabKey = null;
-                if (removeObserver) {
-                    removeObserver.disconnect();
-                    removeObserver = null;
-                }
-            };
-
-            const getCurrentIframeUrl = () => {
-                if (!isCurrentTargetAlive()) return '';
-                const pane = document.querySelector(`#settingsTabContent-${currentAgentId} .tab-pane[data-tab="${currentTabKey}"]`);
-                const iframe = pane ? pane.querySelector('iframe') : null;
-                const src = iframe && iframe.src ? String(iframe.src) : '';
-                if (!src) return '';
-                try {
-                    const u = new URL(src);
-                    u.searchParams.delete('_ts');
-                    return u.toString();
-                } catch (e) {
-                    return src;
-                }
-            };
-
-            const copyTextToClipboard = async (text) => {
-                if (!text) return false;
-
-                try {
-                    if (window.electronAPI && typeof window.electronAPI.writeClipboardText === 'function') {
-                        const res = await window.electronAPI.writeClipboardText(text);
-                        if (res && res.success) return true;
-                    }
-                } catch (e) {
-                }
-
-                try {
-                    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                        await navigator.clipboard.writeText(text);
-                        return true;
-                    }
-                } catch (e) {
-                }
-
-                try {
-                    const textarea = document.createElement('textarea');
-                    textarea.value = text;
-                    textarea.setAttribute('readonly', '');
-                    textarea.style.position = 'fixed';
-                    textarea.style.left = '-9999px';
-                    textarea.style.top = '-9999px';
-                    document.body.appendChild(textarea);
-                    textarea.focus();
-                    textarea.select();
-                    textarea.setSelectionRange(0, textarea.value.length);
-                    const ok = document.execCommand('copy');
-                    textarea.remove();
-                    return !!ok;
-                } catch (e) {
-                    return false;
-                }
-            };
-
-            const isCurrentTargetAlive = () => {
-                if (!currentAgentId || !currentTabKey) return false;
-                const tabBtn = document.querySelector(`#settingsTabs-${currentAgentId} .settings-tab[data-tab="${currentTabKey}"]`);
-                const pane = document.querySelector(`#settingsTabContent-${currentAgentId} .tab-pane[data-tab="${currentTabKey}"]`);
-                return !!(tabBtn && pane);
-            };
-
-            const reloadCurrentIframe = () => {
-                if (!isCurrentTargetAlive()) {
-                    hideMenu();
-                    return;
-                }
-
-                const pane = document.querySelector(`#settingsTabContent-${currentAgentId} .tab-pane[data-tab="${currentTabKey}"]`);
-                const iframe = pane ? pane.querySelector('iframe') : null;
-                if (iframe && iframe.src) {
-                    try {
-                        if (iframe.contentWindow && iframe.contentWindow.location && typeof iframe.contentWindow.location.reload === 'function') {
-                            iframe.contentWindow.location.reload();
-                            return;
-                        }
-                    } catch (e) {
-                        // ignore and fallback to src reload
-                    }
-
-                    try {
-                        const u = new URL(iframe.src);
-                        u.searchParams.set('_ts', String(Date.now()));
-                        iframe.src = u.toString();
-                    } catch (e) {
-                        const sep = iframe.src.includes('?') ? '&' : '?';
-                        iframe.src = `${iframe.src}${sep}_ts=${Date.now()}`;
-                    }
-                }
-            };
-
-            const showMenuAt = (x, y) => {
-                menu.style.display = 'block';
-                const menuWidth = menu.offsetWidth || 140;
-                const menuHeight = menu.offsetHeight || 38;
-                const viewportWidth = window.innerWidth;
-                const viewportHeight = window.innerHeight;
-                let left = x;
-                let top = y;
-                if (left + menuWidth > viewportWidth) left = viewportWidth - menuWidth - 10;
-                if (top + menuHeight > viewportHeight) top = viewportHeight - menuHeight - 10;
-                menu.style.left = left + 'px';
-                menu.style.top = top + 'px';
-            };
-
-            document.addEventListener('click', (e) => {
-                if (!menu.contains(e.target)) hideMenu();
-            });
-
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') hideMenu();
-            });
-
-            window.addEventListener('blur', hideMenu);
-            window.addEventListener('resize', hideMenu);
-            window.addEventListener('scroll', hideMenu, true);
-
-            menu.addEventListener('click', (e) => {
-                const item = e.target.closest('.context-menu-item');
-                if (!item) return;
-                const action = item.dataset.action;
-                if (action === 'reload') {
-                    reloadCurrentIframe();
-                } else if (action === 'open-browser') {
-                    const url = getCurrentIframeUrl();
-                    if (url) {
-                        if (window.electronAPI && window.electronAPI.openUrl) {
-                            window.electronAPI.openUrl(url);
-                        } else {
-                            window.open(url, '_blank');
-                        }
-                    }
-                } else if (action === 'copy-url') {
-                    const url = getCurrentIframeUrl();
-                    if (url) {
-                        copyTextToClipboard(url).then((ok) => {
-                            if (ok) console.log('URL copied to clipboard');
-                        });
-                    }
-                }
-                hideMenu();
-            });
-
-            document.addEventListener('contextmenu', (e) => {
-                const tabBtn = e.target.closest('.settings-tab[data-agent-id]');
-                if (!tabBtn) return;
-                if (e.target.closest('.tab-close-btn')) return;
-
-                const agentId = tabBtn.dataset.agentId;
-                const tabKey = tabBtn.dataset.tab;
-                if (tabKey !== 'plugin-avatar3d') return;
-
-                e.preventDefault();
-                e.stopPropagation();
-
-                currentAgentId = agentId;
-                currentTabKey = tabKey;
-                menu.dataset.agentId = agentId;
-                menu.dataset.tab = tabKey;
-
-                showMenuAt(e.clientX, e.clientY);
-
-                if (removeObserver) {
-                    removeObserver.disconnect();
-                    removeObserver = null;
-                }
-                removeObserver = new MutationObserver(() => {
-                    if (!isCurrentTargetAlive()) hideMenu();
-                });
-                removeObserver.observe(document.body, { childList: true, subtree: true });
-            });
-
-            document.addEventListener('click', (e) => {
-                if (e.target.closest(`#settingsTabs-${currentAgentId || ''} .tab-close-btn`)) {
-                    hideMenu();
-                }
-            });
-        }
-
         if (!this._agentSettingsContextMenuInitialized) {
             this._agentSettingsContextMenuInitialized = true;
 
@@ -4528,7 +4297,6 @@ const multiAgentHandlers = {
                 const builtin = [
                     { id: 'mindmap', name: 'Mind map plugin', description: 'Convert Markdown mindmap syntax in chat messages into a visual mind map' },
                     { id: 'code', name: 'Code execution plugin', description: 'Extract code blocks from chat messages and provide edit/run features (supports JavaScript, Python, HTML/CSS/JS)' },
-                    { id: 'avatar3d', name: '3D Avatar', description: 'Open the 3D Avatar page in the right settings panel' },
                     { id: 'llm-log', name: 'LLM Log', description: 'Browse backend LLM logs by date and file.' }
                 ];
 
@@ -4733,24 +4501,6 @@ const multiAgentHandlers = {
                 description: 'Browse backend LLM logs by date and file.',
                 icon: '<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>'
             },
-            'calendar': {
-                name: 'Calendar',
-                fullName: 'Calendar plugin',
-                description: 'Display and manage calendar events in chat',
-                icon: '<path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>'
-            },
-            'chart': {
-                name: 'Charts',
-                fullName: 'Chart plugin',
-                description: 'Visualize data into charts',
-                icon: '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>'
-            },
-            'avatar3d': {
-                name: '3D Avatar',
-                fullName: '3D Avatar',
-                description: 'Open the 3D Avatar page in the right settings panel',
-                icon: '<path d="M12 2a4 4 0 0 1 4 4c0 1.1-.45 2.1-1.17 2.83A6 6 0 0 1 18 14v2h-2v-2a4 4 0 0 0-8 0v2H6v-2a6 6 0 0 1 3.17-5.17A3.98 3.98 0 0 1 8 6a4 4 0 0 1 4-4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>'
-            }
         };
 
         const config = pluginConfigs[pluginId];
@@ -4820,27 +4570,19 @@ const multiAgentHandlers = {
         const tabPane = document.createElement('div');
         tabPane.className = 'tab-pane';
         tabPane.dataset.tab = `plugin-${pluginId}`;
-        if (pluginId === 'avatar3d') {
-            tabPane.innerHTML = `
+        tabPane.innerHTML = `
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
+                        ${config.icon}
+                    </svg>
+                    <span>${config.fullName}</span>
+                </div>
                 <div class="plugin-content" id="plugin-content-${pluginId}-${agentId}">
                     <p style="font-size: 11px; color: #999; text-align: center; padding: 20px;">Loading plugin...</p>
                 </div>
-            `;
-        } else {
-            tabPane.innerHTML = `
-                <div class="settings-section">
-                    <div class="settings-section-title">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8">
-                            ${config.icon}
-                        </svg>
-                        <span>${config.fullName}</span>
-                    </div>
-                    <div class="plugin-content" id="plugin-content-${pluginId}-${agentId}">
-                        <p style="font-size: 11px; color: #999; text-align: center; padding: 20px;">Loading plugin...</p>
-                    </div>
-                </div>
-            `;
-        }
+            </div>
+        `;
 
         tabContent.appendChild(tabPane);
         console.log('[MultiAgentHandlers] ✓ Tab content created');
@@ -4935,19 +4677,6 @@ const multiAgentHandlers = {
                     container.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--text-secondary, #666);">Code execution plugin is not loaded. Please refresh the page.</p>';
                     console.error('[MultiAgentHandlers] CodePlugin not found');
                 }
-                break;
-            case 'avatar3d':
-                container.innerHTML = `
-                    <div class="profile-webview-container">
-                        <iframe src="https://cjragents.ngrok.app/server1/wschat/static/desktop.html" class="profile-webview" frameborder="0" allow="microphone"></iframe>
-                    </div>
-                `;
-                break;
-            case 'calendar':
-                container.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--text-secondary, #666);">Calendar plugin is under development...</p>';
-                break;
-            case 'chart':
-                container.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--text-secondary, #666);">Chart plugin is under development...</p>';
                 break;
             default:
                 container.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--text-secondary, #666);">Unknown plugin</p>';

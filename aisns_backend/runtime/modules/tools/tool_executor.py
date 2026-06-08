@@ -210,6 +210,10 @@ class ToolExecutor:
             file_path = mcp_data.get('file_path')
             mcp_type = mcp_data.get('mcp_type', 'stdio')
             parameter = mcp_data.get('parameter', '{}')
+            # The MCP 'instruction' field is repurposed as Test Arguments (JSON):
+            # it is not used by agent tool conversion, so we reuse it to pass
+            # arguments to the first tool during connection tests.
+            test_arguments = mcp_data.get('instruction', '')
 
             mcp_type_norm = str(mcp_type or 'stdio').lower().strip()
             is_http_transport = mcp_type_norm in ('sse', 'streamable-http')
@@ -254,7 +258,7 @@ class ToolExecutor:
             # Real MCP server test
             self.log_execution("mcp", mcp_id, "testing", f"Testing MCP server: {file_path}")
 
-            result = await self._test_mcp_server(file_path, mcp_type_norm, parameter)
+            result = await self._test_mcp_server(file_path, mcp_type_norm, parameter, test_arguments)
 
             self.log_execution("mcp", mcp_id, "completed", "MCP test completed", result)
 
@@ -629,8 +633,14 @@ if 'main' in dir():
         except Exception as e:
             raise Exception(f"Shell script execution failed: {str(e)}")
 
-    async def _test_mcp_server(self, file_path: str, mcp_type: str, parameter: str) -> dict:
-        """Test MCP server by connecting and calling a tool"""
+    async def _test_mcp_server(self, file_path: str, mcp_type: str, parameter: str, test_arguments: str = '') -> dict:
+        """Test MCP server by connecting and calling a tool.
+
+        test_arguments: optional JSON object (from the MCP 'instruction' field,
+        repurposed as Test Arguments) used as the arguments for the tested tool.
+        When provided, it overrides the built-in default arguments and the tool
+        called is always the first tool reported by the server.
+        """
 
         # Check if MCP library is available
         if not MCP_AVAILABLE:
@@ -645,6 +655,30 @@ if 'main' in dir():
 
         try:
             mcp_type_norm = str(mcp_type or 'stdio').lower().strip()
+
+            # Parse user-provided Test Arguments (JSON) for the tested tool.
+            # Two accepted forms:
+            #   1. {"tool_name": "fetch", "arguments": {"url": "..."}}
+            #      -> test the named tool with the given arguments.
+            #   2. {"url": "..."}
+            #      -> treat the whole object as arguments for the first tool.
+            custom_test_tool: Optional[str] = None
+            custom_test_args: Optional[Dict[str, Any]] = None
+            if test_arguments and str(test_arguments).strip():
+                try:
+                    parsed = json.loads(test_arguments) if isinstance(test_arguments, str) else test_arguments
+                    if isinstance(parsed, dict):
+                        tool_name_val = parsed.get('tool_name')
+                        if isinstance(tool_name_val, str) and tool_name_val.strip():
+                            custom_test_tool = tool_name_val.strip()
+                            args_val = parsed.get('arguments')
+                            custom_test_args = args_val if isinstance(args_val, dict) else {}
+                        else:
+                            custom_test_args = parsed
+                except Exception:
+                    # Ignore invalid Test Arguments JSON and fall back to defaults
+                    custom_test_tool = None
+                    custom_test_args = None
 
             stdio_args: list[str] = []
             stdio_env: Optional[Dict[str, str]] = None
@@ -674,6 +708,16 @@ if 'main' in dir():
                         stdio_command_resolved = resolved
                         total_timeout = 180
 
+            launch_command = None
+            launch_args: list[str] = []
+            stderr_log_path = None
+            stderr_log_file = None
+            if mcp_type_norm == 'stdio':
+                import tempfile
+                stderr_log_file = tempfile.NamedTemporaryFile(
+                    mode='w', suffix='.log', prefix='mcp_stderr_', delete=False, encoding='utf-8'
+                )
+                stderr_log_path = stderr_log_file.name
             async with asyncio.timeout(total_timeout):
                 async with AsyncExitStack() as stack:
                     if mcp_type_norm == 'stdio':
@@ -689,13 +733,36 @@ if 'main' in dir():
                         else:
                             cmd = [stdio_command_resolved or file_path] + (stdio_args or [])
 
+                        # Windows: .cmd/.bat wrappers (e.g. npx.CMD, uvx) cannot be
+                        # reliably launched directly via CreateProcess for stdio piping,
+                        # which results in "Connection closed" during initialize().
+                        # Launch them through cmd.exe /c instead.
+                        if os.name == 'nt' and str(cmd[0]).lower().endswith(('.cmd', '.bat')):
+                            cmd = ['cmd', '/c'] + cmd
+
+                        launch_command = cmd[0]
+                        launch_args = cmd[1:] if len(cmd) > 1 else []
+
                         server_params = StdioServerParameters(
-                            command=cmd[0],
-                            args=cmd[1:] if len(cmd) > 1 else [],
+                            command=launch_command,
+                            args=launch_args,
                             env=env
                         )
 
-                        stdio_transport = await stack.enter_async_context(stdio_client(server_params))
+                        # Pass errlog only if this mcp SDK version supports it,
+                        # so we can capture the child process stderr for diagnostics.
+                        try:
+                            import inspect
+                            _supports_errlog = 'errlog' in inspect.signature(stdio_client).parameters
+                        except (ValueError, TypeError):
+                            _supports_errlog = False
+
+                        if _supports_errlog and stderr_log_file is not None:
+                            stdio_transport = await stack.enter_async_context(
+                                stdio_client(server_params, errlog=stderr_log_file)
+                            )
+                        else:
+                            stdio_transport = await stack.enter_async_context(stdio_client(server_params))
                         read_stream, write_stream = stdio_transport
                         session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
 
@@ -757,7 +824,11 @@ if 'main' in dir():
 
                     tools_result = await session.list_tools()
                     tools_list = [
-                        {"name": t.name, "description": t.description}
+                        {
+                            "name": t.name,
+                            "description": t.description,
+                            "inputSchema": getattr(t, "inputSchema", None),
+                        }
                         for t in (tools_result.tools or [])
                     ]
 
@@ -766,7 +837,17 @@ if 'main' in dir():
                         test_tool = None
                         test_args: Dict[str, Any] = {}
 
-                        for t in tools_result.tools:
+                        # If the user provided Test Arguments (JSON), skip the
+                        # built-in default heuristics. When a tool_name is given,
+                        # test that tool; otherwise test the first tool.
+                        if custom_test_args is not None and tools_result.tools:
+                            if custom_test_tool:
+                                test_tool = custom_test_tool
+                            else:
+                                test_tool = tools_result.tools[0].name
+                            test_args = custom_test_args
+
+                        for t in (tools_result.tools if test_tool is None else []):
                             if t.name == 'get_weather':
                                 test_tool = 'get_weather'
                                 test_args = {"city": "Beijing", "unit": "celsius"}
@@ -795,11 +876,35 @@ if 'main' in dir():
                                 for content in call_result.content:
                                     if hasattr(content, 'text'):
                                         result_text += content.text
+
+                                # If the result references MCP resource URIs (e.g. screenshots),
+                                # read them in the same session before it closes.
+                                resources = []
+                                if result_text:
+                                    import re
+                                    uris = set(re.findall(r'[a-zA-Z][a-zA-Z0-9+.-]*://[^\s<>"\')\]]+', result_text))
+                                    for uri in uris:
+                                        if uri.startswith(('http://', 'https://', 'data:', 'mailto:')):
+                                            continue
+                                        try:
+                                            resource = await session.read_resource(uri)
+                                            if resource and hasattr(resource, 'contents'):
+                                                for content in resource.contents:
+                                                    if hasattr(content, 'blob'):
+                                                        resources.append({
+                                                            "uri": uri,
+                                                            "mimeType": getattr(content, 'mimeType', None) or 'application/octet-stream',
+                                                            "blob": content.blob,
+                                                        })
+                                        except Exception:
+                                            pass
+
                                 tool_call_result = {
                                     "tool_name": test_tool,
                                     "arguments": test_args,
                                     "success": True,
-                                    "result": result_text[:500],
+                                    "result": result_text,
+                                    "resources": resources,
                                 }
                             except Exception as e:
                                 tool_call_result = {
@@ -807,12 +912,15 @@ if 'main' in dir():
                                     "arguments": test_args,
                                     "success": False,
                                     "error": str(e),
+                                    "resources": [],
                                 }
 
                     return {
                         "status": "success",
                         "file_path": file_path,
                         "mcp_type": mcp_type_norm,
+                        "command": launch_command,
+                        "args": launch_args,
                         "message": "MCP server connected and tools tested successfully",
                         "tools_count": len(tools_list),
                         "tools": tools_list,
@@ -831,17 +939,58 @@ if 'main' in dir():
         except Exception as e:
             # Handle all exceptions including ExceptionGroup
             error_msg = str(e)
+
+            def _flatten_exc(exc, depth=0):
+                """Recursively unwrap ExceptionGroup to reach leaf exceptions."""
+                leaves = []
+                subs = getattr(exc, "exceptions", None)
+                if subs:
+                    for sub in subs:
+                        leaves.extend(_flatten_exc(sub, depth + 1))
+                else:
+                    leaves.append(f"{type(exc).__name__}: {exc}")
+                return leaves
+
+            leaf_errors = _flatten_exc(e)
+            if leaf_errors:
+                error_msg = f"{str(e)}; root-causes: {' | '.join(leaf_errors)}"
+
+            # Capture the child process's stderr (if any) to surface the real
+            # reason a command-based stdio MCP exited during startup.
+            server_stderr = ""
+            try:
+                if stderr_log_file is not None:
+                    stderr_log_file.flush()
+                if stderr_log_path and os.path.exists(stderr_log_path):
+                    with open(stderr_log_path, 'r', encoding='utf-8', errors='replace') as fh:
+                        server_stderr = fh.read().strip()
+            except Exception:
+                pass
+            if server_stderr:
+                error_msg = f"{error_msg}; server-stderr: {server_stderr[:1500]}"
+
             error_trace = traceback.format_exc()
             return {
                 "status": "error",
                 "file_path": file_path,
                 "mcp_type": mcp_type,
+                "command": locals().get("launch_command"),
+                "args": locals().get("launch_args"),
                 "message": f"MCP server test failed: {error_msg}",
                 "error": error_msg,
-                "traceback": error_trace[:1000],  # Limit traceback
+                "server_stderr": server_stderr[:1500],
+                "traceback": error_trace[:4000],  # Limit traceback
                 "tools": [],
                 "tool_call_result": None
             }
+        finally:
+            try:
+                if 'stderr_log_file' in locals() and stderr_log_file is not None:
+                    stderr_log_file.close()
+                if 'stderr_log_path' in locals() and stderr_log_path and os.path.exists(stderr_log_path):
+                    os.unlink(stderr_log_path)
+            except Exception:
+                pass
 
     async def execute_mcp_tool(self, mcp_id: str, tool_name: str, arguments: dict) -> dict:
         """
@@ -889,12 +1038,26 @@ if 'main' in dir():
 
             file_path = mcp_data.file_path
             mcp_type = mcp_data.mcp_type or 'stdio'
+            parameter = mcp_data.parameter or '{}'
 
-            if not file_path or not os.path.exists(file_path):
+            if not file_path:
                 return {
                     "success": False,
-                    "error": f"MCP server file not found: {file_path}"
+                    "error": "MCP server file_path is required"
                 }
+
+            # Allow stdio MCPs to be launched via a PATH command (e.g. uvx, npx)
+            # in addition to a local script path, mirroring _test_mcp_server.
+            stdio_command_resolved = None
+            if not os.path.exists(file_path):
+                resolved = shutil.which(str(file_path))
+                if resolved:
+                    stdio_command_resolved = resolved
+                else:
+                    return {
+                        "success": False,
+                        "error": f"MCP server file/command not found: {file_path}"
+                    }
 
         finally:
             db.close()
@@ -904,11 +1067,35 @@ if 'main' in dir():
             env = os.environ.copy()
             env['PYTHONIOENCODING'] = 'utf-8'
 
+            # Parse launch parameters (args/env) from the MCP 'parameter' field,
+            # mirroring _test_mcp_server so command-based MCPs receive their args.
+            stdio_args: list[str] = []
+            if parameter:
+                try:
+                    p = json.loads(parameter) if isinstance(parameter, str) else parameter
+                    if isinstance(p, list):
+                        stdio_args = [str(x) for x in p]
+                    elif isinstance(p, dict):
+                        if isinstance(p.get('args'), list):
+                            stdio_args = [str(x) for x in p.get('args')]
+                        if isinstance(p.get('env'), dict):
+                            env.update({str(k): str(v) for k, v in p.get('env').items()})
+                except Exception:
+                    # Ignore parameter parse errors for backward compatibility
+                    pass
+
             # Determine command to start server
             if file_path.endswith('.py'):
-                cmd = [get_python_executable(), file_path]
+                cmd = [get_python_executable(), file_path] + stdio_args
             else:
-                cmd = [file_path]
+                cmd = [stdio_command_resolved or file_path] + stdio_args
+
+            # Windows: .cmd/.bat wrappers (e.g. npx.CMD, uvx) cannot be
+            # reliably launched directly via CreateProcess for stdio piping,
+            # which results in "Connection closed" during initialize().
+            # Launch them through cmd.exe /c instead.
+            if os.name == 'nt' and str(cmd[0]).lower().endswith(('.cmd', '.bat')):
+                cmd = ['cmd', '/c'] + cmd
 
             # Set up MCP client parameters
             server_params = StdioServerParameters(

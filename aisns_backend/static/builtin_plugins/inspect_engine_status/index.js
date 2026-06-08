@@ -66,7 +66,7 @@ const InspectEngineStatusPlugin = {
                             <div style="font-size:12px; color:var(--text-secondary,#666);">Calling functions may change engine state.</div>
                         </div>
 
-                        <pre style="white-space:pre-wrap; word-break:break-word; background: var(--bg-secondary,#f5f5f5); padding:10px; border-radius:6px; max-height:220px; overflow:auto;" id="ies_fn_result"></pre>
+                        <pre style="white-space:pre-wrap; word-break:break-word; background: var(--bg-secondary,#f5f5f5); padding:10px; border-radius:6px; min-height:5.6em; max-height:220px; overflow:auto;" id="ies_fn_result"></pre>
                     </div>
                 </div>
             </div>

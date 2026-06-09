@@ -159,6 +159,7 @@ export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 
 npm config set registry https://registry.npmmirror.com 
+```
 
 ## 🧑 For Users
 
